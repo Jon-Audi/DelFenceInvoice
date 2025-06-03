@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -47,6 +48,20 @@ function useSidebar() {
   return context
 }
 
+const getCookieValue = (name: string): string | undefined => {
+  if (typeof document === "undefined") {
+    return undefined;
+  }
+  const cookies = document.cookie.split(';');
+  for (let i = 0; i < cookies.length; i++) {
+    let cookie = cookies[i].trim();
+    if (cookie.startsWith(name + '=')) {
+      return cookie.substring(name.length + 1);
+    }
+  }
+  return undefined;
+};
+
 const SidebarProvider = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
@@ -69,34 +84,50 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
+    const [isMounted, setIsMounted] = React.useState(false);
+    
+    // Initialize with defaultOpen for SSR and first client paint.
+    // Cookie value will be applied in useEffect once mounted.
+    const [_open, _setOpen] = React.useState(defaultOpen);
 
-    // This is the internal state of the sidebar.
-    // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen)
-    const open = openProp ?? _open
-    const setOpen = React.useCallback(
-      (value: boolean | ((value: boolean) => boolean)) => {
-        const openState = typeof value === "function" ? value(open) : value
-        if (setOpenProp) {
-          setOpenProp(openState)
-        } else {
-          _setOpen(openState)
+    React.useEffect(() => {
+      setIsMounted(true);
+      const cookieValue = getCookieValue(SIDEBAR_COOKIE_NAME);
+      if (cookieValue !== undefined) {
+        // Only update from cookie if not a controlled component during this initial phase
+        if (openProp === undefined) {
+          _setOpen(cookieValue === 'true');
         }
+      }
+      // If cookieValue is undefined, _open remains defaultOpen from useState initializer, which is correct.
+    }, [defaultOpen, openProp]); // Effect dependencies
 
-        // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+    // Determine the effective 'open' state
+    // If controlled, use openProp.
+    // If not controlled, use _open (from cookie or interaction) once mounted. Before mount, use defaultOpen for consistency.
+    const open = openProp !== undefined ? openProp : (isMounted ? _open : defaultOpen);
+
+    const setOpen = React.useCallback(
+      (value: boolean | ((currentOpen: boolean) => boolean)) => {
+        const newOpenState = typeof value === 'function' ? value(open) : value;
+        if (setOpenProp) {
+          setOpenProp(newOpenState);
+        } else {
+          _setOpen(newOpenState);
+        }
+        if (typeof document !== "undefined") {
+          document.cookie = `${SIDEBAR_COOKIE_NAME}=${String(newOpenState)}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        }
       },
-      [setOpenProp, open]
-    )
-
-    // Helper to toggle the sidebar.
+      [open, setOpenProp, _setOpen] 
+    );
+    
     const toggleSidebar = React.useCallback(() => {
       return isMobile
-        ? setOpenMobile((open) => !open)
-        : setOpen((open) => !open)
+        ? setOpenMobile((currentOpenMobile) => !currentOpenMobile)
+        : setOpen((currentOpen) => !currentOpen)
     }, [isMobile, setOpen, setOpenMobile])
 
-    // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         if (
@@ -112,8 +143,6 @@ const SidebarProvider = React.forwardRef<
       return () => window.removeEventListener("keydown", handleKeyDown)
     }, [toggleSidebar])
 
-    // We add a state so that we can do data-state="expanded" or "collapsed".
-    // This makes it easier to style the sidebar with Tailwind classes.
     const state = open ? "expanded" : "collapsed"
 
     const contextValue = React.useMemo<SidebarContext>(
@@ -761,3 +790,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
