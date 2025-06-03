@@ -1,6 +1,6 @@
 "use client";
 
-import type React from 'react';
+import React from 'react';
 import type { Customer } from '@/types';
 import { CustomerForm } from './customer-form';
 import {
