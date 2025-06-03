@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   Package,
@@ -26,7 +27,9 @@ import {
   PanelsTopLeft,
   AlertCircle,
   XCircle,
-  CheckCircle2
+  CheckCircle2,
+  UsersRound, // Added UsersRound
+  UserCog,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -61,6 +64,8 @@ const iconComponents = {
   AlertCircle,
   XCircle,
   CheckCircle2,
+  UsersRound,
+  UserCog,
 };
 
 interface IconProps extends LucideProps {

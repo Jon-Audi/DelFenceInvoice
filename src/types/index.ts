@@ -1,7 +1,9 @@
 
+
 export type ProductCategory = 'Fencing' | 'Posts' | 'Gates' | 'Hardware' | 'Accessories' | 'Other';
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
+export type UserRole = 'Admin' | 'User';
 
 export interface Product {
   id: string;
@@ -95,4 +97,14 @@ export interface Invoice extends BaseDocument {
   status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Paid' | 'Voided'>;
   dueDate?: string; // ISO date string
   paymentTerms?: string;
+}
+
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  lastLogin?: string; // ISO date string
 }
