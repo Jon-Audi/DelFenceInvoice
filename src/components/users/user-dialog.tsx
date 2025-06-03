@@ -1,7 +1,7 @@
 
 "use client";
 
-import type React from 'react';
+import React from 'react'; // Added React import
 import type { User, PermissionKey } from '@/types';
 import { UserForm } from './user-form';
 import {
