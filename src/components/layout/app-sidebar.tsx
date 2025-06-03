@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -65,10 +66,11 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter className="p-2">
-        {/* Placeholder for potential footer items like settings or logout */}
-        <SidebarMenuButton tooltip="Settings">
+        <SidebarMenuButton asChild tooltip="Settings">
+          <Link href="/settings">
             <Icon name="Settings" />
             <span>Settings</span>
+          </Link>
         </SidebarMenuButton>
       </SidebarFooter>
     </Sidebar>

@@ -28,8 +28,9 @@ import {
   AlertCircle,
   XCircle,
   CheckCircle2,
-  UsersRound, // Added UsersRound
+  UsersRound, 
   UserCog,
+  Paintbrush, // Added Paintbrush
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -66,6 +67,7 @@ const iconComponents = {
   CheckCircle2,
   UsersRound,
   UserCog,
+  Paintbrush,
 };
 
 interface IconProps extends LucideProps {
@@ -76,6 +78,7 @@ export const Icon = ({ name, ...props }: IconProps) => {
   const LucideIcon = iconComponents[name];
   if (!LucideIcon) {
     // Fallback or error handling
+    console.warn("Icon not found:", name);
     return <AlertCircle {...props} />;
   }
   return <LucideIcon {...props} />;

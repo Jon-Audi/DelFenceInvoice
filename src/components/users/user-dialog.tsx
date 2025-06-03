@@ -2,7 +2,7 @@
 "use client";
 
 import type React from 'react';
-import type { User } from '@/types';
+import type { User, PermissionKey } from '@/types';
 import { UserForm } from './user-form';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ROLE_PERMISSIONS } from '@/lib/constants';
 
 interface UserDialogProps {
   user?: User;
@@ -22,10 +23,11 @@ interface UserDialogProps {
 export function UserDialog({ user, triggerButton, onSave }: UserDialogProps) {
   const [open, setOpen] = React.useState(false);
 
-  const handleSubmit = (data: Omit<User, 'id' | 'lastLogin'> & { id?: string }) => {
+  const handleSubmit = (data: Omit<User, 'id' | 'lastLogin' | 'permissions'> & { id?: string; permissions: PermissionKey[] }) => {
     const userToSave: User = {
       ...data,
       id: user?.id || crypto.randomUUID(),
+      permissions: data.permissions, // Permissions are now passed from the form submission logic
       // lastLogin is usually managed by the backend, so we don't set it here
       // If creating a new user, lastLogin would be undefined
       lastLogin: user?.lastLogin 

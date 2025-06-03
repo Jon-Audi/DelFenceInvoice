@@ -5,6 +5,21 @@ export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'G
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
 export type UserRole = 'Admin' | 'User';
 
+export type PermissionKey =
+  | 'manage_users'
+  | 'view_users'
+  | 'edit_products'
+  | 'view_products'
+  | 'manage_orders'
+  | 'view_orders'
+  | 'manage_customers'
+  | 'view_customers'
+  | 'manage_estimates'
+  | 'view_estimates'
+  | 'manage_invoices'
+  | 'view_invoices'
+  | 'access_settings';
+
 export interface Product {
   id: string;
   name: string;
@@ -107,4 +122,5 @@ export interface User {
   role: UserRole;
   isActive: boolean;
   lastLogin?: string; // ISO date string
+  permissions: PermissionKey[];
 }

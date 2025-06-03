@@ -5,8 +5,8 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { User, UserRole } from '@/types';
-import { USER_ROLES } from '@/lib/constants';
+import type { User, UserRole, PermissionKey } from '@/types';
+import { USER_ROLES, ROLE_PERMISSIONS } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,13 +34,17 @@ const userFormSchema = z.object({
   email: z.string().email("Invalid email address"),
   role: z.enum(USER_ROLES as [UserRole, ...UserRole[]]),
   isActive: z.boolean(),
+  // Permissions are not directly editable in this form version,
+  // but will be derived from the role.
 });
 
-export type UserFormData = z.infer<typeof userFormSchema>;
+// This type will be used for form submission, then permissions are added.
+export type UserFormData = Omit<z.infer<typeof userFormSchema>, 'permissions'>;
+
 
 interface UserFormProps {
   user?: User; // Existing user data for editing
-  onSubmit: (data: UserFormData) => void;
+  onSubmit: (data: Omit<User, 'id' | 'lastLogin' | 'permissions'> & { permissions: PermissionKey[] }) => void;
   onClose?: () => void;
 }
 
@@ -62,9 +66,14 @@ export function UserForm({ user, onSubmit, onClose }: UserFormProps) {
     },
   });
 
+  const handleSubmit = (data: UserFormData) => {
+    const permissions = ROLE_PERMISSIONS[data.role] || [];
+    onSubmit({ ...data, permissions });
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="firstName" render={({ field }) => (
             <FormItem>
@@ -94,7 +103,13 @@ export function UserForm({ user, onSubmit, onClose }: UserFormProps) {
           <FormField control={form.control} name="role" render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select 
+                onValueChange={(value) => {
+                  field.onChange(value as UserRole);
+                  // Permissions will be re-calculated on submit based on new role
+                }} 
+                defaultValue={field.value}
+              >
                 <FormControl><SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger></FormControl>
                 <SelectContent>
                   {USER_ROLES.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
@@ -122,6 +137,9 @@ export function UserForm({ user, onSubmit, onClose }: UserFormProps) {
             </FormItem>
           )} />
         </div>
+
+        {/* Future: UI for managing permissions could go here */}
+        {/* For now, permissions are derived from role on submit */}
 
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
