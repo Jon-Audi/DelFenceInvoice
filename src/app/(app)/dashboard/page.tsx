@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Icon } from '@/components/icons';
+import type { IconName } from '@/components/icons';
 
 interface DashboardCardProps {
   title: string;
@@ -11,10 +12,6 @@ interface DashboardCardProps {
   description: string;
   href: string;
 }
-
-// Extracted IconName type from components/icons.tsx to avoid direct import issues in non-component files if it were there
-type IconName = "LayoutDashboard" | "Package" | "Users" | "FileText" | "ShoppingCart" | "FileDigit" | "Calculator" | "ChevronDown" | "ChevronRight" | "PlusCircle" | "Edit" | "Trash2" | "Upload" | "Download" | "Send" | "Mail" | "MoreHorizontal" | "Search" | "PanelLeft" | "Sun" | "Moon" | "Settings" | "LogOut" | "ExternalLink" | "PanelsTopLeft" | "AlertCircle" | "XCircle" | "CheckCircle2" | "UsersRound" | "UserCog" | "Paintbrush" | "Loader2";
-
 
 const DashboardCard: React.FC<DashboardCardProps> = ({ title, iconName, value, description, href }) => {
   return (
