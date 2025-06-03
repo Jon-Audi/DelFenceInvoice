@@ -1,7 +1,7 @@
 
 "use client"; // Marking as client component for useState and event handlers
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -107,6 +107,11 @@ export default function OrdersPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleGenerateEmail = async (order: Order) => {
     setSelectedOrder(order);
@@ -149,6 +154,12 @@ export default function OrdersPage() {
     setIsEmailModalOpen(false);
   };
 
+  const formatDate = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
+    if (!dateString) return '';
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR / pre-hydration
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
   return (
     <>
       <PageHeader title="Orders" description="Create and manage customer orders.">
@@ -181,7 +192,7 @@ export default function OrdersPage() {
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatDate(order.date)}</TableCell>
                   <TableCell>${order.total.toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={
@@ -190,8 +201,8 @@ export default function OrdersPage() {
                       'outline'
                     }>
                       {order.status}
-                      {order.status === 'Ready for pick up' && order.readyForPickUpDate && ` (${new Date(order.readyForPickUpDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })})`}
-                      {order.status === 'Picked up' && order.pickedUpDate && ` (${new Date(order.pickedUpDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })})`}
+                      {order.status === 'Ready for pick up' && order.readyForPickUpDate && ` (${formatDate(order.readyForPickUpDate, { month: '2-digit', day: '2-digit' })})`}
+                      {order.status === 'Picked up' && order.pickedUpDate && ` (${formatDate(order.pickedUpDate, { month: '2-digit', day: '2-digit' })})`}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -255,4 +266,3 @@ export default function OrdersPage() {
     </>
   );
 }
-

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -44,8 +44,8 @@ const mockInvoices: Invoice[] = [
       { id: 'li_inv_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350.00 },
       { id: 'li_inv_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00 },
     ], 
-    subtotal: 1750.50, // Example subtotal
-    taxAmount: 100.00, // Example tax
+    subtotal: 1750.50, 
+    taxAmount: 100.00, 
   },
   { 
     id: 'inv_2', 
@@ -98,6 +98,18 @@ export default function InvoicesPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR / pre-hydration
+    return new Date(dateString).toLocaleDateString();
+  };
+
 
   const handleGenerateEmail = async (invoice: Invoice) => {
     setSelectedInvoice(invoice);
@@ -113,10 +125,10 @@ export default function InvoicesPage() {
         customerName: invoice.customerName || (customer ? `${customer.firstName} ${customer.lastName}` : 'Valued Customer'),
         companyName: customer?.companyName,
         invoiceNumber: invoice.invoiceNumber,
-        invoiceDate: new Date(invoice.date).toLocaleDateString(),
+        invoiceDate: new Date(invoice.date).toLocaleDateString(), // For Genkit, use consistent format
         invoiceTotal: invoice.total,
         invoiceItems: invoiceItemsDescription,
-        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined,
+        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined, // For Genkit
         companyNameToDisplay: "Delaware Fence Pro",
       });
       
@@ -174,8 +186,8 @@ export default function InvoicesPage() {
                 <TableRow key={invoice.id}>
                   <TableCell>{invoice.invoiceNumber}</TableCell>
                   <TableCell>{invoice.customerName}</TableCell>
-                  <TableCell>{new Date(invoice.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}</TableCell>
+                  <TableCell>{formatDate(invoice.date)}</TableCell>
+                  <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                   <TableCell>${invoice.total.toFixed(2)}</TableCell>
                   <TableCell>{invoice.status}</TableCell>
                   <TableCell>
