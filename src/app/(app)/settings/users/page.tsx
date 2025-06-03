@@ -37,16 +37,21 @@ const mockUsers: User[] = [
     role: 'User',
     isActive: false,
     permissions: ROLE_PERMISSIONS['User'],
+    lastLogin: undefined, // Explicitly undefined for inactive user who never logged in
   },
 ];
 
-export default function UsersPage() {
+export default function UsersSettingsPage() {
   // In a real app, you'd fetch users and handle saving here or in a global state/context
   // For now, we'll just log the save action.
   const handleSaveUser = (user: User) => {
     console.log("Saving user:", user);
     // Here you would update your user list, possibly by refetching or updating local state.
     // For mock purposes, you might find and update the user in mockUsers or add a new one.
+    // This function is primarily a placeholder for when a backend is integrated.
+    // The actual update to the mockUsers list for immediate UI feedback would happen
+    // if this page managed its own state for users, which it currently doesn't
+    // (it receives mockUsers as a static prop).
   };
 
 
@@ -67,3 +72,4 @@ export default function UsersPage() {
     </>
   );
 }
+

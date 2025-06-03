@@ -208,7 +208,8 @@ export default function OrdersPage() {
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
-              <div className="flex justify-center items-center h-40">
+              <div className="flex flex-col justify-center items-center h-40 space-y-2">
+                 <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                  <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
@@ -240,3 +241,4 @@ export default function OrdersPage() {
     </>
   );
 }
+

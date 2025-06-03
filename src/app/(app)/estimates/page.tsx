@@ -1,3 +1,4 @@
+
 "use client"; // Marking as client component for useState and event handlers
 
 import React, { useState } from 'react';
@@ -76,11 +77,6 @@ export default function EstimatesPage() {
         estimateContent: estimateContent,
       });
       
-      // The flow `estimateEmailDraft` returns { emailDraft: string }
-      // We need to parse this into subject and body if possible, or use it as body.
-      // For now, assuming the entire draft is the body.
-      // A more sophisticated flow would return structured subject/body.
-      // For now, using a generic subject.
       setEmailDraft({ 
         subject: `Estimate ${estimate.estimateNumber} from Delaware Fence Pro`, 
         body: result.emailDraft 
@@ -165,9 +161,9 @@ export default function EstimatesPage() {
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
-              <div className="flex justify-center items-center h-40">
-                <Icon name="Loader" className="h-8 w-8 animate-spin text-primary" /> {/* Assuming Loader icon exists */}
-                 <p>Loading email draft...</p> {/* Fallback if Loader icon doesn't exist */}
+              <div className="flex flex-col justify-center items-center h-40 space-y-2">
+                <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
+                <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
               <div className="space-y-4 py-4">
@@ -198,3 +194,4 @@ export default function EstimatesPage() {
     </>
   );
 }
+

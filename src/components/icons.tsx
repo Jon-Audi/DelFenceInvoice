@@ -30,7 +30,8 @@ import {
   CheckCircle2,
   UsersRound, 
   UserCog,
-  Paintbrush, // Added Paintbrush
+  Paintbrush,
+  Loader2, // Added Loader2
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -68,6 +69,7 @@ const iconComponents = {
   UsersRound,
   UserCog,
   Paintbrush,
+  Loader2, // Added Loader2
 };
 
 interface IconProps extends LucideProps {
@@ -83,3 +85,4 @@ export const Icon = ({ name, ...props }: IconProps) => {
   }
   return <LucideIcon {...props} />;
 };
+
