@@ -33,47 +33,61 @@ import type { Order, Customer } from '@/types'; // Assuming you have these types
 
 // Mock data
 const mockOrders: Order[] = [
-  { 
-    id: 'ord_1', 
-    orderNumber: 'ORD-2024-001', 
-    customerId: 'cust_1', 
-    customerName: 'John Doe Fencing', 
-    date: '2024-07-20', 
-    total: 1850.50, 
-    status: 'Ordered', 
-    lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}], 
+  {
+    id: 'ord_1',
+    orderNumber: 'ORD-2024-001',
+    customerId: 'cust_1',
+    customerName: 'John Doe Fencing',
+    date: '2024-07-20T10:00:00.000Z',
+    total: 1850.50,
+    status: 'Ordered',
+    lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}],
     subtotal: 1850.50,
-    orderState: 'Open',
+    orderState: 'Open', // Customer might add more
     readyForPickUpDate: undefined,
     pickedUpDate: undefined,
   },
-  { 
-    id: 'ord_2', 
-    orderNumber: 'ORD-2024-002', 
-    customerId: 'cust_2', 
-    customerName: 'Jane Smith Landscaping', 
-    date: '2024-07-22', 
-    total: 975.00, 
-    status: 'Ready for pick up', 
-    lineItems: [], 
+  {
+    id: 'ord_2',
+    orderNumber: 'ORD-2024-002',
+    customerId: 'cust_2',
+    customerName: 'Jane Smith Landscaping',
+    date: '2024-07-22T14:30:00.000Z',
+    total: 975.00,
+    status: 'Ready for pick up',
+    lineItems: [{id: 'li_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00}],
     subtotal: 975.00,
-    orderState: 'Closed',
-    readyForPickUpDate: '2024-07-28',
+    orderState: 'Closed', // Finalized, awaiting pickup
+    readyForPickUpDate: '2024-07-28T09:00:00.000Z',
     pickedUpDate: undefined,
   },
-  { 
-    id: 'ord_3', 
-    orderNumber: 'ORD-2024-003', 
-    customerId: 'cust_1', 
-    customerName: 'John Doe Fencing', 
-    date: '2024-07-25', 
-    total: 500.00, 
-    status: 'Picked up', 
-    lineItems: [{id: 'li_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00}], 
+  {
+    id: 'ord_3',
+    orderNumber: 'ORD-2024-003',
+    customerId: 'cust_1',
+    customerName: 'John Doe Fencing',
+    date: '2024-07-25T11:15:00.000Z',
+    total: 500.00,
+    status: 'Picked up',
+    lineItems: [{id: 'li_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00}],
     subtotal: 500.00,
-    orderState: 'Closed',
-    readyForPickUpDate: '2024-07-26',
-    pickedUpDate: '2024-07-27',
+    orderState: 'Closed', // Picked up, order fulfilled
+    readyForPickUpDate: '2024-07-26T16:00:00.000Z',
+    pickedUpDate: '2024-07-27T10:30:00.000Z',
+  },
+   {
+    id: 'ord_4',
+    orderNumber: 'ORD-2024-004',
+    customerId: 'cust_3', // Assuming cust_3 exists or is mocked
+    customerName: 'Robert Johnson Home',
+    date: '2024-07-29T08:00:00.000Z',
+    total: 75.00,
+    status: 'Draft',
+    lineItems: [{id: 'li_4', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 2, unitPrice: 25.00, total: 50.00}],
+    subtotal: 75.00,
+    orderState: 'Open',
+    readyForPickUpDate: undefined,
+    pickedUpDate: undefined,
   },
 ];
 
@@ -98,11 +112,11 @@ export default function OrdersPage() {
     setSelectedOrder(order);
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
-    setEmailDraft(null); 
+    setEmailDraft(null);
 
     try {
       const orderItemsDescription = order.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Items as per order.';
-      
+
       const result = await generateOrderEmailDraft({
         customerName: order.customerName || `${mockCustomer.firstName} ${mockCustomer.lastName}`,
         customerEmail: mockCustomer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com',
@@ -112,7 +126,7 @@ export default function OrdersPage() {
         orderTotal: order.total,
         companyName: "Delaware Fence Pro",
       });
-      
+
       setEmailDraft({ subject: result.subject, body: result.body });
     } catch (error) {
       console.error("Error generating email draft:", error);
@@ -143,7 +157,7 @@ export default function OrdersPage() {
           New Order
         </Button>
       </PageHeader>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>All Orders</CardTitle>
@@ -171,8 +185,8 @@ export default function OrdersPage() {
                   <TableCell>${order.total.toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={
-                      order.status === 'Picked up' ? 'default' : 
-                      order.status === 'Ready for pick up' ? 'secondary' : 
+                      order.status === 'Picked up' ? 'default' :
+                      order.status === 'Ready for pick up' ? 'secondary' :
                       'outline'
                     }>
                       {order.status}
