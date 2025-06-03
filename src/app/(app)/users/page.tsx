@@ -1,12 +1,15 @@
 
+"use client";
+
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { UserTable } from '@/components/users/user-table';
 import { UserDialog } from '@/components/users/user-dialog';
 import type { User } from '@/types';
+import { ROLE_PERMISSIONS } from '@/lib/constants';
 
-// Mock data for users
+// Mock data for users - ensuring it includes permissions based on role
 const mockUsers: User[] = [
   { 
     id: 'user_1', 
@@ -15,7 +18,8 @@ const mockUsers: User[] = [
     email: 'alice.admin@example.com', 
     role: 'Admin',
     isActive: true,
-    lastLogin: new Date(Date.now() - 86400000).toISOString() // Yesterday
+    lastLogin: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+    permissions: ROLE_PERMISSIONS['Admin'] 
   },
   { 
     id: 'user_2', 
@@ -24,7 +28,8 @@ const mockUsers: User[] = [
     email: 'bob.user@example.com', 
     role: 'User',
     isActive: true,
-    lastLogin: new Date(Date.now() - 86400000 * 5).toISOString() // 5 days ago
+    lastLogin: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 days ago
+    permissions: ROLE_PERMISSIONS['User']
   },
   { 
     id: 'user_3', 
@@ -33,6 +38,8 @@ const mockUsers: User[] = [
     email: 'charlie.inactive@example.com', 
     role: 'User',
     isActive: false,
+    permissions: ROLE_PERMISSIONS['User'],
+    lastLogin: undefined
   },
 ];
 

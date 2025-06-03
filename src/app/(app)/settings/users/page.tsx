@@ -1,4 +1,6 @@
 
+"use client";
+
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -37,7 +39,7 @@ const mockUsers: User[] = [
     role: 'User',
     isActive: false,
     permissions: ROLE_PERMISSIONS['User'],
-    lastLogin: undefined, // Explicitly undefined for inactive user who never logged in
+    lastLogin: undefined, 
   },
 ];
 
@@ -72,4 +74,3 @@ export default function UsersSettingsPage() {
     </>
   );
 }
-
