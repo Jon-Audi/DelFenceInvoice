@@ -1,3 +1,4 @@
+
 export type ProductCategory = 'Fencing' | 'Posts' | 'Gates' | 'Hardware' | 'Accessories' | 'Other';
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -46,7 +47,17 @@ export interface LineItem {
   total: number; 
 }
 
-export type DocumentStatus = 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Ordered' | 'Invoiced' | 'Paid' | 'Voided';
+export type DocumentStatus = 
+  'Draft' | 
+  'Sent' | 
+  'Accepted' | 
+  'Rejected' | 
+  'Ordered' | 
+  'Ready for pick up' | 
+  'Picked up' | 
+  'Invoiced' | 
+  'Paid' | 
+  'Voided';
 
 interface BaseDocument {
   id: string;
@@ -71,8 +82,11 @@ export interface Estimate extends BaseDocument {
 export interface Order extends BaseDocument {
   orderNumber: string;
   estimateId?: string; // Optional link to an estimate
-  status: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Invoiced' | 'Voided'>;
+  status: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>;
   expectedDeliveryDate?: string; // ISO date string
+  readyForPickUpDate?: string; // ISO date string, set when status becomes 'Ready for pick up'
+  pickedUpDate?: string; // ISO date string, set when status becomes 'Picked up'
+  orderState: 'Open' | 'Closed'; // 'Open' if customer might add more, 'Closed' if finalized
 }
 
 export interface Invoice extends BaseDocument {

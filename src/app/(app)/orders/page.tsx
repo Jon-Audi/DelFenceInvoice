@@ -1,3 +1,4 @@
+
 "use client"; // Marking as client component for useState and event handlers
 
 import React, { useState } from 'react';
@@ -19,21 +20,61 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer, Product } from '@/types'; // Assuming you have these types
+import type { Order, Customer } from '@/types'; // Assuming you have these types
 
 // Mock data
 const mockOrders: Order[] = [
-  { id: 'ord_1', orderNumber: 'ORD-2024-001', customerId: 'cust_1', customerName: 'John Doe Fencing', date: '2024-07-20', total: 1850.50, status: 'Ordered', lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}], subtotal: 1850.50 },
-  { id: 'ord_2', orderNumber: 'ORD-2024-002', customerId: 'cust_2', customerName: 'Jane Smith Landscaping', date: '2024-07-22', total: 975.00, status: 'Draft', lineItems: [], subtotal: 975.00 },
+  { 
+    id: 'ord_1', 
+    orderNumber: 'ORD-2024-001', 
+    customerId: 'cust_1', 
+    customerName: 'John Doe Fencing', 
+    date: '2024-07-20', 
+    total: 1850.50, 
+    status: 'Ordered', 
+    lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}], 
+    subtotal: 1850.50,
+    orderState: 'Open',
+    readyForPickUpDate: undefined,
+    pickedUpDate: undefined,
+  },
+  { 
+    id: 'ord_2', 
+    orderNumber: 'ORD-2024-002', 
+    customerId: 'cust_2', 
+    customerName: 'Jane Smith Landscaping', 
+    date: '2024-07-22', 
+    total: 975.00, 
+    status: 'Ready for pick up', 
+    lineItems: [], 
+    subtotal: 975.00,
+    orderState: 'Closed',
+    readyForPickUpDate: '2024-07-28',
+    pickedUpDate: undefined,
+  },
+  { 
+    id: 'ord_3', 
+    orderNumber: 'ORD-2024-003', 
+    customerId: 'cust_1', 
+    customerName: 'John Doe Fencing', 
+    date: '2024-07-25', 
+    total: 500.00, 
+    status: 'Picked up', 
+    lineItems: [{id: 'li_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00}], 
+    subtotal: 500.00,
+    orderState: 'Closed',
+    readyForPickUpDate: '2024-07-26',
+    pickedUpDate: '2024-07-27',
+  },
 ];
 
 const mockCustomer: Customer = {
@@ -117,6 +158,7 @@ export default function OrdersPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Order State</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -127,7 +169,22 @@ export default function OrdersPage() {
                   <TableCell>{order.customerName}</TableCell>
                   <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
                   <TableCell>${order.total.toFixed(2)}</TableCell>
-                  <TableCell>{order.status}</TableCell>
+                  <TableCell>
+                    <Badge variant={
+                      order.status === 'Picked up' ? 'default' : 
+                      order.status === 'Ready for pick up' ? 'secondary' : 
+                      'outline'
+                    }>
+                      {order.status}
+                      {order.status === 'Ready for pick up' && order.readyForPickUpDate && ` (${new Date(order.readyForPickUpDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })})`}
+                      {order.status === 'Picked up' && order.pickedUpDate && ` (${new Date(order.pickedUpDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })})`}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={order.orderState === 'Open' ? 'outline' : 'default'}>
+                      {order.orderState}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => handleGenerateEmail(order)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" />
