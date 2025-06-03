@@ -14,7 +14,7 @@ export const NAV_ITEMS = [
   { href: '/orders', label: 'Orders', icon: 'ShoppingCart' },
   { href: '/invoices', label: 'Invoices', icon: 'FileDigit' },
   // { href: '/users', label: 'Users', icon: 'UsersRound' }, // Moved to settings
-  { href: '/settings', label: 'Settings', icon: 'Settings'},
+  // { href: '/settings', label: 'Settings', icon: 'Settings'}, // Removed as per user request
 ];
 
 export const MATERIAL_CALCULATOR_LINK = {
@@ -50,3 +50,4 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_invoices',
   ],
 };
+
