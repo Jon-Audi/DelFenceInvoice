@@ -20,7 +20,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
@@ -28,13 +27,40 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft'; // Import the GenAI flow
-import type { Estimate, Customer, Product } from '@/types'; // Assuming you have these types
+import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
+import type { Estimate, Customer } from '@/types';
 
 // Mock data
 const mockEstimates: Estimate[] = [
-  { id: 'est_1', estimateNumber: 'EST-2024-001', customerId: 'cust_1', customerName: 'John Doe Fencing', date: '2024-07-15', total: 1250.75, status: 'Sent', lineItems: [], subtotal: 1250.75 },
-  { id: 'est_2', estimateNumber: 'EST-2024-002', customerId: 'cust_2', customerName: 'Jane Smith Landscaping', date: '2024-07-18', total: 850.00, status: 'Draft', lineItems: [], subtotal: 850.00 },
+  { 
+    id: 'est_1', 
+    estimateNumber: 'EST-2024-001', 
+    customerId: 'cust_1', 
+    customerName: 'John Doe Fencing', 
+    date: '2024-07-15', 
+    total: 1250.75, 
+    status: 'Sent', 
+    lineItems: [
+      { id: 'li_est_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 50, unitPrice: 3.50, total: 175.00 },
+      { id: 'li_est_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 10, unitPrice: 12.00, total: 120.00 },
+    ], 
+    subtotal: 1150.75, // Example value
+    taxAmount: 100.00, // Example value
+  },
+  { 
+    id: 'est_2', 
+    estimateNumber: 'EST-2024-002', 
+    customerId: 'cust_2', 
+    customerName: 'Jane Smith Landscaping', 
+    date: '2024-07-18', 
+    total: 850.00, 
+    status: 'Draft', 
+    lineItems: [
+      { id: 'li_est_3', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 4, unitPrice: 25.00, total: 100.00 },
+    ], 
+    subtotal: 800.00, // Example value
+    taxAmount: 50.00, // Example value
+  },
 ];
 
 const mockCustomer: Customer = {
@@ -58,10 +84,15 @@ export default function EstimatesPage() {
     setSelectedEstimate(estimate);
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
-    setEmailDraft(null); // Clear previous draft
+    setEmailDraft(null); 
 
     try {
-      // Construct estimate content string
+      const customerForEstimate = mockEstimates.find(e => e.id === estimate.id)?.customerId === mockCustomer.id ? mockCustomer : {
+        firstName: estimate.customerName?.split(' ')[0] || "Valued",
+        lastName: estimate.customerName?.split(' ').slice(1).join(' ') || "Customer",
+        companyName: estimate.customerName?.includes(" ") ? undefined : estimate.customerName, // Basic heuristic
+      };
+      
       const estimateContent = `
         Estimate Number: ${estimate.estimateNumber}
         Date: ${estimate.date}
@@ -72,8 +103,8 @@ export default function EstimatesPage() {
       `;
       
       const result = await estimateEmailDraft({
-        customerName: estimate.customerName || mockCustomer.firstName + " " + mockCustomer.lastName, // Use actual customer name from estimate if available
-        companyName: mockCustomer.companyName, // Or pass from estimate if available
+        customerName: `${customerForEstimate.firstName} ${customerForEstimate.lastName}`,
+        companyName: customerForEstimate.companyName,
         estimateContent: estimateContent,
       });
       
@@ -95,7 +126,6 @@ export default function EstimatesPage() {
   };
 
   const handleSendEmail = () => {
-    // Placeholder for actual email sending logic
     toast({
       title: "Email Sent (Simulation)",
       description: `Email draft for estimate ${selectedEstimate?.estimateNumber} would be sent.`,
@@ -169,11 +199,11 @@ export default function EstimatesPage() {
               <div className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="emailSubject">Subject</Label>
-                  <Input id="emailSubject" value={emailDraft.subject} readOnly />
+                  <Input id="emailSubject" value={emailDraft.subject || ''} readOnly />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={emailDraft.body} readOnly rows={10} className="min-h-[200px]" />
+                  <Textarea id="emailBody" value={emailDraft.body || ''} readOnly rows={10} className="min-h-[200px]" />
                 </div>
               </div>
             ) : (
@@ -194,4 +224,3 @@ export default function EstimatesPage() {
     </>
   );
 }
-

@@ -47,7 +47,7 @@ export default function UsersPage() {
   // In a real app, you'd fetch users and handle saving here or in a global state/context
   // For now, we'll just log the save action.
   const handleSaveUser = (user: User) => {
-    console.log("Saving user:", user);
+    console.log("Saving user (from /users page):", user);
     // Here you would update your user list, possibly by refetching or updating local state.
     // For mock purposes, you might find and update the user in mockUsers or add a new one.
   };
@@ -55,7 +55,7 @@ export default function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" description="Manage user accounts and roles.">
+      <PageHeader title="Users (Legacy)" description="Manage user accounts and roles. (Access via /settings/users)">
          <UserDialog 
             triggerButton={
               <Button>
