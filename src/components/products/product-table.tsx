@@ -36,6 +36,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -46,6 +56,7 @@ interface ProductTableProps {
   productCategories: string[];
   onAddNewCategory: (category: string) => void;
   isLoading: boolean;
+  onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
 }
 
 export function ProductTable({ 
@@ -54,13 +65,37 @@ export function ProductTable({
   onDelete, 
   productCategories, 
   onAddNewCategory,
-  isLoading 
+  isLoading,
+  onApplyCategoryMarkup
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
+  const [selectedCategoryForMarkup, setSelectedCategoryForMarkup] = React.useState<string | null>(null);
+  const [isMarkupDialogOpen, setIsMarkupDialogOpen] = React.useState(false);
+  const [newMarkupValue, setNewMarkupValue] = React.useState<string>("");
 
   const formatCurrency = (amount: number | undefined) => {
     if (typeof amount !== 'number' || isNaN(amount)) return 'N/A';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  };
+
+  const handleOpenMarkupDialog = (category: string) => {
+    setSelectedCategoryForMarkup(category);
+    setNewMarkupValue(""); 
+    setIsMarkupDialogOpen(true);
+  };
+
+  const handleApplyMarkup = () => {
+    if (selectedCategoryForMarkup && newMarkupValue !== "") {
+      const markupNum = parseFloat(newMarkupValue);
+      if (!isNaN(markupNum) && markupNum >= 0) {
+        onApplyCategoryMarkup(selectedCategoryForMarkup, markupNum);
+        setIsMarkupDialogOpen(false);
+        setSelectedCategoryForMarkup(null);
+      } else {
+        // This could be a toast in a real app
+        alert("Please enter a valid non-negative markup percentage.");
+      }
+    }
   };
 
   if (isLoading) {
@@ -89,7 +124,6 @@ export function ProductTable({
     );
   }
 
-  // Determine default open accordions: categories with products
   const defaultOpenValues = Array.from(groupedProducts.entries())
     .filter(([_, products]) => products.length > 0)
     .map(([category]) => category);
@@ -99,10 +133,27 @@ export function ProductTable({
       <Accordion type="multiple" defaultValue={defaultOpenValues} className="w-full space-y-2">
         {Array.from(groupedProducts.entries()).map(([category, productsInCategory]) => (
           <AccordionItem value={category} key={category} className="border rounded-lg shadow-sm overflow-hidden bg-card">
-            <AccordionTrigger className="px-6 py-4 hover:bg-muted/50 data-[state=open]:border-b">
+            <AccordionTrigger className="px-6 py-4 hover:bg-muted/50 data-[state=open]:border-b text-left hover:no-underline">
               <div className="flex items-center justify-between w-full">
                 <span className="font-semibold text-lg text-card-foreground">{category}</span>
-                <Badge variant="secondary" className="ml-2">{productsInCategory.length} product{productsInCategory.length === 1 ? '' : 's'}</Badge>
+                <div className="flex items-center">
+                  <Badge variant="secondary" className="ml-2 mr-2">
+                    {productsInCategory.length} product{productsInCategory.length === 1 ? '' : 's'}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 data-[state=open]:bg-accent/70">
+                        <Icon name="MoreHorizontal" className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => handleOpenMarkupDialog(category)}>
+                        <Icon name="TrendingUp" className="mr-2 h-4 w-4" />
+                        Apply Markup to Category
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="p-0">
@@ -201,9 +252,44 @@ export function ProductTable({
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {isMarkupDialogOpen && selectedCategoryForMarkup && (
+        <Dialog open={isMarkupDialogOpen} onOpenChange={(open) => {
+          setIsMarkupDialogOpen(open);
+          if (!open) setSelectedCategoryForMarkup(null);
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Apply Markup to Category: {selectedCategoryForMarkup}</DialogTitle>
+              <DialogDescription>
+                Enter the new markup percentage to apply to all products in this category.
+                This will recalculate their selling price based on their cost and update their individual markup percentage.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="markupPercentageDialog" className="text-right col-span-1">Markup (%)</Label>
+                <Input
+                  id="markupPercentageDialog"
+                  type="number"
+                  value={newMarkupValue}
+                  onChange={(e) => setNewMarkupValue(e.target.value)}
+                  className="col-span-3"
+                  placeholder="e.g., 50"
+                  min="0"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsMarkupDialogOpen(false);
+                setSelectedCategoryForMarkup(null);
+              }}>Cancel</Button>
+              <Button onClick={handleApplyMarkup}>Apply Markup</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
-
-
-    

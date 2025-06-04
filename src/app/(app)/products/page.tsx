@@ -11,7 +11,7 @@ import type { Product } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -71,6 +71,7 @@ export default function ProductsPage() {
     const { id, ...productData } = productToSave;
 
     try {
+      setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
         const productRef = doc(db, 'products', id);
         await setDoc(productRef, productData);
@@ -92,11 +93,14 @@ export default function ProductsPage() {
         description: "Could not save product to database.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
     try {
+      setIsLoading(true);
       await deleteDoc(doc(db, 'products', productId));
       toast({
         title: "Product Deleted",
@@ -110,6 +114,48 @@ export default function ProductsPage() {
         description: "Could not delete product from database.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleApplyCategoryMarkup = async (categoryName: string, markup: number) => {
+    if (isNaN(markup) || markup < 0) {
+      toast({ title: "Invalid Markup", description: "Markup percentage must be a non-negative number.", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const productsRef = collection(db, 'products');
+      const q = query(productsRef, where('category', '==', categoryName));
+      const querySnapshot = await getDocs(q);
+  
+      if (querySnapshot.empty) {
+        toast({ title: "No Products", description: `No products found in category "${categoryName}".`, variant: "default" });
+        setIsLoading(false);
+        return;
+      }
+  
+      const batch = writeBatch(db);
+      querySnapshot.forEach((docSnap) => {
+        const product = docSnap.data() as Omit<Product, 'id'>; // Cast to exclude ID, Firestore data won't have it here
+        const newPrice = product.cost * (1 + markup / 100);
+        batch.update(docSnap.ref, { 
+          price: parseFloat(newPrice.toFixed(2)), 
+          markupPercentage: parseFloat(markup.toFixed(2)) 
+        });
+      });
+  
+      await batch.commit();
+      toast({
+        title: "Markup Applied",
+        description: `Markup of ${markup}% applied to ${querySnapshot.size} products in category "${categoryName}". Prices updated.`,
+      });
+    } catch (error) {
+      console.error("Error applying category markup:", error);
+      toast({ title: "Error", description: "Could not apply markup. Please try again.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -147,7 +193,6 @@ export default function ProductsPage() {
 
     let parsedProductCount = 0;
     let skippedRowCount = 0;
-    console.log("Starting CSV product parsing. Expected normalized headers:", expectedRequiredHeadersNormalized);
 
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
@@ -249,13 +294,12 @@ export default function ProductsPage() {
           if (newCategoriesFromCsv.size > 0) {
             setProductCategories(prev => [...prev, ...Array.from(newCategoriesFromCsv)].sort((a,b) => a.localeCompare(b)));
           }
-
+          setIsLoading(true);
           try {
             const batch = writeBatch(db);
             parsedProducts.forEach(productData => { 
               const newDocRef = doc(collection(db, 'products'));
               const productToWrite: any = {...productData};
-              // Ensure description is not undefined
               if (productData.description === undefined) {
                 delete productToWrite.description;
               }
@@ -274,9 +318,9 @@ export default function ProductsPage() {
               variant: "destructive",
               duration: 10000,
             });
+          } finally {
+            setIsLoading(false);
           }
-        } else {
-          console.log("CSV Import: parseCsvToProducts returned no products. Specific toasts handled within that function.");
         }
       }
       if (fileInputRef.current) {
@@ -305,7 +349,6 @@ export default function ProductsPage() {
           value = product[header as keyof Product];
         }
         
-        // Handle undefined description specifically for export, ensuring it's an empty string
         if (header === 'description' && value === undefined) {
           return '';
         }
@@ -349,16 +392,15 @@ export default function ProductsPage() {
   const groupedProducts = useMemo(() => {
     const groups = new Map<string, Product[]>();
     productCategories.forEach(category => {
-        groups.set(category, []); // Initialize all known categories, even if empty
+        groups.set(category, []); 
     });
     products.forEach(product => {
-      const category = product.category || 'Uncategorized'; // Fallback for products missing a category
+      const category = product.category || 'Uncategorized'; 
       if (!groups.has(category)) {
-        groups.set(category, []); // Ensure the category exists if it wasn't in productCategories initially
+        groups.set(category, []); 
       }
       groups.get(category)!.push(product);
     });
-    // Sort categories: those with products first, then alphabetically
     return new Map([...groups.entries()].sort(([catA, prodsA], [catB, prodsB]) => {
         if (prodsA.length > 0 && prodsB.length === 0) return -1;
         if (prodsA.length === 0 && prodsB.length > 0) return 1;
@@ -366,7 +408,7 @@ export default function ProductsPage() {
     }));
   }, [products, productCategories]);
   
-  if (isLoading) {
+  if (isLoading && products.length === 0) { // Show main loading only if no products are yet displayed
     return (
       <PageHeader title="Products" description="Loading product inventory...">
         <div className="flex items-center justify-center h-32">
@@ -387,17 +429,17 @@ export default function ProductsPage() {
             accept=".csv"
             onChange={handleFileChange}
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button variant="outline" onClick={handleExportCsv}>
+          <Button variant="outline" onClick={handleExportCsv} disabled={isLoading || products.length === 0}>
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
           <ProductDialog 
             triggerButton={
-              <Button>
+              <Button disabled={isLoading}>
                 <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
                 Add Product
               </Button>
@@ -415,10 +457,8 @@ export default function ProductsPage() {
         productCategories={productCategories}
         onAddNewCategory={handleAddNewCategory}
         isLoading={isLoading}
+        onApplyCategoryMarkup={handleApplyCategoryMarkup}
       />
     </>
   );
 }
-    
-
-    

@@ -34,7 +34,8 @@ import {
   Loader2,
   ChevronsUpDown,
   Check,
-  CalendarDays, // Added CalendarDays for date pickers
+  CalendarDays,
+  TrendingUp, // Added TrendingUp
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -75,7 +76,8 @@ const iconComponents = {
   Loader2,
   ChevronsUpDown,
   Check,
-  Calendar: CalendarDays, // Using CalendarDays as "Calendar"
+  Calendar: CalendarDays,
+  TrendingUp, // Added TrendingUp
 };
 
 interface IconProps extends LucideProps {
