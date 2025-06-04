@@ -37,15 +37,15 @@ const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for p
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
 
 const lineItemSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().optional(), // For existing items when editing
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
 });
 
 const orderFormSchema = z.object({
+  id: z.string().optional(), // For initialData from conversion
   orderNumber: z.string().min(1, "Order number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), // Auto-filled for display
   date: z.date({ required_error: "Order date is required." }),
   status: z.enum(ORDER_STATUSES as [typeof ORDER_STATUSES[0], ...typeof ORDER_STATUSES]),
   orderState: z.enum(ORDER_STATES as [typeof ORDER_STATES[0], ...typeof ORDER_STATES]),
@@ -59,46 +59,72 @@ const orderFormSchema = z.object({
 export type OrderFormData = z.infer<typeof orderFormSchema>;
 
 interface OrderFormProps {
-  order?: Order;
+  order?: Order; // For editing an existing order
+  initialData?: OrderFormData | null; // For pre-filling from conversion
   onSubmit: (data: OrderFormData) => void;
   onClose?: () => void;
   customers: Customer[];
   products: Product[];
 }
 
-export function OrderForm({ order, onSubmit, onClose, customers, products }: OrderFormProps) {
+export function OrderForm({ order, initialData, onSubmit, onClose, customers, products }: OrderFormProps) {
+  const defaultFormValues: OrderFormData = order 
+    ? { // Editing existing order
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        date: new Date(order.date),
+        status: order.status,
+        orderState: order.orderState,
+        expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
+        readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
+        pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
+        lineItems: order.lineItems.map(li => ({
+          id: li.id,
+          productId: li.productId,
+          quantity: li.quantity,
+        })),
+        notes: order.notes || '',
+      }
+    : initialData 
+    ? { // Pre-filling from conversion (initialData is already OrderFormData)
+        ...initialData,
+        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date), // Ensure date is Date object
+        expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
+        readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
+        pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
+      }
+    : { // Creating a new order from scratch
+        id: undefined,
+        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
+        customerId: '',
+        date: new Date(),
+        status: 'Draft',
+        orderState: 'Open',
+        lineItems: [],
+        notes: '',
+        expectedDeliveryDate: undefined,
+        readyForPickUpDate: undefined,
+        pickedUpDate: undefined,
+      };
+  
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
-    defaultValues: order ? {
-      ...order,
-      date: new Date(order.date),
-      expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
-      readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
-      pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
-      customerId: order.customerId || '',
-      customerName: order.customerName || '',
-      lineItems: order.lineItems.map(li => ({
-        id: li.id,
-        productId: li.productId,
-        quantity: li.quantity,
-      })),
-      notes: order.notes || '',
-    } : {
-      orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
-      customerId: '',
-      customerName: '',
-      date: new Date(),
-      status: 'Draft',
-      orderState: 'Open',
-      lineItems: [],
-      notes: '',
-    },
+    defaultValues: defaultFormValues,
   });
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
+
+  // Reset form if initialData changes (e.g., user converts another estimate without closing dialog)
+  useEffect(() => {
+    if (initialData && !order) { // Only apply if not editing and initialData is present
+        form.reset(defaultFormValues);
+    }
+  }, [initialData, order, form, defaultFormValues]);
+
 
   const watchedLineItems = form.watch('lineItems');
 
@@ -111,7 +137,7 @@ export function OrderForm({ order, onSubmit, onClose, customers, products }: Ord
   }, [watchedLineItems, products]);
 
   const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0); // Currently same as subtotal
+  const [total, setTotal] = useState(0); 
 
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
@@ -165,8 +191,6 @@ export function OrderForm({ order, onSubmit, onClose, customers, products }: Ord
                             key={customer.id}
                             onSelect={() => {
                               form.setValue("customerId", customer.id, { shouldValidate: true });
-                              const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName);
                             }}
                           >
                             <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -376,7 +400,7 @@ export function OrderForm({ order, onSubmit, onClose, customers, products }: Ord
         )} />
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
-          <Button type="submit">{order ? 'Save Changes' : 'Create Order'}</Button>
+          <Button type="submit">{order || initialData ? 'Save Changes' : 'Create Order'}</Button>
         </div>
       </form>
     </Form>

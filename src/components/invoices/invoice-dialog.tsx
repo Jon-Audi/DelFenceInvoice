@@ -15,14 +15,36 @@ import {
 
 interface InvoiceDialogProps {
   invoice?: Invoice;
-  triggerButton: React.ReactElement;
+  triggerButton?: React.ReactElement; // Make trigger optional
   onSave: (invoice: Invoice) => void;
   customers: Customer[];
   products: Product[];
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialData?: InvoiceFormData | null;
 }
 
-export function InvoiceDialog({ invoice, triggerButton, onSave, customers, products }: InvoiceDialogProps) {
-  const [open, setOpen] = React.useState(false);
+export function InvoiceDialog({ 
+  invoice, 
+  triggerButton, 
+  onSave, 
+  customers, 
+  products,
+  isOpen: controlledIsOpen,
+  onOpenChange: controlledOnOpenChange,
+  initialData 
+}: InvoiceDialogProps) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
+
+  // Open dialog if initialData is provided and it's a new conversion
+  React.useEffect(() => {
+    if (initialData && controlledIsOpen === undefined) { // Only if not controlled externally for this specific case
+        setInternalOpen(true);
+    }
+  }, [initialData, controlledIsOpen]);
 
   const handleSubmit = (formData: InvoiceFormData) => {
     const selectedCustomer = customers.find(c => c.id === formData.customerId);
@@ -46,7 +68,7 @@ export function InvoiceDialog({ invoice, triggerButton, onSave, customers, produ
     const total = subtotal + taxAmount;
       
     const invoiceToSave: Invoice = {
-      id: invoice?.id || crypto.randomUUID(),
+      id: invoice?.id || initialData?.id || crypto.randomUUID(),
       invoiceNumber: formData.invoiceNumber,
       customerId: formData.customerId,
       customerName: customerName,
@@ -64,20 +86,20 @@ export function InvoiceDialog({ invoice, triggerButton, onSave, customers, produ
     setOpen(false);
   };
 
+  const dialogTitle = invoice ? 'Edit Invoice' : (initialData ? 'Create New Invoice from Estimate' : 'New Invoice');
+  const dialogDescription = invoice ? 'Update the details of this invoice.' : (initialData ? 'Review and confirm the details for this new invoice based on the estimate.' : 'Fill in the details for the new invoice.');
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {triggerButton}
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setOpen}>
+      {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{invoice ? 'Edit Invoice' : 'New Invoice'}</DialogTitle>
-          <DialogDescription>
-            {invoice ? 'Update the details of this invoice.' : 'Fill in the details for the new invoice.'}
-          </DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <InvoiceForm 
           invoice={invoice} 
+          initialData={initialData}
           onSubmit={handleSubmit} 
           onClose={() => setOpen(false)}
           customers={customers} 
@@ -87,3 +109,4 @@ export function InvoiceDialog({ invoice, triggerButton, onSave, customers, produ
     </Dialog>
   );
 }
+

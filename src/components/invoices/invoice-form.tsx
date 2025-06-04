@@ -42,9 +42,9 @@ const lineItemSchema = z.object({
 });
 
 const invoiceFormSchema = z.object({
+  id: z.string().optional(), // For initialData from conversion
   invoiceNumber: z.string().min(1, "Invoice number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), // Auto-filled for display
   date: z.date({ required_error: "Invoice date is required." }),
   dueDate: z.date().optional(),
   status: z.enum(INVOICE_STATUSES as [typeof INVOICE_STATUSES[0], ...typeof INVOICE_STATUSES]),
@@ -57,21 +57,22 @@ export type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
 interface InvoiceFormProps {
   invoice?: Invoice;
+  initialData?: InvoiceFormData | null; // For pre-filling from conversion
   onSubmit: (data: InvoiceFormData) => void;
   onClose?: () => void;
   customers: Customer[];
   products: Product[];
 }
 
-export function InvoiceForm({ invoice, onSubmit, onClose, customers, products }: InvoiceFormProps) {
-  const form = useForm<InvoiceFormData>({
-    resolver: zodResolver(invoiceFormSchema),
-    defaultValues: invoice ? {
-      ...invoice,
+export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products }: InvoiceFormProps) {
+  const defaultFormValues: InvoiceFormData = invoice
+  ? { // Editing existing invoice
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      customerId: invoice.customerId,
       date: new Date(invoice.date),
       dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
-      customerId: invoice.customerId || '',
-      customerName: invoice.customerName || '',
+      status: invoice.status,
       lineItems: invoice.lineItems.map(li => ({
         id: li.id,
         productId: li.productId,
@@ -79,22 +80,40 @@ export function InvoiceForm({ invoice, onSubmit, onClose, customers, products }:
       })),
       paymentTerms: invoice.paymentTerms || 'Due on receipt',
       notes: invoice.notes || '',
-    } : {
-      invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
+    }
+  : initialData
+  ? { // Pre-filling from conversion
+      ...initialData,
+      date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+      dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
+    }
+  : { // Creating a new invoice from scratch
+      id: undefined,
+      invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
       customerId: '',
-      customerName: '',
       date: new Date(),
       status: 'Draft',
       lineItems: [],
       paymentTerms: 'Due on receipt',
       notes: '',
-    },
+      dueDate: undefined,
+    };
+
+  const form = useForm<InvoiceFormData>({
+    resolver: zodResolver(invoiceFormSchema),
+    defaultValues: defaultFormValues,
   });
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
+
+  useEffect(() => {
+    if (initialData && !invoice) { // Only apply if not editing and initialData is present
+        form.reset(defaultFormValues);
+    }
+  }, [initialData, invoice, form, defaultFormValues]);
 
   const watchedLineItems = form.watch('lineItems');
 
@@ -107,12 +126,12 @@ export function InvoiceForm({ invoice, onSubmit, onClose, customers, products }:
   }, [watchedLineItems, products]);
 
   const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0); // Currently same as subtotal
+  const [total, setTotal] = useState(0); 
 
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
     setSubtotal(newSubtotal);
-    setTotal(newSubtotal); // Assuming no tax for now
+    setTotal(newSubtotal); 
   }, [watchedLineItems, calculateSubtotal]);
 
   const handleProductSelect = (index: number, productId: string) => {
@@ -161,8 +180,6 @@ export function InvoiceForm({ invoice, onSubmit, onClose, customers, products }:
                             key={customer.id}
                             onSelect={() => {
                               form.setValue("customerId", customer.id, { shouldValidate: true });
-                              const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName);
                             }}
                           >
                             <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -333,9 +350,10 @@ export function InvoiceForm({ invoice, onSubmit, onClose, customers, products }:
         )} />
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
-          <Button type="submit">{invoice ? 'Save Changes' : 'Create Invoice'}</Button>
+          <Button type="submit">{invoice || initialData ? 'Save Changes' : 'Create Invoice'}</Button>
         </div>
       </form>
     </Form>
   );
 }
+

@@ -45,8 +45,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer, Product, CustomerType, EmailContactType } from '@/types'; 
-import { OrderDialog } from '@/components/orders/order-dialog';
+import type { Order, Customer, Product, Estimate } from '@/types'; 
+import { OrderDialog, type OrderFormData } from '@/components/orders/order-dialog';
 
 // Initial mock data for customers
 const initialMockCustomers: Customer[] = [
@@ -126,8 +126,39 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
+  const [isConvertingOrder, setIsConvertingOrder] = useState(false);
+  const [conversionOrderData, setConversionOrderData] = useState<OrderFormData | null>(null);
+
   useEffect(() => {
     setIsClient(true);
+    const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
+    if (pendingOrderRaw) {
+      localStorage.removeItem('estimateToConvert_order');
+      try {
+        const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
+        const newOrderData: OrderFormData = {
+          id: crypto.randomUUID(), // Generate new ID for the order
+          orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+          customerId: estimateToConvert.customerId,
+          date: new Date(),
+          status: 'Ordered',
+          orderState: 'Open',
+          lineItems: estimateToConvert.lineItems.map(li => ({
+            productId: li.productId, // id for lineItem itself will be generated in OrderDialog if not present
+            quantity: li.quantity,
+          })),
+          notes: estimateToConvert.notes || '',
+          expectedDeliveryDate: undefined,
+          readyForPickUpDate: undefined,
+          pickedUpDate: undefined,
+        };
+        setConversionOrderData(newOrderData);
+        setIsConvertingOrder(true);
+      } catch (error) {
+        console.error("Error processing estimate for order conversion:", error);
+        toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
+      }
+    }
   }, []);
 
   const handleSaveOrder = (orderToSave: Order) => {
@@ -140,9 +171,13 @@ export default function OrdersPage() {
         return updatedOrders;
       } else {
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added.` });
-        return [...prevOrders, { ...orderToSave, id: orderToSave.id || crypto.randomUUID() }];
+        return [...prevOrders, orderToSave ]; // Ensure it's the full Order object
       }
     });
+    if (isConvertingOrder) {
+        setIsConvertingOrder(false);
+        setConversionOrderData(null);
+    }
   };
 
   const handleDeleteOrder = (orderId: string) => {
@@ -223,6 +258,21 @@ export default function OrdersPage() {
           products={mockProducts}
         />
       </PageHeader>
+
+      {isConvertingOrder && conversionOrderData && (
+        <OrderDialog
+            isOpen={isConvertingOrder}
+            onOpenChange={(open) => {
+                setIsConvertingOrder(open);
+                if (!open) setConversionOrderData(null);
+            }}
+            initialData={conversionOrderData}
+            onSave={handleSaveOrder}
+            customers={customers}
+            products={mockProducts}
+        />
+      )}
+
 
       <Card>
         <CardHeader>

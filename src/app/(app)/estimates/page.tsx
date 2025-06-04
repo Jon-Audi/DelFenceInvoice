@@ -2,6 +2,7 @@
 "use client"; 
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -37,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from '@/components/ui/textarea';
@@ -88,7 +90,7 @@ const initialMockEstimates: Estimate[] = [
   {
     id: 'est_1',
     estimateNumber: 'EST-2024-001',
-    customerId: 'cust_1', // Linked to John Doe Fencing
+    customerId: 'cust_1', 
     customerName: 'Doe Fencing Co.',
     date: '2024-07-15',
     total: 295.00, 
@@ -103,7 +105,7 @@ const initialMockEstimates: Estimate[] = [
   {
     id: 'est_2',
     estimateNumber: 'EST-2024-002',
-    customerId: 'cust_2', // Linked to Jane Smith Landscaping
+    customerId: 'cust_2', 
     customerName: 'J. Smith Landscaping',
     date: '2024-07-18',
     total: 125.00, 
@@ -129,7 +131,7 @@ const mockProducts: Product[] = [
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>(initialMockEstimates);
-  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers); // Manage customers list
+  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
   const [selectedEstimateForEmail, setSelectedEstimateForEmail] = useState<Estimate | null>(null);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
@@ -138,6 +140,7 @@ export default function EstimatesPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -226,6 +229,16 @@ export default function EstimatesPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const handleConvertToOrder = (estimate: Estimate) => {
+    localStorage.setItem('estimateToConvert_order', JSON.stringify(estimate));
+    router.push('/orders');
+  };
+
+  const handleConvertToInvoice = (estimate: Estimate) => {
+    localStorage.setItem('estimateToConvert_invoice', JSON.stringify(estimate));
+    router.push('/invoices');
+  };
+
   return (
     <>
       <PageHeader title="Estimates" description="Create and manage customer estimates.">
@@ -289,6 +302,14 @@ export default function EstimatesPage() {
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleConvertToOrder(estimate)}>
+                          <Icon name="ShoppingCart" className="mr-2 h-4 w-4" /> Convert to Order
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleConvertToInvoice(estimate)}>
+                          <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           onSelect={() => setEstimateToDelete(estimate)}
@@ -362,3 +383,4 @@ export default function EstimatesPage() {
     </>
   );
 }
+

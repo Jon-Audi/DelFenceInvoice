@@ -20,8 +20,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, CustomerType, EmailContactType } from '@/types';
-import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
+import type { Invoice, Customer, Product, Estimate } from '@/types';
+import { InvoiceDialog, type InvoiceFormData } from '@/components/invoices/invoice-dialog';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 
 // Initial mock data for customers
@@ -94,7 +94,7 @@ const initialMockInvoices: Invoice[] = [
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(initialMockInvoices);
   const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>(mockProducts); // Added products state
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -104,9 +104,39 @@ export default function InvoicesPage() {
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
+  const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
+  const [conversionInvoiceData, setConversionInvoiceData] = useState<InvoiceFormData | null>(null);
+
   useEffect(() => {
     setIsClient(true);
+    const pendingInvoiceRaw = localStorage.getItem('estimateToConvert_invoice');
+    if (pendingInvoiceRaw) {
+      localStorage.removeItem('estimateToConvert_invoice');
+      try {
+        const estimateToConvert = JSON.parse(pendingInvoiceRaw) as Estimate;
+        const newInvoiceData: InvoiceFormData = {
+          id: crypto.randomUUID(), // Generate new ID for the invoice
+          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+          customerId: estimateToConvert.customerId,
+          date: new Date(),
+          status: 'Draft',
+          lineItems: estimateToConvert.lineItems.map(li => ({
+            productId: li.productId,
+            quantity: li.quantity,
+          })),
+          notes: estimateToConvert.notes || '',
+          paymentTerms: 'Due upon receipt', // Default payment terms
+          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), // Default due date (e.g., 30 days from now)
+        };
+        setConversionInvoiceData(newInvoiceData);
+        setIsConvertingInvoice(true);
+      } catch (error) {
+        console.error("Error processing estimate for invoice conversion:", error);
+        toast({ title: "Conversion Error", description: "Could not process estimate data for invoice.", variant: "destructive" });
+      }
+    }
   }, []);
+
 
   const handleSaveInvoice = (invoiceToSave: Invoice) => {
     setInvoices(prevInvoices => {
@@ -118,9 +148,13 @@ export default function InvoicesPage() {
         return updatedInvoices;
       } else {
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added.` });
-        return [...prevInvoices, { ...invoiceToSave, id: invoiceToSave.id || crypto.randomUUID() }];
+        return [...prevInvoices, invoiceToSave];
       }
     });
+    if (isConvertingInvoice) {
+        setIsConvertingInvoice(false);
+        setConversionInvoiceData(null);
+    }
   };
 
   const handleDeleteInvoice = (invoiceId: string) => {
@@ -199,6 +233,20 @@ export default function InvoicesPage() {
             products={products}
           />
       </PageHeader>
+
+      {isConvertingInvoice && conversionInvoiceData && (
+        <InvoiceDialog
+            isOpen={isConvertingInvoice}
+            onOpenChange={(open) => {
+                setIsConvertingInvoice(open);
+                if (!open) setConversionInvoiceData(null);
+            }}
+            initialData={conversionInvoiceData}
+            onSave={handleSaveInvoice}
+            customers={customers}
+            products={products}
+        />
+      )}
       
       <Card>
         <CardHeader>
@@ -256,3 +304,4 @@ export default function InvoicesPage() {
     </>
   );
 }
+
