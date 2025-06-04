@@ -1,6 +1,6 @@
 
 
-export type ProductCategory = 'Fencing' | 'Posts' | 'Gates' | 'Hardware' | 'Accessories' | 'Other';
+export type ProductCategory = string; // Changed from union type to string
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
 export type UserRole = 'Admin' | 'User';

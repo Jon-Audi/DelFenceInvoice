@@ -1,26 +1,22 @@
+
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Product, ProductCategory } from '@/types';
-import { PRODUCT_CATEGORIES } from '@/lib/constants';
+import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Icon } from '@/components/icons';
+import { cn } from '@/lib/utils';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -29,9 +25,7 @@ import {
 
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
-  category: z.enum(PRODUCT_CATEGORIES as [ProductCategory, ...ProductCategory[]], {
-    errorMap: () => ({ message: "Please select a valid category." })
-  }),
+  category: z.string().min(1, "Category is required"),
   unit: z.string().min(1, "Unit is required"),
   cost: z.coerce.number().min(0, "Cost must be non-negative"),
   price: z.coerce.number().min(0, "Price must be non-negative"),
@@ -45,9 +39,11 @@ interface ProductFormProps {
   product?: Product;
   onSubmit: (data: ProductFormData) => void;
   onClose?: () => void;
+  productCategories: string[];
+  onAddNewCategory: (category: string) => void;
 }
 
-export function ProductForm({ product, onSubmit, onClose }: ProductFormProps) {
+export function ProductForm({ product, onSubmit, onClose, productCategories, onAddNewCategory }: ProductFormProps) {
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
@@ -57,7 +53,7 @@ export function ProductForm({ product, onSubmit, onClose }: ProductFormProps) {
       markupPercentage: product.markupPercentage || 0,
     } : {
       name: '',
-      category: PRODUCT_CATEGORIES[0],
+      category: productCategories.length > 0 ? productCategories[0] : '',
       unit: '',
       cost: 0,
       price: 0,
@@ -66,13 +62,30 @@ export function ProductForm({ product, onSubmit, onClose }: ProductFormProps) {
     },
   });
 
-  const { watch, setValue, control } = form;
+  const { watch, setValue, control, handleSubmit: formHandleSubmit } = form;
   const cost = watch('cost');
   const price = watch('price');
   const markupPercentage = watch('markupPercentage');
+  const currentCategoryValue = watch('category');
 
-  // State to track which field was last manually edited for price calculation
   const [lastEditedField, setLastEditedField] = React.useState<'price' | 'markup' | null>(null);
+  const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(currentCategoryValue || "");
+
+
+  useEffect(() => {
+    if (product?.category) {
+      setInputValue(product.category);
+    } else if (productCategories.length > 0 && !product) {
+       setValue('category', productCategories[0]);
+       setInputValue(productCategories[0]);
+    }
+  }, [product, productCategories, setValue]);
+  
+  useEffect(() => {
+    setInputValue(currentCategoryValue);
+  }, [currentCategoryValue]);
+
 
   useEffect(() => {
     if (lastEditedField === 'markup' && cost > 0 && markupPercentage >= 0) {
@@ -88,10 +101,30 @@ export function ProductForm({ product, onSubmit, onClose }: ProductFormProps) {
     }
   }, [cost, price, setValue, lastEditedField]);
 
+  const processSubmit = (data: ProductFormData) => {
+    // If user typed a new category directly in combobox input that wasn't formally selected
+    // ensure it's added.
+    const finalCategory = data.category.trim();
+    if (finalCategory && !productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase())) {
+      onAddNewCategory(finalCategory);
+    }
+    onSubmit(data);
+  };
+  
+  const handleCategorySelect = (selectedCategory: string) => {
+    setValue("category", selectedCategory, { shouldValidate: true });
+    setInputValue(selectedCategory);
+    setComboboxOpen(false);
+    // Check if this newly selected/typed category is actually new
+    if (!productCategories.find(pc => pc.toLowerCase() === selectedCategory.toLowerCase())) {
+      onAddNewCategory(selectedCategory); // Add it to the main list
+    }
+  };
+
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={formHandleSubmit(processSubmit)} className="space-y-6">
         <FormField
           control={control}
           name="name"
@@ -103,30 +136,85 @@ export function ProductForm({ product, onSubmit, onClose }: ProductFormProps) {
             </FormItem>
           )}
         />
+        
         <FormField
           control={control}
           name="category"
           render={({ field }) => (
-            <FormItem>
+            <FormItem className="flex flex-col">
               <FormLabel>Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {PRODUCT_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={comboboxOpen}
+                      className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                    >
+                      {field.value
+                        ? productCategories.find(cat => cat.toLowerCase() === field.value.toLowerCase()) || field.value
+                        : "Select or type category..."}
+                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command shouldFilter={false}> {/* Custom filtering below */}
+                    <CommandInput 
+                      placeholder="Search or add category..."
+                      value={inputValue}
+                      onValueChange={(search) => {
+                        setInputValue(search);
+                        // If typing directly, update form value as well
+                        // This allows submitting typed value even if not in list yet
+                        setValue("category", search, {shouldValidate: true});
+                      }}
+                    />
+                    <CommandEmpty
+                      onMouseDown={(e) => { // Use onMouseDown to prevent Popover from closing due to blur
+                        e.preventDefault();
+                        const newCat = inputValue.trim();
+                        if (newCat) {
+                         handleCategorySelect(newCat);
+                        }
+                      }}
+                      className="cursor-pointer p-2 text-sm"
+                    >
+                      Add "{inputValue}"
+                    </CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {productCategories
+                          .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
+                          .map((cat) => (
+                          <CommandItem
+                            value={cat}
+                            key={cat}
+                            onSelect={() => {
+                              handleCategorySelect(cat);
+                            }}
+                          >
+                            <Icon
+                              name="Check"
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                cat.toLowerCase() === field.value?.toLowerCase() ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {cat}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <FormMessage />
             </FormItem>
           )}
         />
+
         <FormField
           control={control}
           name="unit"

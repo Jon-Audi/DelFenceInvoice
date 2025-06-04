@@ -1,7 +1,9 @@
 
-import type { ProductCategory, CustomerType, EmailContactType, UserRole, PermissionKey } from '@/types';
+import type { CustomerType, EmailContactType, UserRole, PermissionKey } from '@/types';
 
-export const PRODUCT_CATEGORIES: ProductCategory[] = ['Fencing', 'Posts', 'Gates', 'Hardware', 'Accessories', 'Other'];
+// Renamed and updated to be initial values, 'Other' removed.
+export const INITIAL_PRODUCT_CATEGORIES: string[] = ['Fencing', 'Posts', 'Gates', 'Hardware', 'Accessories'];
+
 export const CUSTOMER_TYPES: CustomerType[] = ['Fence Contractor', 'Landscaper', 'Home Owner', 'Government', 'Commercial', 'Other'];
 export const EMAIL_CONTACT_TYPES: EmailContactType[] = ['Main Contact', 'Accounts Payable', 'Owner', 'Billing', 'Shipping', 'Other'];
 export const USER_ROLES: UserRole[] = ['Admin', 'User'];
@@ -13,8 +15,6 @@ export const NAV_ITEMS = [
   { href: '/estimates', label: 'Estimates', icon: 'FileText' },
   { href: '/orders', label: 'Orders', icon: 'ShoppingCart' },
   { href: '/invoices', label: 'Invoices', icon: 'FileDigit' },
-  // { href: '/users', label: 'Users', icon: 'UsersRound' }, // Moved to settings
-  // { href: '/settings', label: 'Settings', icon: 'Settings'}, // Removed as per user request
 ];
 
 export const MATERIAL_CALCULATOR_LINK = {
@@ -50,4 +50,3 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_invoices',
   ],
 };
-

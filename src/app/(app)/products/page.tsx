@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { ProductTable } from '@/components/products/product-table';
 import { ProductDialog } from '@/components/products/product-dialog';
-import type { Product, ProductCategory } from '@/types';
-import { PRODUCT_CATEGORIES } from '@/lib/constants';
+import type { Product } from '@/types';
+import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
 
 // Mock data for products
@@ -21,10 +21,26 @@ const mockProducts: Product[] = [
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [productCategories, setProductCategories] = useState<string[]>(INITIAL_PRODUCT_CATEGORIES);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const handleAddNewCategory = (category: string) => {
+    if (category.trim() === '') return;
+    const normalizedCategory = category.trim();
+    if (!productCategories.find(pc => pc.toLowerCase() === normalizedCategory.toLowerCase())) {
+      setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
+       toast({
+          title: "Category Added",
+          description: `Category "${normalizedCategory}" has been added to the list.`,
+      });
+    }
+  };
+
   const handleSaveProduct = (productToSave: Product) => {
+    // Ensure the product's category is added to the list if it's new
+    handleAddNewCategory(productToSave.category);
+
     setProducts(prevProducts => {
       const index = prevProducts.findIndex(p => p.id === productToSave.id);
       if (index !== -1) {
@@ -98,12 +114,15 @@ export default function ProductsPage() {
         continue; 
       }
       
-      const category = PRODUCT_CATEGORIES.find(cat => cat.toLowerCase() === (productData.category || '').toLowerCase()) || PRODUCT_CATEGORIES[0];
+      const category = productData.category.trim();
+      // Add category from CSV to available categories if not present
+      handleAddNewCategory(category);
+
 
       const newProduct: Product = {
         id: crypto.randomUUID(),
         name: productData.name,
-        category: category as ProductCategory,
+        category: category,
         unit: productData.unit,
         price: parseFloat(productData.price) || 0,
         cost: parseFloat(productData.cost) || 0,
@@ -173,7 +192,6 @@ export default function ProductsPage() {
       headers.map(header => {
         const value = product[header as keyof Product];
         if (typeof value === 'string') {
-          // Escape commas and quotes in string values
           return `"${value.replace(/"/g, '""')}"`;
         }
         return value !== undefined && value !== null ? value : '';
@@ -231,11 +249,19 @@ export default function ProductsPage() {
                 Add Product
               </Button>
             }
-            onSave={handleSaveProduct} 
+            onSave={handleSaveProduct}
+            productCategories={productCategories}
+            onAddNewCategory={handleAddNewCategory}
           />
         </div>
       </PageHeader>
-      <ProductTable products={products} onSave={handleSaveProduct} onDelete={handleDeleteProduct} />
+      <ProductTable 
+        products={products} 
+        onSave={handleSaveProduct} 
+        onDelete={handleDeleteProduct}
+        productCategories={productCategories}
+        onAddNewCategory={handleAddNewCategory}
+      />
     </>
   );
 }

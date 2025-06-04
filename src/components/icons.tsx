@@ -31,7 +31,9 @@ import {
   UsersRound, 
   UserCog,
   Paintbrush,
-  Loader2, // Added Loader2
+  Loader2,
+  ChevronsUpDown, // Added ChevronsUpDown
+  Check, // Added Check for Combobox
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -69,7 +71,9 @@ const iconComponents = {
   UsersRound,
   UserCog,
   Paintbrush,
-  Loader2, // Added Loader2
+  Loader2,
+  ChevronsUpDown, // Added ChevronsUpDown
+  Check, // Added Check
 };
 
 interface IconProps extends LucideProps {
@@ -85,4 +89,3 @@ export const Icon = ({ name, ...props }: IconProps) => {
   }
   return <LucideIcon {...props} />;
 };
-

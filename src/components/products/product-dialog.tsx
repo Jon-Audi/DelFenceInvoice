@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -11,24 +12,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from '@/components/ui/button';
 
 interface ProductDialogProps {
   product?: Product;
-  triggerButton: React.ReactElement; // Expect a button-like element to trigger the dialog
+  triggerButton: React.ReactElement;
   onSave?: (product: Product) => void;
+  productCategories: string[];
+  onAddNewCategory: (category: string) => void;
 }
 
-export function ProductDialog({ product, triggerButton, onSave }: ProductDialogProps) {
+export function ProductDialog({ product, triggerButton, onSave, productCategories, onAddNewCategory }: ProductDialogProps) {
   const [open, setOpen] = React.useState(false);
 
-  const handleSubmit = (data: any) => {
-    // Here you would typically call an API to save the product
-    console.log("Product data submitted:", data);
+  const handleSubmit = (data: Omit<Product, 'id'>) => {
     if (onSave) {
       onSave({ ...data, id: product?.id || crypto.randomUUID() });
     }
-    setOpen(false); // Close dialog on submit
+    setOpen(false); 
   };
 
   return (
@@ -43,7 +43,13 @@ export function ProductDialog({ product, triggerButton, onSave }: ProductDialogP
             {product ? 'Update the details of this product.' : 'Fill in the details for the new product.'}
           </DialogDescription>
         </DialogHeader>
-        <ProductForm product={product} onSubmit={handleSubmit} onClose={() => setOpen(false)} />
+        <ProductForm 
+          product={product} 
+          onSubmit={handleSubmit} 
+          onClose={() => setOpen(false)}
+          productCategories={productCategories}
+          onAddNewCategory={onAddNewCategory} 
+        />
       </DialogContent>
     </Dialog>
   );

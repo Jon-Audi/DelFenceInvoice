@@ -37,9 +37,11 @@ interface ProductTableProps {
   products: Product[];
   onSave: (product: Product) => void;
   onDelete: (productId: string) => void;
+  productCategories: string[];
+  onAddNewCategory: (category: string) => void;
 }
 
-export function ProductTable({ products, onSave, onDelete }: ProductTableProps) {
+export function ProductTable({ products, onSave, onDelete, productCategories, onAddNewCategory }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
 
   const formatCurrency = (amount: number | undefined) => {
@@ -91,6 +93,8 @@ export function ProductTable({ products, onSave, onDelete }: ProductTableProps) 
                           </DropdownMenuItem>
                         }
                         onSave={onSave}
+                        productCategories={productCategories}
+                        onAddNewCategory={onAddNewCategory}
                       />
                        <AlertDialogTrigger asChild>
                         <DropdownMenuItem
