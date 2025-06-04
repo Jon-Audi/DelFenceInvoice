@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, CustomerType, EmailContactType } from '@/types';
+import type { Invoice, Customer, Product, CustomerType, EmailContactType } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 
@@ -46,6 +46,15 @@ const initialMockCustomers: Customer[] = [
   },
 ];
 
+// Mock products data 
+const mockProducts: Product[] = [
+  { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
+  { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
+  { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
+  { id: 'prod_4', name: 'Stainless Steel Hinges', category: 'Hardware', unit: 'pair', price: 25.00, cost: 15.00, markupPercentage: 66.67, description: 'Heavy duty gate hinges' },
+  { id: 'prod_5', name: 'Post Caps', category: 'Accessories', unit: 'piece', price: 2.50, cost: 1.00, markupPercentage: 150, description: 'Decorative post cap' },
+];
+
 // Initial mock data for invoices
 const initialMockInvoices: Invoice[] = [
   { 
@@ -54,15 +63,15 @@ const initialMockInvoices: Invoice[] = [
     customerId: 'cust_1', 
     customerName: 'Doe Fencing Co.', 
     date: '2024-07-25', 
-    total: 1850.50, 
+    total: 590.00, 
     status: 'Sent', 
     dueDate: '2024-08-24', 
     lineItems: [
       { id: 'li_inv_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350.00 },
       { id: 'li_inv_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00 },
     ], 
-    subtotal: 1750.50, 
-    taxAmount: 100.00, 
+    subtotal: 590.00, 
+    taxAmount: 0.00, 
   },
   { 
     id: 'inv_2', 
@@ -70,14 +79,14 @@ const initialMockInvoices: Invoice[] = [
     customerId: 'cust_2', 
     customerName: 'J. Smith Landscaping', 
     date: '2024-07-28', 
-    total: 975.00, 
+    total: 150.00, 
     status: 'Paid', 
     dueDate: '2024-08-27', 
     lineItems: [
        { id: 'li_inv_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00 }
     ], 
-    subtotal: 900.00, 
-    taxAmount: 75.00,
+    subtotal: 150.00, 
+    taxAmount: 0.00,
   },
 ];
 
@@ -85,6 +94,7 @@ const initialMockInvoices: Invoice[] = [
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(initialMockInvoices);
   const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
+  const [products, setProducts] = useState<Product[]>(mockProducts);
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -136,7 +146,10 @@ export default function InvoicesPage() {
       const customer = customers.find(c => c.id === invoice.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (invoice.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
-      const invoiceItemsDescription = invoice.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Services/Products as per invoice.';
+      
+      const invoiceItemsDescription = invoice.lineItems.map(item => 
+        `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
+      ).join('\n') || 'Services/Products as per invoice.';
       
       const result = await generateInvoiceEmailDraft({
         customerName: customerDisplayName,
@@ -183,6 +196,7 @@ export default function InvoicesPage() {
             }
             onSave={handleSaveInvoice}
             customers={customers}
+            products={products}
           />
       </PageHeader>
       
@@ -199,6 +213,7 @@ export default function InvoicesPage() {
             onGenerateEmail={handleGenerateEmail}
             formatDate={formatDate}
             customers={customers}
+            products={products}
           />
         </CardContent>
       </Card>

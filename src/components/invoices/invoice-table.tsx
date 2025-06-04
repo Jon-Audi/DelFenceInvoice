@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Invoice, Customer } from '@/types';
+import type { Invoice, Customer, Product } from '@/types';
 import {
   Table,
   TableBody,
@@ -39,9 +39,10 @@ interface InvoiceTableProps {
   onGenerateEmail: (invoice: Invoice) => void;
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
+  products: Product[];
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, formatDate, customers }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, formatDate, customers, products }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   return (
@@ -84,6 +85,7 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, form
                       }
                       onSave={onSave}
                       customers={customers}
+                      products={products}
                     />
                     <DropdownMenuItem onClick={() => onGenerateEmail(invoice)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Invoice
