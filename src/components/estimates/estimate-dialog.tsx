@@ -2,8 +2,8 @@
 "use client";
 
 import React from 'react';
-import type { Estimate } from '@/types';
-import { EstimateForm } from './estimate-form';
+import type { Estimate, Product, LineItem } from '@/types';
+import { EstimateForm, type EstimateFormData } from './estimate-form';
 import {
   Dialog,
   DialogContent,
@@ -17,27 +17,43 @@ interface EstimateDialogProps {
   estimate?: Estimate;
   triggerButton: React.ReactElement;
   onSave: (estimate: Estimate) => void;
+  products: Product[];
 }
 
-export function EstimateDialog({ estimate, triggerButton, onSave }: EstimateDialogProps) {
+export function EstimateDialog({ estimate, triggerButton, onSave, products }: EstimateDialogProps) {
   const [open, setOpen] = React.useState(false);
 
-  const handleSubmit = (data: Omit<Estimate, 'id' | 'lineItems'> & { lineItemsDescription?: string }) => {
-    // For now, we'll use a simplified lineItems structure or just the description
+  const handleSubmit = (formData: EstimateFormData) => {
+    const lineItems: LineItem[] = formData.lineItems.map((item) => {
+      const product = products.find(p => p.id === item.productId);
+      const unitPrice = product ? product.price : 0;
+      return {
+        id: item.id || crypto.randomUUID(),
+        productId: item.productId,
+        productName: product?.name || 'Unknown Product',
+        quantity: item.quantity,
+        unitPrice: unitPrice,
+        total: item.quantity * unitPrice,
+      };
+    });
+
+    const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
+    const taxAmount = 0; // Simplified for now
+    const total = subtotal + taxAmount;
+
     const estimateToSave: Estimate = {
-      ...data,
       id: estimate?.id || crypto.randomUUID(),
-      // Simulate line items from description if actual line item editing isn't implemented yet
-      lineItems: data.lineItemsDescription ? [{ 
-        id: crypto.randomUUID(), 
-        productId: 'desc_prod', 
-        productName: data.lineItemsDescription.substring(0,50), // Truncate for name
-        quantity: 1, 
-        unitPrice: data.total, // Approximation
-        total: data.total 
-      }] : (estimate?.lineItems || []),
-      subtotal: data.total, // Assuming total includes tax for simplicity in this form version
-      taxAmount: 0, // Defaulting tax for simplicity
+      estimateNumber: formData.estimateNumber,
+      customerId: estimate?.customerId || '', // Needs a way to select customer
+      customerName: formData.customerName,
+      date: formData.date.toISOString(),
+      validUntil: formData.validUntil ? formData.validUntil.toISOString() : undefined,
+      status: formData.status,
+      lineItems: lineItems,
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      total: total,
+      notes: formData.notes,
     };
     onSave(estimateToSave);
     setOpen(false);
@@ -48,14 +64,19 @@ export function EstimateDialog({ estimate, triggerButton, onSave }: EstimateDial
       <DialogTrigger asChild>
         {triggerButton}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{estimate ? 'Edit Estimate' : 'New Estimate'}</DialogTitle>
           <DialogDescription>
             {estimate ? 'Update the details of this estimate.' : 'Fill in the details for the new estimate.'}
           </DialogDescription>
         </DialogHeader>
-        <EstimateForm estimate={estimate} onSubmit={handleSubmit} onClose={() => setOpen(false)} />
+        <EstimateForm 
+          estimate={estimate} 
+          onSubmit={handleSubmit} 
+          onClose={() => setOpen(false)}
+          products={products}
+        />
       </DialogContent>
     </Dialog>
   );

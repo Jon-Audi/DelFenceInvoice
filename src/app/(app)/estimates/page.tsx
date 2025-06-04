@@ -45,7 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
-import type { Estimate, Customer } from '@/types';
+import type { Estimate, Product } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 
 // Initial mock data for estimates
@@ -56,14 +56,14 @@ const initialMockEstimates: Estimate[] = [
     customerId: 'cust_1',
     customerName: 'John Doe Fencing',
     date: '2024-07-15',
-    total: 1250.75,
+    total: 295.00, // Updated total
     status: 'Sent',
     lineItems: [
       { id: 'li_est_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 50, unitPrice: 3.50, total: 175.00 },
       { id: 'li_est_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 10, unitPrice: 12.00, total: 120.00 },
     ],
-    subtotal: 1150.75,
-    taxAmount: 100.00,
+    subtotal: 295.00, // Updated subtotal
+    taxAmount: 0.00,
   },
   {
     id: 'est_2',
@@ -71,27 +71,26 @@ const initialMockEstimates: Estimate[] = [
     customerId: 'cust_2',
     customerName: 'Jane Smith Landscaping',
     date: '2024-07-18',
-    total: 850.00,
+    total: 125.00, // Updated total
     status: 'Draft',
     lineItems: [
       { id: 'li_est_3', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 4, unitPrice: 25.00, total: 100.00 },
       { id: 'li_est_4', productId: 'prod_5', productName: 'Post Caps', quantity: 10, unitPrice: 2.50, total: 25.00 },
     ],
-    subtotal: 800.00,
-    taxAmount: 50.00,
+    subtotal: 125.00, // Updated subtotal
+    taxAmount: 0.00,
   },
 ];
 
-// Mock customer data for email draft purposes
-const mockCustomer: Customer = {
-  id: 'cust_1',
-  firstName: 'John',
-  lastName: 'Doe',
-  companyName: 'Doe Fencing Co.',
-  phone: '555-1234',
-  emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }],
-  customerType: 'Fence Contractor',
-};
+// Mock products data - in a real app, this would come from a shared service or state
+const mockProducts: Product[] = [
+  { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
+  { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
+  { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
+  { id: 'prod_4', name: 'Stainless Steel Hinges', category: 'Hardware', unit: 'pair', price: 25.00, cost: 15.00, markupPercentage: 66.67, description: 'Heavy duty gate hinges' },
+  { id: 'prod_5', name: 'Post Caps', category: 'Accessories', unit: 'piece', price: 2.50, cost: 1.00, markupPercentage: 150, description: 'Decorative post cap' },
+];
+
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>(initialMockEstimates);
@@ -119,7 +118,8 @@ export default function EstimatesPage() {
         return updatedEstimates;
       } else {
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added.` });
-        return [...prevEstimates, estimateToSave];
+        // Ensure new estimate has a unique ID if not provided (should be handled in dialog)
+        return [...prevEstimates, { ...estimateToSave, id: estimateToSave.id || crypto.randomUUID() }];
       }
     });
   };
@@ -139,13 +139,17 @@ export default function EstimatesPage() {
     setEditableBody('');
 
     try {
+      const lineItemsDescription = estimate.lineItems.map(item => 
+        `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
+      ).join('\n');
+
       const estimateContent = `
         Estimate Number: ${estimate.estimateNumber}
         Date: ${new Date(estimate.date).toLocaleDateString()}
         Customer: ${estimate.customerName || 'Valued Customer'}
         Total: $${estimate.total.toFixed(2)}
         Items:
-        ${estimate.lineItems.map(item => `- ${item.productName} (Qty: ${item.quantity}, Price: $${item.unitPrice.toFixed(2)})`).join('\n') || 'Details to be confirmed.'}
+        ${lineItemsDescription || 'Details to be confirmed.'}
       `;
 
       const result = await estimateEmailDraft({
@@ -194,6 +198,7 @@ export default function EstimatesPage() {
             </Button>
           }
           onSave={handleSaveEstimate}
+          products={mockProducts}
         />
       </PageHeader>
 
@@ -238,6 +243,7 @@ export default function EstimatesPage() {
                             </DropdownMenuItem>
                           }
                           onSave={handleSaveEstimate}
+                          products={mockProducts}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
