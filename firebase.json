@@ -1,3 +1,4 @@
+
 {
   "apphosting": {
     "backendId": "delfenceinvbackend",
@@ -9,5 +10,9 @@
       "firebase-debug.*.log",
       "functions"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }
