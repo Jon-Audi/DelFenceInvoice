@@ -1,14 +1,13 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Keep Label, it's used by FormLabel
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -62,39 +61,33 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     },
   });
 
-  const { watch, setValue, control, handleSubmit: formHandleSubmit, trigger, formState: { errors } } = form;
+  const { watch, setValue, control, handleSubmit: formHandleSubmit, trigger, formState: { errors }, getValues } = form;
   const cost = watch('cost');
   const price = watch('price');
   const markupPercentage = watch('markupPercentage');
-  const currentCategoryValue = watch('category');
+  const formCategoryValue = watch('category'); // Watch the form's category value
 
   const [lastEditedField, setLastEditedField] = React.useState<'price' | 'markup' | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(currentCategoryValue || "");
+  // inputValue is for the CommandInput, formCategoryValue is the actual form state
+  const [inputValue, setInputValue] = useState(formCategoryValue || "");
 
 
   useEffect(() => {
-    if (product?.category) {
-      setInputValue(product.category);
-      setValue('category', product.category, { shouldValidate: false }); // Ensure form state matches
-    } else if (!product && productCategories.length > 0 && !form.getValues('category')) {
-      const defaultCategory = productCategories[0];
-      setValue('category', defaultCategory, { shouldValidate: true });
-      setInputValue(defaultCategory);
-    } else if (form.getValues('category')) {
-      setInputValue(form.getValues('category'));
-    } else {
-      setInputValue("");
+    // When editing an existing product, or form is reset, initialize inputValue
+    const initialCategory = product?.category || (productCategories.length > 0 ? productCategories[0] : '');
+    if (getValues('category') !== initialCategory) { // Check if form value is different from expected initial
+        setValue('category', initialCategory, { shouldValidate: true });
     }
-  }, [product, productCategories, setValue, form]);
-  
+    setInputValue(initialCategory);
+  }, [product, productCategories, setValue, getValues]);
+
   useEffect(() => {
-    // Sync inputValue with the form's category value if it changes externally or by reset
-    const formCategory = form.getValues('category');
-    if (formCategory !== inputValue) {
-      setInputValue(formCategory);
+    // Sync inputValue with the form's category value if it changes externally (e.g., by reset or initial load)
+    if (formCategoryValue !== inputValue) {
+      setInputValue(formCategoryValue);
     }
-  }, [form.watch('category'), inputValue]);
+  }, [formCategoryValue]);
 
 
   useEffect(() => {
@@ -114,31 +107,58 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
   }, [cost, price, setValue, lastEditedField]);
 
   const processAndSubmit = (data: ProductFormData) => {
-    const finalCategory = inputValue.trim(); 
+    // Use the form's 'category' value, which should be up-to-date.
+    const finalCategory = data.category.trim(); 
     
     if (!finalCategory) {
       form.setError("category", { type: "manual", message: "Category cannot be empty." });
       return;
     }
     
-    // Check if category already exists (case-insensitive) to avoid duplicates with different casing
     const existingCategory = productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase());
     const categoryToSave = existingCategory || finalCategory;
 
-
-    if (!existingCategory) {
-      onAddNewCategory(finalCategory); // This adds it to the parent's list for next time
+    if (!existingCategory && !productCategories.some(pc => pc === finalCategory)) { // check exact match too
+      onAddNewCategory(finalCategory); 
     }
     const dataToSubmit = { ...data, category: categoryToSave };
     onSubmit(dataToSubmit);
   };
   
   const handleCategorySelect = (selectedCategoryValue: string) => {
-    setValue("category", selectedCategoryValue, { shouldValidate: true });
-    setInputValue(selectedCategoryValue); 
+    setValue("category", selectedCategoryValue, { shouldValidate: true }); // This is the primary update point
+    setInputValue(selectedCategoryValue); // Sync input field
     setComboboxOpen(false);
     trigger("category"); 
   };
+
+  const handleComboboxOpenChange = (open: boolean) => {
+    if (!open) {
+      // When popover closes, if inputValue is different from form value and valid, update form value.
+      const currentFormCategory = getValues("category");
+      const trimmedInputValue = inputValue.trim();
+      if (trimmedInputValue && trimmedInputValue !== currentFormCategory) {
+        // Check if it's an existing category (case-insensitive) or a new one
+        const existingCat = productCategories.find(pc => pc.toLowerCase() === trimmedInputValue.toLowerCase());
+        if (existingCat) {
+          setValue("category", existingCat, { shouldValidate: true });
+          setInputValue(existingCat); // Standardize casing
+        } else {
+          setValue("category", trimmedInputValue, { shouldValidate: true });
+          // onAddNewCategory will be called during submission if it's truly new
+        }
+      } else if (!trimmedInputValue && currentFormCategory) {
+        // If input is cleared, revert to last valid form category or set error if required
+        // This depends on desired behavior. For now, assume category is required so user must select/type.
+        setInputValue(currentFormCategory); // Revert input to what's in the form
+      } else if (trimmedInputValue && trimmedInputValue === currentFormCategory) {
+        // No change needed, just close
+      }
+       trigger("category");
+    }
+    setComboboxOpen(open);
+  };
+
 
   return (
     <Form {...form}>
@@ -158,19 +178,19 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
         <FormField
           control={control}
           name="category"
-          render={({ field }) => ( // field here contains value, onChange etc. for 'category'
+          render={({ field }) => ( 
             <FormItem className="flex flex-col">
               <FormLabel>Category</FormLabel>
-              <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+              <Popover open={comboboxOpen} onOpenChange={handleComboboxOpenChange}>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button
                       variant="outline"
                       role="combobox"
                       aria-expanded={comboboxOpen}
-                      className={cn("w-full justify-between", !inputValue && "text-muted-foreground", errors.category && "border-destructive")}
+                      className={cn("w-full justify-between", !field.value && "text-muted-foreground", errors.category && "border-destructive")}
                     >
-                      {inputValue || "Select or type category..."}
+                      {field.value || "Select or type category..."}
                       <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </FormControl>
@@ -179,22 +199,20 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                   <Command shouldFilter={false}>
                     <CommandInput 
                       placeholder="Search or add category..."
-                      value={inputValue}
+                      value={inputValue} // Use local inputValue for typing
                       onValueChange={(search) => {
-                        setInputValue(search);
-                        // No need to call field.onChange here directly as CommandInput is for filtering/display
-                        // We update the form's 'category' value on actual selection or when 'Add' is clicked
+                        setInputValue(search); // Update local input value as user types
                       }}
                     />
                      <CommandList>
                       <CommandEmpty
                         onMouseDown={(e) => { 
-                          e.preventDefault(); // Prevents Popover from closing due to input blur
+                          e.preventDefault(); 
                           const newCat = inputValue.trim();
                           if (newCat) {
-                            handleCategorySelect(newCat); // This sets form value and closes
+                            handleCategorySelect(newCat); 
                           } else {
-                             setComboboxOpen(false); // Close if empty and clicked
+                            setComboboxOpen(false); 
                           }
                         }}
                         className="cursor-pointer p-2 text-sm hover:bg-accent"
@@ -206,7 +224,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                           .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
                           .map((cat) => (
                           <CommandItem
-                            value={cat} // value for cmdk filtering/selection
+                            value={cat} 
                             key={cat}
                             onSelect={() => {
                               handleCategorySelect(cat);
@@ -253,9 +271,9 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                 <FormControl><Input type="number" step="0.01" {...field} 
                   onChange={(e) => { 
                     field.onChange(parseFloat(e.target.value) || 0); 
-                    setLastEditedField(null); // Reset last edited when cost changes directly
+                    setLastEditedField(null); 
                   }} 
-                  onBlur={()=> trigger(["price", "markupPercentage"])} // Trigger validation/recalculation on blur
+                  onBlur={()=> trigger(["price", "markupPercentage"])} 
                 /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -323,3 +341,4 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     </Form>
   );
 }
+
