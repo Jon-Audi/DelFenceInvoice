@@ -8,7 +8,7 @@ import * as z from 'zod';
 import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Keep Label, it's used by FormLabel
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -70,30 +70,31 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
 
   const [lastEditedField, setLastEditedField] = React.useState<'price' | 'markup' | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(currentCategoryValue || ""); // For the CommandInput
+  const [inputValue, setInputValue] = useState(currentCategoryValue || "");
 
 
   useEffect(() => {
-    // Initialize inputValue when the form loads or productCategories change
     if (product?.category) {
       setInputValue(product.category);
-    } else if (!product && productCategories.length > 0 && !currentCategoryValue) {
-      // For new product, if no category is set yet, default to first available, and sync inputValue
-      setValue('category', productCategories[0], { shouldValidate: true });
-      setInputValue(productCategories[0]);
-    } else if (currentCategoryValue) {
-      setInputValue(currentCategoryValue);
+      setValue('category', product.category, { shouldValidate: false }); // Ensure form state matches
+    } else if (!product && productCategories.length > 0 && !form.getValues('category')) {
+      const defaultCategory = productCategories[0];
+      setValue('category', defaultCategory, { shouldValidate: true });
+      setInputValue(defaultCategory);
+    } else if (form.getValues('category')) {
+      setInputValue(form.getValues('category'));
     } else {
-      setInputValue(""); // Fallback for empty categories and no current value
+      setInputValue("");
     }
-  }, [product, productCategories, setValue, currentCategoryValue]);
+  }, [product, productCategories, setValue, form]);
   
-  // Sync inputValue with form's category value if it changes externally
   useEffect(() => {
-    if (currentCategoryValue !== inputValue) {
-      setInputValue(currentCategoryValue);
+    // Sync inputValue with the form's category value if it changes externally or by reset
+    const formCategory = form.getValues('category');
+    if (formCategory !== inputValue) {
+      setInputValue(formCategory);
     }
-  }, [currentCategoryValue]);
+  }, [form.watch('category'), inputValue]);
 
 
   useEffect(() => {
@@ -107,36 +108,37 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     if (lastEditedField === 'price' && cost > 0 && price >= 0) {
       const calculatedMarkup = cost > 0 ? ((price / cost) - 1) * 100 : 0;
       setValue('markupPercentage', parseFloat(calculatedMarkup.toFixed(2)), { shouldValidate: true });
-    } else if (cost === 0 && price >= 0) { // Handle case where cost is 0
+    } else if (cost === 0 && price >= 0) {
       setValue('markupPercentage', 0, { shouldValidate: true });
     }
   }, [cost, price, setValue, lastEditedField]);
 
   const processAndSubmit = (data: ProductFormData) => {
-    const finalCategory = inputValue.trim(); // Use inputValue which reflects user's direct input
+    const finalCategory = inputValue.trim(); 
     
     if (!finalCategory) {
-      // This should ideally be caught by Zod, but as a safeguard
       form.setError("category", { type: "manual", message: "Category cannot be empty." });
       return;
     }
     
-    // If the category from input isn't in the main list, add it.
-    if (!productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase())) {
-      onAddNewCategory(finalCategory);
+    // Check if category already exists (case-insensitive) to avoid duplicates with different casing
+    const existingCategory = productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase());
+    const categoryToSave = existingCategory || finalCategory;
+
+
+    if (!existingCategory) {
+      onAddNewCategory(finalCategory); // This adds it to the parent's list for next time
     }
-    // Ensure the form data uses this potentially new category
-    const dataToSubmit = { ...data, category: finalCategory };
+    const dataToSubmit = { ...data, category: categoryToSave };
     onSubmit(dataToSubmit);
   };
   
   const handleCategorySelect = (selectedCategoryValue: string) => {
     setValue("category", selectedCategoryValue, { shouldValidate: true });
-    setInputValue(selectedCategoryValue); // Sync inputValue
+    setInputValue(selectedCategoryValue); 
     setComboboxOpen(false);
-    trigger("category"); // Manually trigger validation for category
+    trigger("category"); 
   };
-
 
   return (
     <Form {...form}>
@@ -156,7 +158,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
         <FormField
           control={control}
           name="category"
-          render={({ field }) => (
+          render={({ field }) => ( // field here contains value, onChange etc. for 'category'
             <FormItem className="flex flex-col">
               <FormLabel>Category</FormLabel>
               <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
@@ -180,31 +182,31 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                       value={inputValue}
                       onValueChange={(search) => {
                         setInputValue(search);
-                        // Update form value in real-time for validation or if user submits by pressing Enter from input
-                        setValue("category", search, { shouldValidate: true }); 
+                        // No need to call field.onChange here directly as CommandInput is for filtering/display
+                        // We update the form's 'category' value on actual selection or when 'Add' is clicked
                       }}
                     />
                      <CommandList>
                       <CommandEmpty
                         onMouseDown={(e) => { 
-                          e.preventDefault();
+                          e.preventDefault(); // Prevents Popover from closing due to input blur
                           const newCat = inputValue.trim();
                           if (newCat) {
-                            handleCategorySelect(newCat);
+                            handleCategorySelect(newCat); // This sets form value and closes
                           } else {
-                             // If empty, maybe set error or do nothing
+                             setComboboxOpen(false); // Close if empty and clicked
                           }
                         }}
                         className="cursor-pointer p-2 text-sm hover:bg-accent"
                       >
-                        {inputValue.trim() ? `Add "${inputValue.trim()}"` : "Type to add new category"}
+                        {inputValue.trim() ? `Add "${inputValue.trim()}"` : "Type to search or add"}
                       </CommandEmpty>
-                     
+                      <CommandGroup>
                         {productCategories
                           .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
                           .map((cat) => (
                           <CommandItem
-                            value={cat}
+                            value={cat} // value for cmdk filtering/selection
                             key={cat}
                             onSelect={() => {
                               handleCategorySelect(cat);
@@ -251,9 +253,9 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                 <FormControl><Input type="number" step="0.01" {...field} 
                   onChange={(e) => { 
                     field.onChange(parseFloat(e.target.value) || 0); 
-                    setLastEditedField(null); // Reset so it doesn't immediately trigger price/markup calc
+                    setLastEditedField(null); // Reset last edited when cost changes directly
                   }} 
-                  onBlur={()=> trigger(["price", "markupPercentage"])} // Trigger dependent fields on blur
+                  onBlur={()=> trigger(["price", "markupPercentage"])} // Trigger validation/recalculation on blur
                 /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -321,6 +323,3 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     </Form>
   );
 }
-
-
-    
