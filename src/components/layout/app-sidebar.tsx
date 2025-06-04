@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  SidebarRail, // Added SidebarRail import
 } from "@/components/ui/sidebar";
 import { Icon, type IconName } from "@/components/icons";
 import { NAV_ITEMS, MATERIAL_CALCULATOR_LINK } from "@/lib/constants";
@@ -21,6 +22,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
+      <SidebarRail /> {/* Added SidebarRail component */}
       <SidebarHeader className="p-4">
         <Link href="/dashboard" className="flex items-center gap-2">
           <Icon name="PanelsTopLeft" className="h-8 w-8 text-primary" />

@@ -1,3 +1,4 @@
+
 import type React from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
@@ -11,7 +12,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col">
           <AppHeader />
           <main className="flex-1 p-6 overflow-auto">
-            {children}
+            <div className="w-full max-w-screen-xl mx-auto">
+              {children}
+            </div>
           </main>
         </div>
       </div>
