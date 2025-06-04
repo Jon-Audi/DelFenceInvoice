@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import type { IconName } from '@/components/icons';
 
@@ -33,7 +34,22 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, iconName, value, d
 export default function DashboardPage() {
   return (
     <>
-      <PageHeader title="Dashboard" description="Welcome to Delaware Fence Pro." />
+      <PageHeader title="Dashboard" description="Welcome to Delaware Fence Solutions.">
+        <div className="flex gap-2">
+          <Link href="/orders" passHref>
+            <Button>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+              New Order
+            </Button>
+          </Link>
+          <Link href="/estimates" passHref>
+            <Button>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+              New Estimate
+            </Button>
+          </Link>
+        </div>
+      </PageHeader>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <DashboardCard
           title="Total Products"
