@@ -1,6 +1,12 @@
-import { redirect } from 'next/navigation';
+
+// import { redirect } from 'next/navigation'; // Temporarily commented out
 
 export default function HomePage() {
-  redirect('/dashboard');
-  return null; 
+  // redirect('/dashboard'); // Temporarily commented out
+  return (
+    <div>
+      <h1>Hello World!</h1>
+      <p>This is a basic page for testing.</p>
+    </div>
+  );
 }
