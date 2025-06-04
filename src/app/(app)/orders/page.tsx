@@ -46,7 +46,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
 import type { Order, Customer, Product, Estimate } from '@/types'; 
-import { OrderDialog, type OrderFormData } from '@/components/orders/order-dialog';
+import { OrderDialog } from '@/components/orders/order-dialog';
+import type { OrderFormData } from '@/components/orders/order-form'; // Corrected import path
 import { MOCK_CUSTOMERS, MOCK_PRODUCTS, MOCK_ORDERS } from '@/lib/mock-data';
 
 
