@@ -55,8 +55,12 @@ export default function SettingsPage() {
             <CardDescription>Customize the look and feel of the application.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Theme options coming soon.</p>
-            {/* Theme toggle can be here */}
+            <Link href="/settings/appearance" passHref>
+              <Button variant="outline">
+                Theme Settings
+                <Icon name="ChevronRight" className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
