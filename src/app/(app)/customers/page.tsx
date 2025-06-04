@@ -61,7 +61,7 @@ export default function CustomersPage() {
         return updatedCustomers;
       } else {
         // Add new customer
-        return [...prevCustomers, customerToSave];
+        return [...prevCustomers, { ...customerToSave, id: customerToSave.id || crypto.randomUUID() }];
       }
     });
     toast({
@@ -73,59 +73,66 @@ export default function CustomersPage() {
   const parseCsvToCustomers = (csvData: string): Customer[] => {
     const newCustomers: Customer[] = [];
     const lines = csvData.trim().split('\n');
-    if (lines.length < 2) {
+    const lineCount = lines.length;
+
+    if (lineCount < 2) {
       toast({ title: "Error", description: "CSV file is empty or has no data rows.", variant: "destructive" });
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim());
-    const expectedHeaders = ['firstName', 'lastName', 'companyName', 'phone', 'primaryEmail', 'primaryEmailType', 'customerType', 'addressStreet', 'addressCity', 'addressState', 'addressZip'];
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase()); // Normalize headers
+    const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
     
-    // Basic header validation
-    const missingHeaders = expectedHeaders.filter(eh => !headers.includes(eh) && (eh === 'firstName' || eh === 'lastName' || eh === 'primaryEmail' || eh === 'phone'));
-    if (missingHeaders.length > 0 && (missingHeaders.includes('firstName') || missingHeaders.includes('lastName'))) {
-        toast({ title: "Error", description: `CSV file is missing required headers: ${missingHeaders.join(', ')}. Required: firstName, lastName.`, variant: "destructive"});
+    const receivedHeadersSet = new Set(headers);
+    const missingHeaders = expectedHeaders.filter(eh => !receivedHeadersSet.has(eh) && (eh === 'firstname' || eh === 'lastname')); // Only check required for "missing"
+
+    if (missingHeaders.length > 0 || headers.length < 2) { // Check if core required headers are present
+        toast({ 
+            title: "CSV Header Error", 
+            description: `CSV file headers are incorrect. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. At least 'firstName' and 'lastName' are required. Please ensure your CSV matches this format.`, 
+            variant: "destructive",
+            duration: 10000,
+        });
         return [];
     }
 
 
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const customerData: any = {};
-      headers.forEach((header, index) => {
-        customerData[header] = values[index];
+      // Use actual headers from CSV for mapping, but check against expected for validation
+      lines[0].split(',').map(h => h.trim()).forEach((header, index) => {
+        customerData[header.toLowerCase()] = values[index];
       });
 
-      if (!customerData.firstName || !customerData.lastName) {
+
+      if (!customerData.firstname || !customerData.lastname) {
         console.warn(`Skipping row ${i+1}: missing firstName or lastName.`);
         continue; 
       }
       
-      const emailType = EMAIL_CONTACT_TYPES.includes(customerData.primaryEmailType as EmailContactType) 
-                          ? customerData.primaryEmailType 
-                          : EMAIL_CONTACT_TYPES[0];
-      const custType = CUSTOMER_TYPES.includes(customerData.customerType as CustomerType)
-                          ? customerData.customerType
-                          : CUSTOMER_TYPES[0];
+      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === (customerData.primaryemailtype || '').toLowerCase()) || EMAIL_CONTACT_TYPES[0];
+      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === (customerData.customertype || '').toLowerCase()) || CUSTOMER_TYPES[0];
+
 
       const newCustomer: Customer = {
         id: crypto.randomUUID(),
-        firstName: customerData.firstName || '',
-        lastName: customerData.lastName || '',
-        companyName: customerData.companyName || undefined,
+        firstName: customerData.firstname || '',
+        lastName: customerData.lastname || '',
+        companyName: customerData.companyname || undefined,
         phone: customerData.phone || '',
-        emailContacts: customerData.primaryEmail ? [{
+        emailContacts: customerData.primaryemail ? [{
           id: crypto.randomUUID(),
           type: emailType as EmailContactType,
-          email: customerData.primaryEmail,
-          name: `${customerData.firstName} ${customerData.lastName}`
+          email: customerData.primaryemail,
+          name: `${customerData.firstname} ${customerData.lastname}`
         }] : [],
         customerType: custType as CustomerType,
-        address: (customerData.addressStreet || customerData.addressCity || customerData.addressState || customerData.addressZip) ? {
-          street: customerData.addressStreet || '',
-          city: customerData.addressCity || '',
-          state: customerData.addressState || '',
-          zip: customerData.addressZip || '',
+        address: (customerData.addressstreet || customerData.addresscity || customerData.addressstate || customerData.addresszip) ? {
+          street: customerData.addressstreet || '',
+          city: customerData.addresscity || '',
+          state: customerData.addressstate || '',
+          zip: customerData.addresszip || '',
         } : undefined,
         notes: customerData.notes || undefined,
       };
@@ -150,22 +157,23 @@ export default function CustomersPage() {
               title: "Success",
               description: `${parsedCustomers.length} customers imported successfully.`,
             });
-          } else if (lines.length >=2) { // if lines.length < 2, parseCsvToCustomers already toasted
+          } else if (csvData.trim().split('\n').length >=2) { 
              toast({
               title: "Info",
-              description: "No new customers were imported. Check CSV format or content.",
+              description: "No new customers were imported. Check CSV format or content. Required headers: firstName, lastName.",
+              duration: 7000,
             });
           }
         } catch (error) {
           console.error("Error parsing CSV:", error);
           toast({
-            title: "Error",
-            description: "Failed to parse CSV file. Please check the file format and content.",
+            title: "Error Parsing CSV",
+            description: "Failed to parse CSV file. Please check the file format, content, and ensure it meets header requirements (e.g., firstName, lastName).",
             variant: "destructive",
+            duration: 10000,
           });
         }
       }
-      // Reset file input to allow uploading the same file again
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -209,5 +217,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-    

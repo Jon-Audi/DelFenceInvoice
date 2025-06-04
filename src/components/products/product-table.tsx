@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Product } from '@/types';
@@ -19,15 +20,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+
 
 interface ProductTableProps {
   products: Product[];
+  onSave: (product: Product) => void;
 }
 
-export function ProductTable({ products }: ProductTableProps) {
-  const formatCurrency = (amount: number) => {
+export function ProductTable({ products, onSave }: ProductTableProps) {
+  const { toast } = useToast();
+
+  const formatCurrency = (amount: number | undefined) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return 'N/A';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
+
+  const handleDeleteProduct = (productId: string) => {
+    console.log("Attempting to delete product:", productId);
+    // In a real app, this would involve an API call and updating state based on response.
+    // For now, we'll just show a toast.
+    // To actually remove, the products state would need to be managed in the parent page
+    // and a delete handler passed down. This onSave prop is for add/edit.
+    toast({
+      title: "Delete (Simulation)",
+      description: `Product with ID ${productId} would be deleted. Actual deletion not implemented in mock.`,
+      variant: "default"
+    });
+  };
+
 
   return (
     <div className="rounded-lg border shadow-sm">
@@ -51,7 +72,11 @@ export function ProductTable({ products }: ProductTableProps) {
               <TableCell>{product.unit}</TableCell>
               <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
               <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
-              <TableCell className="text-right">{product.markupPercentage.toFixed(2)}%</TableCell>
+              <TableCell className="text-right">
+                {typeof product.markupPercentage === 'number' && !isNaN(product.markupPercentage)
+                  ? `${product.markupPercentage.toFixed(2)}%`
+                  : 'N/A'}
+              </TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -66,9 +91,13 @@ export function ProductTable({ products }: ProductTableProps) {
                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                           <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
-                      } 
+                      }
+                      onSave={onSave} 
                     />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                    <DropdownMenuItem 
+                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      onClick={() => handleDeleteProduct(product.id)}
+                    >
                       <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
