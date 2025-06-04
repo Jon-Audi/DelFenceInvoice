@@ -22,7 +22,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
 import type { Invoice, Customer, Product, Estimate } from '@/types';
-import { InvoiceDialog, type InvoiceFormData } from '@/components/invoices/invoice-dialog';
+import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
+import type { InvoiceFormData } from '@/components/invoices/invoice-form'; // Corrected import path
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
