@@ -15,6 +15,12 @@ import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -29,18 +35,27 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used directly here for the delete action
+} from "@/components/ui/alert-dialog";
 import React from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProductTableProps {
-  products: Product[];
+  groupedProducts: Map<string, Product[]>;
   onSave: (product: Product) => void;
   onDelete: (productId: string) => void;
   productCategories: string[];
   onAddNewCategory: (category: string) => void;
+  isLoading: boolean;
 }
 
-export function ProductTable({ products, onSave, onDelete, productCategories, onAddNewCategory }: ProductTableProps) {
+export function ProductTable({ 
+  groupedProducts, 
+  onSave, 
+  onDelete, 
+  productCategories, 
+  onAddNewCategory,
+  isLoading 
+}: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
 
   const formatCurrency = (amount: number | undefined) => {
@@ -48,97 +63,144 @@ export function ProductTable({ products, onSave, onDelete, productCategories, on
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="rounded-lg border shadow-sm p-4">
+            <Skeleton className="h-8 w-1/3 mb-4" />
+            <Skeleton className="h-10 w-full mb-2" />
+            <Skeleton className="h-10 w-full mb-2" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (groupedProducts.size === 0 && !isLoading) {
+    return (
+      <div className="rounded-lg border shadow-sm p-6 text-center">
+        <p className="text-muted-foreground">No products found.</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Try adding a new product or importing from a CSV file.
+        </p>
+      </div>
+    );
+  }
+
+  // Determine default open accordions: categories with products
+  const defaultOpenValues = Array.from(groupedProducts.entries())
+    .filter(([_, products]) => products.length > 0)
+    .map(([category]) => category);
+
   return (
     <>
-      <div className="rounded-lg border shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Cost</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right">Markup</TableHead>
-              <TableHead className="w-[80px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {products.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell className="font-medium">{product.name}</TableCell>
-                <TableCell><Badge variant="secondary">{product.category}</Badge></TableCell>
-                <TableCell>{product.unit}</TableCell>
-                <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
-                <TableCell className="text-right">
-                  {typeof product.markupPercentage === 'number' && !isNaN(product.markupPercentage)
-                    ? `${product.markupPercentage.toFixed(2)}%`
-                    : 'N/A'}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Icon name="MoreHorizontal" className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <ProductDialog
-                        product={product}
-                        triggerButton={
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                            <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
-                        }
-                        onSave={onSave}
-                        productCategories={productCategories}
-                        onAddNewCategory={onAddNewCategory}
-                      />
-                      {/* Removed AlertDialogTrigger from here */}
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                        onSelect={(e) => { 
-                          e.preventDefault(); 
-                          setProductToDelete(product); 
-                        }}
-                      >
-                        <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      
-      {/* This AlertDialog is controlled by productToDelete state */}
-      <AlertDialog open={!!productToDelete} onOpenChange={(isOpen) => !isOpen && setProductToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the product "{productToDelete?.name}".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (productToDelete) { // Ensure productToDelete is not null
-                  onDelete(productToDelete.id);
-                }
-                setProductToDelete(null);
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Accordion type="multiple" defaultValue={defaultOpenValues} className="w-full space-y-2">
+        {Array.from(groupedProducts.entries()).map(([category, productsInCategory]) => (
+          <AccordionItem value={category} key={category} className="border rounded-lg shadow-sm overflow-hidden">
+            <AccordionTrigger className="px-6 py-4 hover:bg-muted/50 data-[state=open]:border-b">
+              <div className="flex items-center justify-between w-full">
+                <span className="font-semibold text-lg">{category}</span>
+                <Badge variant="secondary" className="ml-2">{productsInCategory.length} product{productsInCategory.length === 1 ? '' : 's'}</Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="p-0">
+              {productsInCategory.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Unit</TableHead>
+                        <TableHead className="text-right">Cost</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="text-right">Markup</TableHead>
+                        <TableHead className="w-[80px] text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {productsInCategory.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell>{product.unit}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
+                          <TableCell className="text-right">
+                            {typeof product.markupPercentage === 'number' && !isNaN(product.markupPercentage)
+                              ? `${product.markupPercentage.toFixed(2)}%`
+                              : 'N/A'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Icon name="MoreHorizontal" className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <ProductDialog
+                                  product={product}
+                                  triggerButton={
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                      <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                  }
+                                  onSave={onSave}
+                                  productCategories={productCategories}
+                                  onAddNewCategory={onAddNewCategory}
+                                />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    setProductToDelete(product);
+                                  }}
+                                >
+                                  <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="p-6 text-muted-foreground text-sm">No products in this category.</p>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+
+      {productToDelete && (
+        <AlertDialog open={!!productToDelete} onOpenChange={(isOpen) => !isOpen && setProductToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the product "{productToDelete?.name}".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (productToDelete) {
+                    onDelete(productToDelete.id);
+                  }
+                  setProductToDelete(null);
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -25,8 +25,8 @@ export default function ProductsPage() {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const fetchedProducts: Product[] = [];
       const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
-      snapshot.forEach((docSnap) => { 
-        const productData = docSnap.data() as Omit<Product, 'id'>; 
+      snapshot.forEach((docSnap) => {
+        const productData = docSnap.data() as Omit<Product, 'id'>;
         fetchedProducts.push({ ...productData, id: docSnap.id });
         if (productData.category) {
           categoriesFromDb.add(productData.category);
@@ -45,7 +45,7 @@ export default function ProductsPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); 
+    return () => unsubscribe();
   }, [toast]);
 
   const handleAddNewCategory = (category: string) => {
@@ -73,7 +73,7 @@ export default function ProductsPage() {
     try {
       if (id && products.some(p => p.id === id)) {
         const productRef = doc(db, 'products', id);
-        await setDoc(productRef, productData); 
+        await setDoc(productRef, productData);
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
@@ -114,7 +114,7 @@ export default function ProductsPage() {
   };
 
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
-    const newProducts: Omit<Product, 'id'>[] = [];
+    const newProductsData: Omit<Product, 'id'>[] = [];
     const lines = csvData.trim().split(/\r\n|\n/);
     const lineCount = lines.length;
 
@@ -127,8 +127,7 @@ export default function ProductsPage() {
     const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\s+/g, ''));
     
     const expectedRequiredHeadersNormalized = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'];
-    // 'description' is optional.
-
+    
     const csvHeaderMap: Record<string, number> = {};
     normalizedCsvHeaders.forEach((header, index) => {
       csvHeaderMap[header] = index;
@@ -148,7 +147,7 @@ export default function ProductsPage() {
 
     let parsedProductCount = 0;
     let skippedRowCount = 0;
-    console.log("Starting CSV product parsing. Required normalized headers:", expectedRequiredHeadersNormalized);
+    console.log("Starting CSV product parsing. Expected normalized headers:", expectedRequiredHeadersNormalized);
 
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
@@ -165,9 +164,8 @@ export default function ProductsPage() {
       const unit = productDataFromCsv.unit;
       const priceStr = productDataFromCsv.price;
       const costStr = productDataFromCsv.cost;
-      // Default markup to "0" if blank, as per previous request, but still parse it
       const markupPercentageStr = productDataFromCsv.markuppercentage === "" ? "0" : productDataFromCsv.markuppercentage;
-      const descriptionFromCsv = productDataFromCsv.description; // Optional
+      const descriptionFromCsv = productDataFromCsv.description; 
 
       let rowIsValid = true;
       let missingFieldsForRow: string[] = [];
@@ -179,7 +177,6 @@ export default function ProductsPage() {
       if (costStr === undefined) { missingFieldsForRow.push('cost'); rowIsValid = false; }
       if (markupPercentageStr === undefined) { missingFieldsForRow.push('markuppercentage'); rowIsValid = false; }
 
-
       if (!rowIsValid) {
         console.warn(`Skipping CSV row ${i+1}: missing required field(s): ${missingFieldsForRow.join(', ')}. Row data: ${lines[i]}`);
         skippedRowCount++;
@@ -188,7 +185,7 @@ export default function ProductsPage() {
       
       const price = parseFloat(priceStr);
       const cost = parseFloat(costStr);
-      const markupPercentage = parseFloat(markupPercentageStr); // Will be parsed from "0" if it was originally blank
+      const markupPercentage = parseFloat(markupPercentageStr || "0");
 
       if (isNaN(price)) { console.warn(`Skipping CSV row ${i+1}: 'price' ("${priceStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
       if (isNaN(cost)) { console.warn(`Skipping CSV row ${i+1}: 'cost' ("${costStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
@@ -206,11 +203,11 @@ export default function ProductsPage() {
       };
 
       const trimmedDescription = descriptionFromCsv?.trim();
-      if (trimmedDescription) { // Only add description if it's a non-empty string
+      if (trimmedDescription) {
         (newProductData as any).description = trimmedDescription;
       }
 
-      newProducts.push(newProductData);
+      newProductsData.push(newProductData);
       parsedProductCount++;
     }
     
@@ -221,7 +218,7 @@ export default function ProductsPage() {
             variant: skippedRowCount > 0 ? "default" : "default",
             duration: 8000,
         });
-    } else if (lineCount > 1 && missingRequiredHeaders.length === 0) { // Headers were found, but no valid data
+    } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
         toast({
             title: "CSV Info",
             description: `Headers matched, but no valid product data rows could be parsed. ${skippedRowCount} rows were skipped. Please check row content for all required fields and correct data types (see console for details).`,
@@ -229,7 +226,7 @@ export default function ProductsPage() {
             duration: 10000,
         });
     }
-    return newProducts;
+    return newProductsData;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,9 +252,14 @@ export default function ProductsPage() {
 
           try {
             const batch = writeBatch(db);
-            parsedProducts.forEach(productData => { // productData is Omit<Product, 'id'>
-              const newDocRef = doc(collection(db, 'products')); 
-              batch.set(newDocRef, productData); // productData may or may not have 'description'
+            parsedProducts.forEach(productData => { 
+              const newDocRef = doc(collection(db, 'products'));
+              const productToWrite: any = {...productData};
+              // Ensure description is not undefined
+              if (productData.description === undefined) {
+                delete productToWrite.description;
+              }
+              batch.set(newDocRef, productToWrite);
             });
             await batch.commit();
             toast({
@@ -294,7 +296,7 @@ export default function ProductsPage() {
     if (!productsToExport.length) return "";
     const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
     const headerString = headers.join(',');
-    const rows = productsToExport.map(product => 
+    const rows = productsToExport.map(product =>
       headers.map(header => {
         let value;
         if (header === 'markuppercentage') {
@@ -303,6 +305,11 @@ export default function ProductsPage() {
           value = product[header as keyof Product];
         }
         
+        // Handle undefined description specifically for export, ensuring it's an empty string
+        if (header === 'description' && value === undefined) {
+          return '';
+        }
+
         if (typeof value === 'string') {
           const escapedValue = value.replace(/"/g, '""');
           if (value.includes(',') || value.includes('"') || value.includes('\n')) {
@@ -338,6 +345,26 @@ export default function ProductsPage() {
       toast({ title: "Export Failed", description: "Your browser doesn't support direct CSV download.", variant: "destructive" });
     }
   };
+
+  const groupedProducts = useMemo(() => {
+    const groups = new Map<string, Product[]>();
+    productCategories.forEach(category => {
+        groups.set(category, []); // Initialize all known categories, even if empty
+    });
+    products.forEach(product => {
+      const category = product.category || 'Uncategorized';
+      if (!groups.has(category)) {
+        groups.set(category, []);
+      }
+      groups.get(category)!.push(product);
+    });
+    // Sort categories that have products first, then by category name
+    return new Map([...groups.entries()].sort(([catA, prodsA], [catB, prodsB]) => {
+        if (prodsA.length > 0 && prodsB.length === 0) return -1;
+        if (prodsA.length === 0 && prodsB.length > 0) return 1;
+        return catA.localeCompare(catB);
+    }));
+  }, [products, productCategories]);
   
   if (isLoading) {
     return (
@@ -382,11 +409,12 @@ export default function ProductsPage() {
         </div>
       </PageHeader>
       <ProductTable 
-        products={products} 
+        groupedProducts={groupedProducts} 
         onSave={handleSaveProduct} 
         onDelete={handleDeleteProduct}
         productCategories={productCategories}
         onAddNewCategory={handleAddNewCategory}
+        isLoading={isLoading}
       />
     </>
   );
