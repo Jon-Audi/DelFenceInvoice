@@ -15,7 +15,7 @@ const firebaseConfig: FirebaseOptions = {
 };
 
 // TEMPORARY DEBUG LINE:
-console.log("Attempting to initialize Firebase with API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+console.log("Firebase config object being used for initialization:", firebaseConfig);
 
 // Initialize Firebase
 let app;
