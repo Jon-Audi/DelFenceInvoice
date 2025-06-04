@@ -1,10 +1,16 @@
 
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+import { AuthProvider } from '@/contexts/auth-context';
+import { Toaster } from "@/components/ui/toaster";
+import { Providers } from './providers';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Delaware Fence Solutions - Diagnostic',
-  description: 'Simplified layout for diagnosing server issues.',
+  title: 'Delaware Fence Pro',
+  description: 'Manage your fencing business with Delaware Fence Pro.',
 };
 
 export default function RootLayout({
@@ -13,13 +19,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body>
-        {children}
+      <body className="font-body bg-background text-foreground">
+        <Providers> {/* Contains QueryClientProvider */}
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </Providers>
       </body>
     </html>
   );
