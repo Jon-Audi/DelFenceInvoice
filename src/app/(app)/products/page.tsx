@@ -233,9 +233,6 @@ export default function ProductsPage() {
         } else {
           // If parsedProducts is empty, parseCsvToProducts should have already shown a specific toast
           // (header error, or no valid data rows).
-          // The lines.length < 2 case is handled within parseCsvToProducts.
-          // The previous `toast.isActive` check was problematic and has been removed.
-          // We now rely on parseCsvToProducts to have already toasted appropriately.
           console.log("CSV Import: parsedProducts was empty, parseCsvToProducts should have handled specific toasts if needed.");
         }
       }
@@ -346,6 +343,8 @@ export default function ProductsPage() {
     </>
   );
 }
+    
+
     
 
     
