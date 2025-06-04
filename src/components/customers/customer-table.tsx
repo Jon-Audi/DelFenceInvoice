@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Customer } from '@/types';
@@ -22,9 +23,18 @@ import {
 
 interface CustomerTableProps {
   customers: Customer[];
+  onSave: (customer: Customer) => void; // Added onSave prop
 }
 
-export function CustomerTable({ customers }: CustomerTableProps) {
+export function CustomerTable({ customers, onSave }: CustomerTableProps) {
+  // In a real app, delete would call an API. For now, it's a placeholder.
+  const handleDeleteCustomer = (customerId: string) => {
+    console.log("Deleting customer (simulation):", customerId);
+    // To actually remove from the list, you'd need to lift state or use a global state manager.
+    // For now, this action won't update the UI directly.
+    alert(`Simulating delete for customer ID: ${customerId}. Implement actual deletion logic.`);
+  };
+
   return (
     <div className="rounded-lg border shadow-sm">
       <Table>
@@ -60,9 +70,13 @@ export function CustomerTable({ customers }: CustomerTableProps) {
                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                            <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
-                      } 
+                      }
+                      onSave={onSave} // Pass the onSave prop here
                     />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                    <DropdownMenuItem 
+                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      onClick={() => handleDeleteCustomer(customer.id)}
+                    >
                       <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -75,3 +89,5 @@ export function CustomerTable({ customers }: CustomerTableProps) {
     </div>
   );
 }
+
+    
