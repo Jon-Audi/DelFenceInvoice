@@ -23,6 +23,22 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,9 +46,10 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
 import type { Order, Customer } from '@/types'; 
+import { OrderDialog } from '@/components/orders/order-dialog';
 
-// Mock data
-const mockOrders: Order[] = [
+// Initial mock data for orders
+const initialMockOrders: Order[] = [
   {
     id: 'ord_1',
     orderNumber: 'ORD-2024-001',
@@ -61,36 +78,9 @@ const mockOrders: Order[] = [
     readyForPickUpDate: '2024-07-28T09:00:00.000Z',
     pickedUpDate: undefined,
   },
-  {
-    id: 'ord_3',
-    orderNumber: 'ORD-2024-003',
-    customerId: 'cust_1',
-    customerName: 'John Doe Fencing',
-    date: '2024-07-25T11:15:00.000Z',
-    total: 500.00,
-    status: 'Picked up',
-    lineItems: [{id: 'li_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00}],
-    subtotal: 500.00,
-    orderState: 'Closed', 
-    readyForPickUpDate: '2024-07-26T16:00:00.000Z',
-    pickedUpDate: '2024-07-27T10:30:00.000Z',
-  },
-   {
-    id: 'ord_4',
-    orderNumber: 'ORD-2024-004',
-    customerId: 'cust_3', 
-    customerName: 'Robert Johnson Home',
-    date: '2024-07-29T08:00:00.000Z',
-    total: 75.00,
-    status: 'Draft',
-    lineItems: [{id: 'li_4', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 2, unitPrice: 25.00, total: 50.00}],
-    subtotal: 75.00,
-    orderState: 'Open',
-    readyForPickUpDate: undefined,
-    pickedUpDate: undefined,
-  },
 ];
 
+// Mock customer for email purposes - in a real app, this would be fetched or resolved.
 const mockCustomer: Customer = {
   id: 'cust_1',
   firstName: 'John',
@@ -102,7 +92,9 @@ const mockCustomer: Customer = {
 };
 
 export default function OrdersPage() {
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>(initialMockOrders);
+  const [selectedOrderForEmail, setSelectedOrderForEmail] = useState<Order | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
   const [editableBody, setEditableBody] = useState<string>('');
@@ -115,8 +107,29 @@ export default function OrdersPage() {
     setIsClient(true);
   }, []);
 
+  const handleSaveOrder = (orderToSave: Order) => {
+    setOrders(prevOrders => {
+      const index = prevOrders.findIndex(o => o.id === orderToSave.id);
+      if (index !== -1) {
+        const updatedOrders = [...prevOrders];
+        updatedOrders[index] = orderToSave;
+        toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
+        return updatedOrders;
+      } else {
+        toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added.` });
+        return [...prevOrders, orderToSave];
+      }
+    });
+  };
+
+  const handleDeleteOrder = (orderId: string) => {
+    setOrders(prevOrders => prevOrders.filter(o => o.id !== orderId));
+    toast({ title: "Order Deleted", description: "The order has been removed." });
+    setOrderToDelete(null);
+  };
+
   const handleGenerateEmail = async (order: Order) => {
-    setSelectedOrder(order);
+    setSelectedOrderForEmail(order);
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
@@ -125,10 +138,13 @@ export default function OrdersPage() {
 
     try {
       const orderItemsDescription = order.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Items as per order.';
+      const customerEmail = order.customerId === mockCustomer.id 
+        ? mockCustomer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com'
+        : 'customer@example.com'; // Fallback if customer not found
 
       const result = await generateOrderEmailDraft({
-        customerName: order.customerName || `${mockCustomer.firstName} ${mockCustomer.lastName}`,
-        customerEmail: mockCustomer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com',
+        customerName: order.customerName || 'Valued Customer',
+        customerEmail: customerEmail,
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
@@ -142,16 +158,10 @@ export default function OrdersPage() {
 
     } catch (error) {
       console.error("Error generating email draft:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate email draft.",
-        variant: "destructive",
-      });
-      const errorSubject = "Error generating subject";
-      const errorBody = "Could not generate email content.";
-      setEmailDraft({ subject: errorSubject, body: errorBody});
-      setEditableSubject(errorSubject);
-      setEditableBody(errorBody);
+      toast({ title: "Error", description: "Failed to generate email draft.", variant: "destructive" });
+      setEmailDraft({ subject: "Error generating subject", body: "Could not generate email content." });
+      setEditableSubject("Error generating subject");
+      setEditableBody("Could not generate email content.");
     } finally {
       setIsLoadingEmail(false);
     }
@@ -160,16 +170,9 @@ export default function OrdersPage() {
   const handleSendEmail = () => {
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for order ${selectedOrder?.orderNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for order ${selectedOrderForEmail?.orderNumber} would be sent.`,
     });
     setIsEmailModalOpen(false);
-  };
-
-  const handleNewOrder = () => {
-    toast({
-      title: "Action: New Order",
-      description: "Functionality to create a new order will be implemented here.",
-    });
   };
 
   const formatDate = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
@@ -181,10 +184,15 @@ export default function OrdersPage() {
   return (
     <>
       <PageHeader title="Orders" description="Create and manage customer orders.">
-        <Button onClick={handleNewOrder}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
-          New Order
-        </Button>
+        <OrderDialog
+          triggerButton={
+            <Button>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+              New Order
+            </Button>
+          }
+          onSave={handleSaveOrder}
+        />
       </PageHeader>
 
       <Card>
@@ -202,11 +210,11 @@ export default function OrdersPage() {
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Order State</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockOrders.map((order) => (
+              {orders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.customerName}</TableCell>
@@ -229,10 +237,33 @@ export default function OrdersPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => handleGenerateEmail(order)}>
-                      <Icon name="Mail" className="mr-2 h-4 w-4" />
-                      Email Draft
-                    </Button>
+                     <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Icon name="MoreHorizontal" className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <OrderDialog
+                          order={order}
+                          triggerButton={
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                              <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                          }
+                          onSave={handleSaveOrder}
+                        />
+                        <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
+                          <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                          onSelect={() => setOrderToDelete(order)}
+                        >
+                          <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -241,13 +272,13 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-       {selectedOrder && (
+       {selectedOrderForEmail && (
         <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Email Draft for Order {selectedOrder.orderNumber}</DialogTitle>
+              <DialogTitle>Email Draft for Order {selectedOrderForEmail.orderNumber}</DialogTitle>
               <DialogDescription>
-                Review and send the email to {selectedOrder.customerName}.
+                Review and send the email to {selectedOrderForEmail.customerName}.
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
@@ -259,36 +290,41 @@ export default function OrdersPage() {
               <div className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="emailSubject">Subject</Label>
-                  <Input
-                    id="emailSubject"
-                    value={editableSubject}
-                    onChange={(e) => setEditableSubject(e.target.value)}
-                  />
+                  <Input id="emailSubject" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea
-                    id="emailBody"
-                    value={editableBody}
-                    onChange={(e) => setEditableBody(e.target.value)}
-                    rows={10} className="min-h-[200px]"
-                  />
+                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={10} className="min-h-[200px]" />
                 </div>
               </div>
-            ) : (
-               <p className="text-center py-4">Could not load email draft.</p>
-            )}
+            ) : ( <p className="text-center py-4">Could not load email draft.</p> )}
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
+              <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
               <Button type="button" onClick={handleSendEmail} disabled={isLoadingEmail || !emailDraft}>
-                <Icon name="Send" className="mr-2 h-4 w-4" />
-                Send Email
+                <Icon name="Send" className="mr-2 h-4 w-4" /> Send Email
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {orderToDelete && (
+        <AlertDialog open={!!orderToDelete} onOpenChange={(isOpen) => !isOpen && setOrderToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete order "{orderToDelete.orderNumber}".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setOrderToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handleDeleteOrder(orderToDelete.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </>
   );

@@ -32,8 +32,9 @@ import {
   UserCog,
   Paintbrush,
   Loader2,
-  ChevronsUpDown, // Added ChevronsUpDown
-  Check, // Added Check for Combobox
+  ChevronsUpDown,
+  Check,
+  CalendarDays, // Added CalendarDays for date pickers
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -72,8 +73,9 @@ const iconComponents = {
   UserCog,
   Paintbrush,
   Loader2,
-  ChevronsUpDown, // Added ChevronsUpDown
-  Check, // Added Check
+  ChevronsUpDown,
+  Check,
+  Calendar: CalendarDays, // Using CalendarDays as "Calendar"
 };
 
 interface IconProps extends LucideProps {
@@ -83,7 +85,6 @@ interface IconProps extends LucideProps {
 export const Icon = ({ name, ...props }: IconProps) => {
   const LucideIcon = iconComponents[name];
   if (!LucideIcon) {
-    // Fallback or error handling
     console.warn("Icon not found:", name);
     return <AlertCircle {...props} />;
   }
