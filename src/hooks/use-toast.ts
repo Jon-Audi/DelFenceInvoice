@@ -137,7 +137,9 @@ let memoryState: State = { toasts: [] }
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
   listeners.forEach((listener) => {
-    listener(memoryState)
+    queueMicrotask(() => {
+      listener(memoryState)
+    });
   })
 }
 
@@ -183,7 +185,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, []) // Corrected dependency array to []
+  }, []) // Empty dependency array is correct here
 
   return {
     ...state,
