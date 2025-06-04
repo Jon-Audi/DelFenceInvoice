@@ -1,7 +1,7 @@
 
 "use client"; 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -47,75 +47,13 @@ import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
 import type { Order, Customer, Product, Estimate } from '@/types'; 
 import { OrderDialog, type OrderFormData } from '@/components/orders/order-dialog';
-
-// Initial mock data for customers
-const initialMockCustomers: Customer[] = [
-  {
-    id: 'cust_1',
-    firstName: 'John',
-    lastName: 'Doe',
-    companyName: 'Doe Fencing Co.',
-    phone: '555-1234',
-    emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }],
-    customerType: 'Fence Contractor',
-  },
-  {
-    id: 'cust_2',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    companyName: 'J. Smith Landscaping',
-    phone: '555-5678',
-    emailContacts: [{ id: 'ec_2', type: 'Main Contact', email: 'jane.smith@example.com' }],
-    customerType: 'Landscaper',
-  },
-];
-
-// Mock products data
-const mockProducts: Product[] = [
-  { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
-  { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
-  { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
-  { id: 'prod_4', name: 'Stainless Steel Hinges', category: 'Hardware', unit: 'pair', price: 25.00, cost: 15.00, markupPercentage: 66.67, description: 'Heavy duty gate hinges' },
-  { id: 'prod_5', name: 'Post Caps', category: 'Accessories', unit: 'piece', price: 2.50, cost: 1.00, markupPercentage: 150, description: 'Decorative post cap' },
-];
-
-
-// Initial mock data for orders
-const initialMockOrders: Order[] = [
-  {
-    id: 'ord_1',
-    orderNumber: 'ORD-2024-001',
-    customerId: 'cust_1',
-    customerName: 'Doe Fencing Co.',
-    date: '2024-07-20T10:00:00.000Z',
-    total: 350.00,
-    status: 'Ordered',
-    lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}],
-    subtotal: 350.00,
-    orderState: 'Open', 
-    readyForPickUpDate: undefined,
-    pickedUpDate: undefined,
-  },
-  {
-    id: 'ord_2',
-    orderNumber: 'ORD-2024-002',
-    customerId: 'cust_2',
-    customerName: 'J. Smith Landscaping',
-    date: '2024-07-22T14:30:00.000Z',
-    total: 150.00,
-    status: 'Ready for pick up',
-    lineItems: [{id: 'li_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00}],
-    subtotal: 150.00,
-    orderState: 'Closed', 
-    readyForPickUpDate: '2024-07-28T09:00:00.000Z',
-    pickedUpDate: undefined,
-  },
-];
+import { MOCK_CUSTOMERS, MOCK_PRODUCTS, MOCK_ORDERS } from '@/lib/mock-data';
 
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(initialMockOrders);
-  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
+  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [selectedOrderForEmail, setSelectedOrderForEmail] = useState<Order | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
@@ -255,7 +193,7 @@ export default function OrdersPage() {
           }
           onSave={handleSaveOrder}
           customers={customers}
-          products={mockProducts}
+          products={products}
         />
       </PageHeader>
 
@@ -269,7 +207,7 @@ export default function OrdersPage() {
             initialData={conversionOrderData}
             onSave={handleSaveOrder}
             customers={customers}
-            products={mockProducts}
+            products={products}
         />
       )}
 
@@ -332,7 +270,7 @@ export default function OrdersPage() {
                           }
                           onSave={handleSaveOrder}
                           customers={customers}
-                          products={mockProducts}
+                          products={products}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
@@ -410,5 +348,3 @@ export default function OrdersPage() {
     </>
   );
 }
-
-    

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -23,78 +23,13 @@ import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
 import type { Invoice, Customer, Product, Estimate } from '@/types';
 import { InvoiceDialog, type InvoiceFormData } from '@/components/invoices/invoice-dialog';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
-
-// Initial mock data for customers
-const initialMockCustomers: Customer[] = [
-  { 
-    id: 'cust_1', 
-    firstName: 'John', 
-    lastName: 'Doe', 
-    companyName: 'Doe Fencing Co.', 
-    phone: '555-1234', 
-    emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }], 
-    customerType: 'Fence Contractor',
-  },
-  { 
-    id: 'cust_2', 
-    firstName: 'Jane', 
-    lastName: 'Smith', 
-    companyName: 'J. Smith Landscaping',
-    phone: '555-5678', 
-    emailContacts: [{ id: 'ec_2', type: 'Main Contact', email: 'jane.smith@example.com' }], 
-    customerType: 'Landscaper',
-  },
-];
-
-// Mock products data 
-const mockProducts: Product[] = [
-  { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
-  { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
-  { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
-  { id: 'prod_4', name: 'Stainless Steel Hinges', category: 'Hardware', unit: 'pair', price: 25.00, cost: 15.00, markupPercentage: 66.67, description: 'Heavy duty gate hinges' },
-  { id: 'prod_5', name: 'Post Caps', category: 'Accessories', unit: 'piece', price: 2.50, cost: 1.00, markupPercentage: 150, description: 'Decorative post cap' },
-];
-
-// Initial mock data for invoices
-const initialMockInvoices: Invoice[] = [
-  { 
-    id: 'inv_1', 
-    invoiceNumber: 'INV-2024-001', 
-    customerId: 'cust_1', 
-    customerName: 'Doe Fencing Co.', 
-    date: '2024-07-25', 
-    total: 590.00, 
-    status: 'Sent', 
-    dueDate: '2024-08-24', 
-    lineItems: [
-      { id: 'li_inv_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350.00 },
-      { id: 'li_inv_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00 },
-    ], 
-    subtotal: 590.00, 
-    taxAmount: 0.00, 
-  },
-  { 
-    id: 'inv_2', 
-    invoiceNumber: 'INV-2024-002', 
-    customerId: 'cust_2', 
-    customerName: 'J. Smith Landscaping', 
-    date: '2024-07-28', 
-    total: 150.00, 
-    status: 'Paid', 
-    dueDate: '2024-08-27', 
-    lineItems: [
-       { id: 'li_inv_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00 }
-    ], 
-    subtotal: 150.00, 
-    taxAmount: 0.00,
-  },
-];
+import { MOCK_CUSTOMERS, MOCK_PRODUCTS, MOCK_INVOICES } from '@/lib/mock-data';
 
 
 export default function InvoicesPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialMockInvoices);
-  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
-  const [products, setProducts] = useState<Product[]>(mockProducts); // Added products state
+  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -304,4 +239,3 @@ export default function InvoicesPage() {
     </>
   );
 }
-

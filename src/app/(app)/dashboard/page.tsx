@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import type { IconName } from '@/components/icons';
+import { MOCK_PRODUCTS, MOCK_CUSTOMERS, MOCK_ESTIMATES, MOCK_ORDERS } from '@/lib/mock-data';
 
 interface DashboardCardProps {
   title: string;
@@ -32,6 +33,20 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, iconName, value, d
 };
 
 export default function DashboardPage() {
+  const totalProducts = MOCK_PRODUCTS.length;
+  const activeCustomers = MOCK_CUSTOMERS.length; // Assuming all mock customers are active for now
+
+  const openEstimates = MOCK_ESTIMATES.filter(
+    (estimate) => estimate.status === 'Draft' || estimate.status === 'Sent'
+  );
+  const openEstimatesCount = openEstimates.length;
+  const openEstimatesTotalValue = openEstimates.reduce((sum, est) => sum + est.total, 0);
+
+  const pendingOrders = MOCK_ORDERS.filter(
+    (order) => order.status === 'Ordered' || order.status === 'Ready for pick up'
+  );
+  const pendingOrdersCount = pendingOrders.length;
+
   return (
     <>
       <PageHeader title="Dashboard" description="Welcome to Delaware Fence Solutions.">
@@ -54,29 +69,29 @@ export default function DashboardPage() {
         <DashboardCard
           title="Total Products"
           iconName="Package"
-          value="150"
-          description="+10 from last month"
+          value={String(totalProducts)}
+          description="Total products in catalog"
           href="/products"
         />
         <DashboardCard
           title="Active Customers"
           iconName="Users"
-          value="72"
-          description="+5 new this month"
+          value={String(activeCustomers)}
+          description="Total customers registered"
           href="/customers"
         />
         <DashboardCard
           title="Open Estimates"
           iconName="FileText"
-          value="23"
-          description="Totaling $15,230.00"
+          value={String(openEstimatesCount)}
+          description={`Totaling $${openEstimatesTotalValue.toFixed(2)}`}
           href="/estimates"
         />
         <DashboardCard
           title="Pending Orders"
           iconName="ShoppingCart"
-          value="8"
-          description="Ready for processing"
+          value={String(pendingOrdersCount)}
+          description="Orders awaiting processing"
           href="/orders"
         />
       </div>
