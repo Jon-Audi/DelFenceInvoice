@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button, buttonVariants } from '@/components/ui/button'; // Imported buttonVariants
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
@@ -24,6 +24,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -48,7 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils'; // Imported cn
+import { cn } from '@/lib/utils';
 
 interface ProductTableProps {
   groupedProducts: Map<string, Product[]>;
@@ -58,6 +59,7 @@ interface ProductTableProps {
   onAddNewCategory: (category: string) => void;
   isLoading: boolean;
   onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
+  onDeleteCategory: (categoryName: string) => void; // New prop
 }
 
 export function ProductTable({ 
@@ -67,9 +69,11 @@ export function ProductTable({
   productCategories, 
   onAddNewCategory,
   isLoading,
-  onApplyCategoryMarkup
+  onApplyCategoryMarkup,
+  onDeleteCategory // New prop
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
+  const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null); // Renamed to avoid conflict
   const [selectedCategoryForMarkup, setSelectedCategoryForMarkup] = React.useState<string | null>(null);
   const [isMarkupDialogOpen, setIsMarkupDialogOpen] = React.useState(false);
   const [newMarkupValue, setNewMarkupValue] = React.useState<string>("");
@@ -93,9 +97,15 @@ export function ProductTable({
         setIsMarkupDialogOpen(false);
         setSelectedCategoryForMarkup(null);
       } else {
-        // This could be a toast in a real app
         alert("Please enter a valid non-negative markup percentage.");
       }
+    }
+  };
+
+  const confirmDeleteCategory = () => {
+    if (categoryToDelete) {
+      onDeleteCategory(categoryToDelete);
+      setCategoryToDeleteState(null);
     }
   };
 
@@ -142,12 +152,11 @@ export function ProductTable({
                     {productsInCategory.length} product{productsInCategory.length === 1 ? '' : 's'}
                   </Badge>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                    <DropdownMenuTrigger asChild onClick={(e) => { e.stopPropagation(); }}>
                        <div
                         className={cn(
                           buttonVariants({ variant: "ghost", size: "icon" }),
                           "h-8 w-8 data-[state=open]:bg-accent/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
-                          // Added focus-visible styles for accessibility on the div
                         )}
                         role="button"
                         tabIndex={0}
@@ -160,6 +169,15 @@ export function ProductTable({
                       <DropdownMenuItem onSelect={() => handleOpenMarkupDialog(category)}>
                         <Icon name="TrendingUp" className="mr-2 h-4 w-4" />
                         Apply Markup to Category
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setCategoryToDeleteState(category)}
+                        disabled={productsInCategory.length > 0}
+                        className={cn(productsInCategory.length > 0 ? "text-muted-foreground" : "text-destructive focus:text-destructive focus:bg-destructive/10")}
+                      >
+                        <Icon name="Trash2" className="mr-2 h-4 w-4" />
+                        Delete Category
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -300,7 +318,29 @@ export function ProductTable({
           </DialogContent>
         </Dialog>
       )}
+
+      {categoryToDelete && (
+        <AlertDialog open={!!categoryToDelete} onOpenChange={(isOpen) => !isOpen && setCategoryToDeleteState(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Category: "{categoryToDelete}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will remove the category "{categoryToDelete}" from the list of available categories.
+                This option is only available if no products are currently in this category.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setCategoryToDeleteState(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteCategory}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete Category
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }
-

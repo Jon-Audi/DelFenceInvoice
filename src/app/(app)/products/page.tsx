@@ -138,7 +138,7 @@ export default function ProductsPage() {
   
       const batch = writeBatch(db);
       querySnapshot.forEach((docSnap) => {
-        const product = docSnap.data() as Omit<Product, 'id'>; // Cast to exclude ID, Firestore data won't have it here
+        const product = docSnap.data() as Omit<Product, 'id'>;
         const newPrice = product.cost * (1 + markup / 100);
         batch.update(docSnap.ref, { 
           price: parseFloat(newPrice.toFixed(2)), 
@@ -158,6 +158,26 @@ export default function ProductsPage() {
       setIsLoading(false);
     }
   };
+
+  const handleDeleteCategory = (categoryToDelete: string) => {
+    const productsUsingCategory = products.filter(p => p.category === categoryToDelete);
+    if (productsUsingCategory.length > 0) {
+      toast({
+        title: "Cannot Delete Category",
+        description: `Category "${categoryToDelete}" cannot be deleted because ${productsUsingCategory.length} product(s) are still using it.`,
+        variant: "destructive",
+        duration: 7000,
+      });
+      return;
+    }
+
+    setProductCategories(prev => prev.filter(cat => cat !== categoryToDelete));
+    toast({
+      title: "Category Deleted",
+      description: `Category "${categoryToDelete}" has been removed.`,
+    });
+  };
+
 
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
     const newProductsData: Omit<Product, 'id'>[] = [];
@@ -397,18 +417,25 @@ export default function ProductsPage() {
     products.forEach(product => {
       const category = product.category || 'Uncategorized'; 
       if (!groups.has(category)) {
-        groups.set(category, []); 
+        groups.set(category, []); // Should not happen if productCategories is up-to-date
       }
       groups.get(category)!.push(product);
     });
+    // Sort categories: those with products first, then alphabetically.
+    // Then sort empty categories alphabetically.
     return new Map([...groups.entries()].sort(([catA, prodsA], [catB, prodsB]) => {
-        if (prodsA.length > 0 && prodsB.length === 0) return -1;
-        if (prodsA.length === 0 && prodsB.length > 0) return 1;
+        const hasProdsA = prodsA.length > 0;
+        const hasProdsB = prodsB.length > 0;
+
+        if (hasProdsA && !hasProdsB) return -1; // A comes before B
+        if (!hasProdsA && hasProdsB) return 1;  // B comes before A
+        
+        // If both have products or both are empty, sort alphabetically
         return catA.localeCompare(catB);
     }));
   }, [products, productCategories]);
   
-  if (isLoading && products.length === 0) { // Show main loading only if no products are yet displayed
+  if (isLoading && products.length === 0) { 
     return (
       <PageHeader title="Products" description="Loading product inventory...">
         <div className="flex items-center justify-center h-32">
@@ -428,6 +455,7 @@ export default function ProductsPage() {
             style={{ display: 'none' }}
             accept=".csv"
             onChange={handleFileChange}
+            disabled={isLoading}
           />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
@@ -458,6 +486,7 @@ export default function ProductsPage() {
         onAddNewCategory={handleAddNewCategory}
         isLoading={isLoading}
         onApplyCategoryMarkup={handleApplyCategoryMarkup}
+        onDeleteCategory={handleDeleteCategory}
       />
     </>
   );
