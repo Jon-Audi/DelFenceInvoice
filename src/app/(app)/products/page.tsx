@@ -25,14 +25,14 @@ export default function ProductsPage() {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const fetchedProducts: Product[] = [];
       const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
-      snapshot.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
-        const productData = docSnap.data() as Omit<Product, 'id'>; // Firestore data won't have id field itself
+      snapshot.forEach((docSnap) => { 
+        const productData = docSnap.data() as Omit<Product, 'id'>; 
         fetchedProducts.push({ ...productData, id: docSnap.id });
         if (productData.category) {
           categoriesFromDb.add(productData.category);
         }
       });
-      setProducts(fetchedProducts);
+      setProducts(fetchedProducts.sort((a,b) => a.name.localeCompare(b.name)));
       setProductCategories(Array.from(categoriesFromDb).sort((a, b) => a.localeCompare(b)));
       setIsLoading(false);
     }, (error) => {
@@ -45,7 +45,7 @@ export default function ProductsPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup subscription on component unmount
+    return () => unsubscribe(); 
   }, [toast]);
 
   const handleAddNewCategory = (category: string) => {
@@ -61,12 +61,9 @@ export default function ProductsPage() {
   };
 
   const handleSaveProduct = async (productToSave: Product) => {
-    // Ensure category from product is in local list for immediate UI consistency
-    // onSnapshot will later confirm it from DB.
     if (productToSave.category) {
         const normalizedCategory = productToSave.category.trim();
         if (normalizedCategory && !productCategories.find(pc => pc.toLowerCase() === normalizedCategory.toLowerCase())) {
-             // This local update is mostly for UI responsiveness before Firestore confirms.
             setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
         }
     }
@@ -118,7 +115,7 @@ export default function ProductsPage() {
 
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
     const newProducts: Omit<Product, 'id'>[] = [];
-    const lines = csvData.trim().split('\n');
+    const lines = csvData.trim().split(/\r\n|\n/); // Handle both CRLF and LF line endings
     const lineCount = lines.length;
 
     if (lineCount < 2) {
@@ -126,27 +123,43 @@ export default function ProductsPage() {
       return [];
     }
 
-    const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage']; // description is optional
-    const receivedHeadersSet = new Set(headerLine);
-    const missingRequiredHeaders = expectedHeaders.filter(eh => !receivedHeadersSet.has(eh) && eh !== 'description'); // only core fields are strictly required for header check
+    const rawHeaders = lines[0].split(',').map(h => h.trim());
+    const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\s+/g, ''));
+    
+    // Define expected headers (normalized: lowercase, no spaces)
+    // 'description' is optional in terms of presence in the header row.
+    const expectedRequiredHeadersNormalized = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'];
+    const allExpectedHeadersNormalized = [...expectedRequiredHeadersNormalized, 'description'];
+
+    const csvHeaderMap: Record<string, number> = {};
+    normalizedCsvHeaders.forEach((header, index) => {
+      csvHeaderMap[header] = index;
+    });
+    
+    const missingRequiredHeaders = expectedRequiredHeadersNormalized.filter(eh => csvHeaderMap[eh] === undefined);
 
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected at least: ${expectedHeaders.slice(0, -1).join(', ')}.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Please ensure your CSV headers match the expected format (case-insensitive, spaces ignored): ${expectedRequiredHeadersNormalized.join(', ')}. Optional header: description.`,
             variant: "destructive",
-            duration: 10000,
+            duration: 15000,
         });
         return [];
     }
 
     let parsedProductCount = 0;
+    let skippedRowCount = 0;
+    console.log("Starting CSV product parsing. Expected normalized headers:", allExpectedHeadersNormalized);
+
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
-      const productDataFromCsv: any = {};
-      headerLine.forEach((header, index) => {
-        productDataFromCsv[header] = values[index];
+      const productDataFromCsv: Record<string, string> = {};
+      
+      normalizedCsvHeaders.forEach((header, index) => {
+        if (values[index] !== undefined) {
+            productDataFromCsv[header] = values[index];
+        }
       });
 
       const name = productDataFromCsv.name;
@@ -155,9 +168,21 @@ export default function ProductsPage() {
       const priceStr = productDataFromCsv.price;
       const costStr = productDataFromCsv.cost;
       const markupPercentageStr = productDataFromCsv.markuppercentage;
+      const description = productDataFromCsv.description; // Optional
 
-      if (!name || !category || !unit || priceStr === undefined || costStr === undefined || markupPercentageStr === undefined) {
-        console.warn(`Skipping row ${i+1}: missing one or more required fields (name, category, unit, price, cost, markupPercentage).`);
+      let rowIsValid = true;
+      let missingFieldsForRow: string[] = [];
+
+      if (!name) { missingFieldsForRow.push('name'); rowIsValid = false; }
+      if (!category) { missingFieldsForRow.push('category'); rowIsValid = false; }
+      if (!unit) { missingFieldsForRow.push('unit'); rowIsValid = false; }
+      if (priceStr === undefined) { missingFieldsForRow.push('price'); rowIsValid = false; }
+      if (costStr === undefined) { missingFieldsForRow.push('cost'); rowIsValid = false; }
+      if (markupPercentageStr === undefined) { missingFieldsForRow.push('markuppercentage'); rowIsValid = false; }
+
+      if (!rowIsValid) {
+        console.warn(`Skipping CSV row ${i+1}: missing required field(s): ${missingFieldsForRow.join(', ')}. Row data: ${lines[i]}`);
+        skippedRowCount++;
         continue; 
       }
       
@@ -165,14 +190,12 @@ export default function ProductsPage() {
       const cost = parseFloat(costStr);
       const markupPercentage = parseFloat(markupPercentageStr);
 
-      if (isNaN(price) || isNaN(cost) || isNaN(markupPercentage)) {
-        console.warn(`Skipping row ${i+1}: price, cost, or markupPercentage is not a valid number.`);
-        continue;
-      }
+      if (isNaN(price)) { console.warn(`Skipping CSV row ${i+1}: 'price' ("${priceStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
+      if (isNaN(cost)) { console.warn(`Skipping CSV row ${i+1}: 'cost' ("${costStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
+      if (isNaN(markupPercentage)) { console.warn(`Skipping CSV row ${i+1}: 'markupPercentage' ("${markupPercentageStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
       
-      // Only call handleAddNewCategory if the product row is valid and will be added
       const trimmedCategory = category.trim();
-      handleAddNewCategory(trimmedCategory); 
+      // handleAddNewCategory(trimmedCategory); // Add category to local list for form dropdown if new
 
       const newProduct: Omit<Product, 'id'> = {
         name: name.trim(),
@@ -181,21 +204,28 @@ export default function ProductsPage() {
         price: price,
         cost: cost,
         markupPercentage: markupPercentage,
-        description: productDataFromCsv.description?.trim() || undefined,
+        description: description?.trim() || undefined,
       };
       newProducts.push(newProduct);
       parsedProductCount++;
     }
     
-    if (lineCount > 1 && parsedProductCount === 0 && missingRequiredHeaders.length === 0) {
-        // Headers were okay, but no data rows were valid
+    if (parsedProductCount > 0) {
         toast({
-            title: "CSV Info",
-            description: "CSV headers found, but no valid product data rows could be parsed. Please check row content for all required fields and correct data types.",
-            variant: "default",
+            title: "CSV Parsed",
+            description: `${parsedProductCount} products parsed. ${skippedRowCount > 0 ? `${skippedRowCount} rows skipped (see console for details).` : 'All rows processed.'}`,
+            variant: skippedRowCount > 0 ? "default" : "default", // Could be 'success' if no skips
             duration: 8000,
         });
+    } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
+        toast({
+            title: "CSV Info",
+            description: `Headers matched, but no valid product data rows could be parsed. ${skippedRowCount} rows were skipped. Please check row content for all required fields and correct data types (see console for details).`,
+            variant: "default",
+            duration: 10000,
+        });
     }
+    // If missingRequiredHeaders.length > 0, that toast is shown and this function returns early.
     return newProducts;
   };
 
@@ -207,9 +237,20 @@ export default function ProductsPage() {
     reader.onload = async (e) => {
       const csvData = e.target?.result as string;
       if (csvData) {
-        const parsedProducts = parseCsvToProducts(csvData); // Called once
+        const parsedProducts = parseCsvToProducts(csvData); 
 
         if (parsedProducts.length > 0) {
+          // Add new categories from parsed products to the global list if they don't exist
+          const newCategoriesFromCsv = new Set<string>();
+          parsedProducts.forEach(p => {
+            if (p.category && !productCategories.some(existingCat => existingCat.toLowerCase() === p.category.toLowerCase())) {
+              newCategoriesFromCsv.add(p.category);
+            }
+          });
+          if (newCategoriesFromCsv.size > 0) {
+            setProductCategories(prev => [...prev, ...Array.from(newCategoriesFromCsv)].sort((a,b) => a.localeCompare(b)));
+          }
+
           try {
             const batch = writeBatch(db);
             parsedProducts.forEach(product => {
@@ -218,8 +259,8 @@ export default function ProductsPage() {
             });
             await batch.commit();
             toast({
-              title: "Success",
-              description: `${parsedProducts.length} products imported successfully to Firestore.`,
+              title: "Import Successful",
+              description: `${parsedProducts.length} products imported to Firestore.`,
             });
           } catch (error) {
             console.error("Error importing CSV to Firestore:", error);
@@ -231,9 +272,8 @@ export default function ProductsPage() {
             });
           }
         } else {
-          // If parsedProducts is empty, parseCsvToProducts should have already shown a specific toast
-          // (header error, or no valid data rows).
-          console.log("CSV Import: parsedProducts was empty, parseCsvToProducts should have handled specific toasts if needed.");
+          // parseCsvToProducts handles its own toasts for parsing issues or empty valid data.
+          console.log("CSV Import: parseCsvToProducts returned no products. Specific toasts handled within that function.");
         }
       }
       if (fileInputRef.current) {
@@ -251,16 +291,26 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
-    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markupPercentage', 'description'];
+    // Use lowercase 'markuppercentage' to match the import expectation
+    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product => 
       headers.map(header => {
-        const value = product[header as keyof Product];
+        let value;
+        // Handle 'markupPercentage' specifically for export to match the 'markuppercentage' key.
+        if (header === 'markuppercentage') {
+          value = product['markupPercentage' as keyof Product];
+        } else {
+          value = product[header as keyof Product];
+        }
+        
         if (typeof value === 'string') {
-          if (value.includes(',') || value.includes('"')) {
-            return `"${value.replace(/"/g, '""')}"`;
+          // Escape quotes and handle commas
+          const escapedValue = value.replace(/"/g, '""');
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            return `"${escapedValue}"`;
           }
-          return value;
+          return escapedValue;
         }
         return value !== undefined && value !== null ? String(value) : '';
       }).join(',')
@@ -343,8 +393,4 @@ export default function ProductsPage() {
     </>
   );
 }
-    
-
-    
-
     
