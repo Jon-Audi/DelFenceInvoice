@@ -1,6 +1,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/icons";
@@ -13,8 +14,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
 
 export function AppHeader() {
+  const { toast } = useToast();
+
+  const handleProfileClick = () => {
+    toast({
+      title: "Profile Clicked",
+      description: "User profile page functionality would be here.",
+    });
+  };
+
+  const handleLogoutClick = () => {
+    toast({
+      title: "Log Out Clicked",
+      description: "User logout process would be initiated here.",
+    });
+  };
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
       <div className="md:hidden">
@@ -24,13 +42,6 @@ export function AppHeader() {
         {/* Search or other header content can go here */}
       </div>
       <div className="flex items-center gap-4">
-        {/* Theme toggle example
-        <Button variant="ghost" size="icon">
-          <Icon name="Sun" className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Icon name="Moon" className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-        */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -43,10 +54,16 @@ export function AppHeader() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>
+              Profile
+            </DropdownMenuItem>
+            <Link href="/settings" passHref>
+              <DropdownMenuItem>
+                Settings
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogoutClick}>
               <Icon name="LogOut" className="mr-2 h-4 w-4" />
               <span>Log out</span>
             </DropdownMenuItem>

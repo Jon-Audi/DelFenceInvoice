@@ -1,5 +1,5 @@
 
-"use client"; // Marking as client component for useState and event handlers
+"use client"; 
 
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -29,7 +29,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer } from '@/types'; // Assuming you have these types
+import type { Order, Customer } from '@/types'; 
 
 // Mock data
 const mockOrders: Order[] = [
@@ -43,7 +43,7 @@ const mockOrders: Order[] = [
     status: 'Ordered',
     lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}],
     subtotal: 1850.50,
-    orderState: 'Open', // Customer might add more
+    orderState: 'Open', 
     readyForPickUpDate: undefined,
     pickedUpDate: undefined,
   },
@@ -57,7 +57,7 @@ const mockOrders: Order[] = [
     status: 'Ready for pick up',
     lineItems: [{id: 'li_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00}],
     subtotal: 975.00,
-    orderState: 'Closed', // Finalized, awaiting pickup
+    orderState: 'Closed', 
     readyForPickUpDate: '2024-07-28T09:00:00.000Z',
     pickedUpDate: undefined,
   },
@@ -71,14 +71,14 @@ const mockOrders: Order[] = [
     status: 'Picked up',
     lineItems: [{id: 'li_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00}],
     subtotal: 500.00,
-    orderState: 'Closed', // Picked up, order fulfilled
+    orderState: 'Closed', 
     readyForPickUpDate: '2024-07-26T16:00:00.000Z',
     pickedUpDate: '2024-07-27T10:30:00.000Z',
   },
    {
     id: 'ord_4',
     orderNumber: 'ORD-2024-004',
-    customerId: 'cust_3', // Assuming cust_3 exists or is mocked
+    customerId: 'cust_3', 
     customerName: 'Robert Johnson Home',
     date: '2024-07-29T08:00:00.000Z',
     total: 75.00,
@@ -133,7 +133,7 @@ export default function OrdersPage() {
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
         orderTotal: order.total,
-        companyName: "Delaware Fence Pro",
+        companyName: "Delaware Fence Solutions",
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -165,16 +165,23 @@ export default function OrdersPage() {
     setIsEmailModalOpen(false);
   };
 
+  const handleNewOrder = () => {
+    toast({
+      title: "Action: New Order",
+      description: "Functionality to create a new order will be implemented here.",
+    });
+  };
+
   const formatDate = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
     if (!dateString) return '';
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR / pre-hydration
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; 
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
   return (
     <>
       <PageHeader title="Orders" description="Create and manage customer orders.">
-        <Button>
+        <Button onClick={handleNewOrder}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
           New Order
         </Button>

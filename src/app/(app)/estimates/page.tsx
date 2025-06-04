@@ -1,5 +1,5 @@
 
-"use client"; // Marking as client component for useState and event handlers
+"use client"; 
 
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -100,7 +100,7 @@ export default function EstimatesPage() {
       const customerForEstimate = mockEstimates.find(e => e.id === estimate.id)?.customerId === mockCustomer.id ? mockCustomer : {
         firstName: estimate.customerName?.split(' ')[0] || "Valued",
         lastName: estimate.customerName?.split(' ').slice(1).join(' ') || "Customer",
-        companyName: estimate.customerName?.includes(" ") ? undefined : estimate.customerName, // Basic heuristic
+        companyName: estimate.customerName?.includes(" ") ? undefined : estimate.customerName, 
       };
 
       const estimateContent = `
@@ -118,7 +118,7 @@ export default function EstimatesPage() {
         estimateContent: estimateContent,
       });
 
-      const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Pro`;
+      const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Solutions`;
       setEmailDraft({
         subject: subject,
         body: result.emailDraft
@@ -151,11 +151,18 @@ export default function EstimatesPage() {
     setIsEmailModalOpen(false);
   };
 
+  const handleNewEstimate = () => {
+    toast({
+      title: "Action: New Estimate",
+      description: "Functionality to create a new estimate will be implemented here.",
+    });
+  };
+
 
   return (
     <>
       <PageHeader title="Estimates" description="Create and manage customer estimates.">
-        <Button>
+        <Button onClick={handleNewEstimate}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
           New Estimate
         </Button>

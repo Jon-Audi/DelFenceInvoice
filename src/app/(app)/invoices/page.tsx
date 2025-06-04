@@ -64,7 +64,6 @@ const mockInvoices: Invoice[] = [
   },
 ];
 
-// Mock customer data for email generation if needed
 const mockCustomers: Customer[] = [
   { 
     id: 'cust_1', 
@@ -106,7 +105,7 @@ export default function InvoicesPage() {
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return 'N/A';
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR / pre-hydration
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; 
     return new Date(dateString).toLocaleDateString();
   };
 
@@ -125,11 +124,11 @@ export default function InvoicesPage() {
         customerName: invoice.customerName || (customer ? `${customer.firstName} ${customer.lastName}` : 'Valued Customer'),
         companyName: customer?.companyName,
         invoiceNumber: invoice.invoiceNumber,
-        invoiceDate: new Date(invoice.date).toLocaleDateString(), // For Genkit, use consistent format
+        invoiceDate: new Date(invoice.date).toLocaleDateString(), 
         invoiceTotal: invoice.total,
         invoiceItems: invoiceItemsDescription,
-        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined, // For Genkit
-        companyNameToDisplay: "Delaware Fence Pro",
+        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined, 
+        companyNameToDisplay: "Delaware Fence Solutions",
       });
       
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -154,10 +153,17 @@ export default function InvoicesPage() {
     setIsEmailModalOpen(false);
   };
 
+  const handleNewInvoice = () => {
+    toast({
+      title: "Action: New Invoice",
+      description: "Functionality to create a new invoice will be implemented here.",
+    });
+  };
+
   return (
     <>
       <PageHeader title="Invoices" description="Create and manage customer invoices.">
-        <Button>
+        <Button onClick={handleNewInvoice}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
           New Invoice
         </Button>

@@ -30,14 +30,27 @@ export default function ProductsPage() {
       if (index !== -1) {
         const updatedProducts = [...prevProducts];
         updatedProducts[index] = productToSave;
+        toast({
+          title: "Product Updated",
+          description: `Product ${productToSave.name} has been updated.`,
+        });
         return updatedProducts;
       } else {
+        toast({
+          title: "Product Added",
+          description: `Product ${productToSave.name} has been added.`,
+        });
         return [...prevProducts, { ...productToSave, id: productToSave.id || crypto.randomUUID() }];
       }
     });
+  };
+
+  const handleDeleteProduct = (productId: string) => {
+    setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
     toast({
-      title: "Success",
-      description: `Product ${productToSave.name} saved.`,
+      title: "Product Deleted",
+      description: "The product has been removed.",
+      variant: "default",
     });
   };
 
@@ -51,17 +64,17 @@ export default function ProductsPage() {
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase()); // Normalize headers
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
     const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
     
     const receivedHeadersSet = new Set(headers);
-    // Check if all expected headers are present
-    const allExpectedHeadersPresent = expectedHeaders.every(eh => receivedHeadersSet.has(eh));
+    const missingRequiredHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'].filter(eh => !receivedHeadersSet.has(eh));
 
-    if (!allExpectedHeadersPresent) {
+
+    if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file headers are incorrect or missing. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. Optional: description. Please ensure your CSV matches this format.`, 
             variant: "destructive",
             duration: 10000,
         });
@@ -71,18 +84,16 @@ export default function ProductsPage() {
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const productData: any = {};
-      // Use actual headers from CSV for mapping
-       lines[0].split(',').map(h => h.trim()).forEach((header, index) => {
-        productData[header.toLowerCase()] = values[index];
+       lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
+        productData[header] = values[index];
       });
 
-      if (!productData.name || !productData.category || !productData.unit) {
-        console.warn(`Skipping row ${i+1}: missing name, category, or unit.`);
+      if (!productData.name || !productData.category || !productData.unit || productData.price === undefined || productData.cost === undefined || productData.markuppercentage === undefined) {
         toast({
             title: "Skipped Row",
-            description: `Skipped row ${i+1} due to missing name, category, or unit.`,
+            description: `Skipped row ${i+1} due to missing required fields (name, category, unit, price, cost, markupPercentage).`,
             variant: "default",
-            duration: 5000,
+            duration: 7000,
         });
         continue; 
       }
@@ -120,10 +131,14 @@ export default function ProductsPage() {
               title: "Success",
               description: `${parsedProducts.length} products imported successfully.`,
             });
-          } else if (csvData.trim().split('\n').length >=2) { 
+          } else if (csvData.trim().split('\n').length >=2 && parseCsvToProducts(csvData).length === 0) { 
+            // Handled by parseCsvToProducts detailed toast
+          } else if (csvData.trim().split('\n').length <2) {
+            // Already handled by parseCsvToProducts initial check
+          } else {
              toast({
               title: "Info",
-              description: "No new products were imported. Check CSV format or content. Required headers: name, category, unit.",
+              description: "No new products were imported. Check CSV file content.",
               duration: 7000,
             });
           }
@@ -150,6 +165,46 @@ export default function ProductsPage() {
     reader.readAsText(file);
   };
 
+  const productsToCsv = (productsToExport: Product[]): string => {
+    if (!productsToExport.length) return "";
+    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markupPercentage', 'description'];
+    const headerString = headers.join(',');
+    const rows = productsToExport.map(product => 
+      headers.map(header => {
+        const value = product[header as keyof Product];
+        if (typeof value === 'string') {
+          // Escape commas and quotes in string values
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value !== undefined && value !== null ? value : '';
+      }).join(',')
+    );
+    return [headerString, ...rows].join('\n');
+  };
+
+  const handleExportCsv = () => {
+    if (products.length === 0) {
+      toast({ title: "No Products", description: "There are no products to export.", variant: "default" });
+      return;
+    }
+    const csvString = productsToCsv(products);
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", "products_export.csv");
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Successful", description: "Products exported to products_export.csv" });
+    } else {
+      toast({ title: "Export Failed", description: "Your browser doesn't support direct CSV download.", variant: "destructive" });
+    }
+  };
+
   return (
     <>
       <PageHeader title="Products" description="Manage your product inventory.">
@@ -165,7 +220,7 @@ export default function ProductsPage() {
             <Icon name="Upload" className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportCsv}>
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
@@ -180,7 +235,7 @@ export default function ProductsPage() {
           />
         </div>
       </PageHeader>
-      <ProductTable products={products} onSave={handleSaveProduct} />
+      <ProductTable products={products} onSave={handleSaveProduct} onDelete={handleDeleteProduct} />
     </>
   );
 }

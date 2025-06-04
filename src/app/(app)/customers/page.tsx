@@ -58,15 +58,28 @@ export default function CustomersPage() {
         // Edit existing customer
         const updatedCustomers = [...prevCustomers];
         updatedCustomers[index] = customerToSave;
+        toast({
+          title: "Customer Updated",
+          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
+        });
         return updatedCustomers;
       } else {
         // Add new customer
+        toast({
+          title: "Customer Added",
+          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
+        });
         return [...prevCustomers, { ...customerToSave, id: customerToSave.id || crypto.randomUUID() }];
       }
     });
+  };
+
+  const handleDeleteCustomer = (customerId: string) => {
+    setCustomers(prevCustomers => prevCustomers.filter(c => c.id !== customerId));
     toast({
-      title: "Success",
-      description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} saved.`,
+      title: "Customer Deleted",
+      description: "The customer has been removed.",
+      variant: "default",
     });
   };
 
@@ -80,16 +93,16 @@ export default function CustomersPage() {
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase()); // Normalize headers
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
     const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
     
     const receivedHeadersSet = new Set(headers);
-    const missingHeaders = expectedHeaders.filter(eh => !receivedHeadersSet.has(eh) && (eh === 'firstname' || eh === 'lastname')); // Only check required for "missing"
+    const missingRequiredHeaders = ['firstname', 'lastname'].filter(eh => !receivedHeadersSet.has(eh));
 
-    if (missingHeaders.length > 0 || headers.length < 2) { // Check if core required headers are present
+    if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file headers are incorrect. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. At least 'firstName' and 'lastName' are required. Please ensure your CSV matches this format.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
             variant: "destructive",
             duration: 10000,
         });
@@ -100,9 +113,8 @@ export default function CustomersPage() {
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const customerData: any = {};
-      // Use actual headers from CSV for mapping, but check against expected for validation
-      lines[0].split(',').map(h => h.trim()).forEach((header, index) => {
-        customerData[header.toLowerCase()] = values[index];
+      lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
+        customerData[header] = values[index];
       });
 
 
@@ -157,10 +169,14 @@ export default function CustomersPage() {
               title: "Success",
               description: `${parsedCustomers.length} customers imported successfully.`,
             });
-          } else if (csvData.trim().split('\n').length >=2) { 
+          } else if (csvData.trim().split('\n').length >=2 && parseCsvToCustomers(csvData).length === 0) { 
+             // This condition is met if headers were incorrect or no valid data rows after header check
+          } else if (csvData.trim().split('\n').length <2) {
+            // Already handled by parseCsvToCustomers initial check
+          } else {
              toast({
               title: "Info",
-              description: "No new customers were imported. Check CSV format or content. Required headers: firstName, lastName.",
+              description: "No new customers were imported. Check CSV file content and ensure it has data rows.",
               duration: 7000,
             });
           }
@@ -213,7 +229,7 @@ export default function CustomersPage() {
           />
         </div>
       </PageHeader>
-      <CustomerTable customers={customers} onSave={handleSaveCustomer} />
+      <CustomerTable customers={customers} onSave={handleSaveCustomer} onDelete={handleDeleteCustomer} />
     </>
   );
 }
