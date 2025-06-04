@@ -29,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  // AlertDialogTrigger, // No longer needed here
 } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from 'date-fns';
 import React from 'react';
@@ -88,14 +88,13 @@ export function UserTable({ users, onSave, onDelete }: UserTableProps) {
                         }
                         onSave={onSave}
                       />
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          onSelect={(e) => { e.preventDefault(); setUserToDelete(user); }}
-                        >
-                          <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete User
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
+                      {/* Removed AlertDialogTrigger from here */}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        onSelect={(e) => { e.preventDefault(); setUserToDelete(user); }}
+                      >
+                        <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete User
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -105,31 +104,32 @@ export function UserTable({ users, onSave, onDelete }: UserTableProps) {
         </Table>
       </div>
 
-      {userToDelete && (
-        <AlertDialog open={!!userToDelete} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete the user 
-                "{userToDelete.firstName} {userToDelete.lastName}".
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
+      {/* This AlertDialog is controlled by userToDelete state */}
+      <AlertDialog open={!!userToDelete} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the user
+              "{userToDelete?.firstName} {userToDelete?.lastName}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (userToDelete) { // Ensure userToDelete is not null
                   onDelete(userToDelete.id);
-                  setUserToDelete(null);
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+                }
+                setUserToDelete(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
