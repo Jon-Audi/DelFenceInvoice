@@ -232,17 +232,11 @@ export default function ProductsPage() {
           }
         } else {
           // If parsedProducts is empty, parseCsvToProducts should have already shown a specific toast
-          // (header error, or no valid data rows). If not, this is a fallback.
-          const lines = csvData.trim().split('\n');
-          if (lines.length < 2) {
-            // This case is already handled by parseCsvToProducts' initial check
-          } else if (!toast.isActive(`csv-info-no-valid-rows`) && !toast.isActive('csv-header-error-toast')) {
-            // Check if a more specific toast was already shown.
-            // `toast.isActive` is a hypothetical check; useToast doesn't provide this.
-            // We rely on parseCsvToProducts to have already toasted appropriately.
-            // This fallback might be redundant if parseCsvToProducts covers all empty scenarios.
-            console.log("CSV Import: parsedProducts was empty, specific toasts should have handled this.");
-          }
+          // (header error, or no valid data rows).
+          // The lines.length < 2 case is handled within parseCsvToProducts.
+          // The previous `toast.isActive` check was problematic and has been removed.
+          // We now rely on parseCsvToProducts to have already toasted appropriately.
+          console.log("CSV Import: parsedProducts was empty, parseCsvToProducts should have handled specific toasts if needed.");
         }
       }
       if (fileInputRef.current) {
@@ -352,5 +346,6 @@ export default function ProductsPage() {
     </>
   );
 }
+    
 
     
