@@ -19,9 +19,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    allowedDevOrigins: ['https://*.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev'],
-  },
+  allowedDevOrigins: ['https://*.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev'],
 };
 
 export default nextConfig;
