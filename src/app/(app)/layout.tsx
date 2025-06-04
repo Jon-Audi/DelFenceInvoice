@@ -12,7 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col">
           <AppHeader />
           <main className="flex-1 p-6 overflow-auto">
-            <div className="w-full max-w-screen-xl mx-auto">
+            <div className="w-full max-w-[1440px] mx-auto">
               {children}
             </div>
           </main>
