@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -68,7 +68,8 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products }: OrderFormProps) {
-  const defaultFormValues: OrderFormData = order 
+  const defaultFormValues = useMemo((): OrderFormData => {
+    return order
     ? { // Editing existing order
         id: order.id,
         orderNumber: order.orderNumber,
@@ -86,7 +87,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         })),
         notes: order.notes || '',
       }
-    : initialData 
+    : initialData
     ? { // Pre-filling from conversion (initialData is already OrderFormData)
         ...initialData,
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date), // Ensure date is Date object
@@ -107,24 +108,23 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         readyForPickUpDate: undefined,
         pickedUpDate: undefined,
       };
-  
+  }, [order, initialData]);
+
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: defaultFormValues,
   });
 
+  // Effect to reset form when defaultFormValues change (i.e., when order or initialData props change)
+  useEffect(() => {
+    form.reset(defaultFormValues);
+  }, [defaultFormValues, form.reset]);
+
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
-
-  // Reset form if initialData changes (e.g., user converts another estimate without closing dialog)
-  useEffect(() => {
-    if (initialData && !order) { // Only apply if not editing and initialData is present
-        form.reset(defaultFormValues);
-    }
-  }, [initialData, order, form, defaultFormValues]);
-
 
   const watchedLineItems = form.watch('lineItems');
 
@@ -137,7 +137,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   }, [watchedLineItems, products]);
 
   const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0); 
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
@@ -149,7 +149,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
-  
+
   const handleQuantityChange = (index: number, quantity: number) => {
      form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
      form.trigger(`lineItems.${index}.quantity`);
@@ -161,7 +161,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         <FormField control={form.control} name="orderNumber" render={({ field }) => (
           <FormItem><FormLabel>Order Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-        
+
         <FormField
           control={form.control}
           name="customerId"
@@ -172,8 +172,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                      {field.value 
-                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` 
+                      {field.value
+                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
                         : "Select customer"}
                       <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -206,7 +206,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </FormItem>
           )}
         />
-        
+
         <FormField control={form.control} name="date" render={({ field }) => (
           <FormItem className="flex flex-col">
             <FormLabel>Order Date</FormLabel>
@@ -247,7 +247,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </FormItem>
           )} />
         </div>
-        
+
         <FormField control={form.control} name="expectedDeliveryDate" render={({ field }) => (
             <FormItem className="flex flex-col">
               <FormLabel>Expected Delivery (Optional)</FormLabel>
@@ -304,7 +304,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
-              
+
               <FormField
                 control={form.control}
                 name={`lineItems.${index}.productId`}
@@ -359,9 +359,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                     <FormItem>
                       <FormLabel>Quantity</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          {...qtyField} 
+                        <Input
+                          type="number"
+                          {...qtyField}
                           onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
                           min="1"
                         />
@@ -406,5 +406,3 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-
-    

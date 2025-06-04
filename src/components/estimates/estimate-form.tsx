@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -64,9 +64,8 @@ interface EstimateFormProps {
 }
 
 export function EstimateForm({ estimate, onSubmit, onClose, products, customers }: EstimateFormProps) {
-  const form = useForm<EstimateFormData>({
-    resolver: zodResolver(estimateFormSchema),
-    defaultValues: estimate ? {
+  const defaultFormValues = useMemo((): EstimateFormData => {
+    return estimate ? {
       ...estimate,
       date: new Date(estimate.date),
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
@@ -86,8 +85,17 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
       status: 'Draft',
       lineItems: [],
       notes: '',
-    },
+    };
+  }, [estimate]);
+
+  const form = useForm<EstimateFormData>({
+    resolver: zodResolver(estimateFormSchema),
+    defaultValues: defaultFormValues,
   });
+
+  useEffect(() => {
+    form.reset(defaultFormValues);
+  }, [defaultFormValues, form.reset]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -118,7 +126,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
     form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
-  
+
   const handleQuantityChange = (index: number, quantity: number) => {
      form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
      form.trigger(`lineItems.${index}.quantity`);
@@ -130,7 +138,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
         <FormField control={form.control} name="estimateNumber" render={({ field }) => (
           <FormItem><FormLabel>Estimate Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-        
+
         <FormField
           control={form.control}
           name="customerId"
@@ -141,8 +149,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                      {field.value 
-                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` 
+                      {field.value
+                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
                         : "Select customer"}
                       <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -218,7 +226,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
             </FormItem>
           )} />
         </div>
-        
+
         <FormField control={form.control} name="status" render={({ field }) => (
           <FormItem>
             <FormLabel>Status</FormLabel>
@@ -243,7 +251,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
-              
+
               <FormField
                 control={form.control}
                 name={`lineItems.${index}.productId`}
@@ -298,9 +306,9 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
                     <FormItem>
                       <FormLabel>Quantity</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          {...qtyField} 
+                        <Input
+                          type="number"
+                          {...qtyField}
                           onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
                           min="1"
                         />
@@ -334,7 +342,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
           <span>Total:</span>
           <span>${total.toFixed(2)}</span>
         </div>
-        
+
         <FormField control={form.control} name="notes" render={({ field }) => (
           <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the estimate..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />

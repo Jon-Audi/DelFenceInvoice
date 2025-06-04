@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -65,55 +65,55 @@ interface InvoiceFormProps {
 }
 
 export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products }: InvoiceFormProps) {
-  const defaultFormValues: InvoiceFormData = invoice
-  ? { // Editing existing invoice
-      id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      customerId: invoice.customerId,
-      date: new Date(invoice.date),
-      dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
-      status: invoice.status,
-      lineItems: invoice.lineItems.map(li => ({
-        id: li.id,
-        productId: li.productId,
-        quantity: li.quantity,
-      })),
-      paymentTerms: invoice.paymentTerms || 'Due on receipt',
-      notes: invoice.notes || '',
-    }
-  : initialData
-  ? { // Pre-filling from conversion
-      ...initialData,
-      date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
-      dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
-    }
-  : { // Creating a new invoice from scratch
-      id: undefined,
-      invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
-      customerId: '',
-      date: new Date(),
-      status: 'Draft',
-      lineItems: [],
-      paymentTerms: 'Due on receipt',
-      notes: '',
-      dueDate: undefined,
-    };
+  const defaultFormValues = useMemo((): InvoiceFormData => {
+    return invoice
+    ? { // Editing existing invoice
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        date: new Date(invoice.date),
+        dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
+        status: invoice.status,
+        lineItems: invoice.lineItems.map(li => ({
+          id: li.id,
+          productId: li.productId,
+          quantity: li.quantity,
+        })),
+        paymentTerms: invoice.paymentTerms || 'Due on receipt',
+        notes: invoice.notes || '',
+      }
+    : initialData
+    ? { // Pre-filling from conversion
+        ...initialData,
+        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+        dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
+      }
+    : { // Creating a new invoice from scratch
+        id: undefined,
+        invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
+        customerId: '',
+        date: new Date(),
+        status: 'Draft',
+        lineItems: [],
+        paymentTerms: 'Due on receipt',
+        notes: '',
+        dueDate: undefined,
+      };
+  }, [invoice, initialData]);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: defaultFormValues,
   });
 
+  useEffect(() => {
+    form.reset(defaultFormValues);
+  }, [defaultFormValues, form.reset]);
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
-
-  useEffect(() => {
-    if (initialData && !invoice) { // Only apply if not editing and initialData is present
-        form.reset(defaultFormValues);
-    }
-  }, [initialData, invoice, form, defaultFormValues]);
 
   const watchedLineItems = form.watch('lineItems');
 
@@ -126,19 +126,19 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   }, [watchedLineItems, products]);
 
   const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0); 
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
     setSubtotal(newSubtotal);
-    setTotal(newSubtotal); 
+    setTotal(newSubtotal);
   }, [watchedLineItems, calculateSubtotal]);
 
   const handleProductSelect = (index: number, productId: string) => {
     form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
-  
+
   const handleQuantityChange = (index: number, quantity: number) => {
      form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
      form.trigger(`lineItems.${index}.quantity`);
@@ -161,8 +161,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                      {field.value 
-                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` 
+                      {field.value
+                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
                         : "Select customer"}
                       <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -226,7 +226,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </FormItem>
           )} />
         </div>
-        
+
         <FormField control={form.control} name="status" render={({ field }) => (
           <FormItem>
             <FormLabel>Status</FormLabel>
@@ -251,7 +251,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
-              
+
               <FormField
                 control={form.control}
                 name={`lineItems.${index}.productId`}
@@ -306,9 +306,9 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                     <FormItem>
                       <FormLabel>Quantity</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          {...qtyField} 
+                        <Input
+                          type="number"
+                          {...qtyField}
                           onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
                           min="1"
                         />
@@ -341,7 +341,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
           <span>Total:</span>
           <span>${total.toFixed(2)}</span>
         </div>
-        
+
         <FormField control={form.control} name="paymentTerms" render={({ field }) => (
           <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -356,4 +356,3 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     </Form>
   );
 }
-
