@@ -1,25 +1,13 @@
+// next.config.js
 
-import type {NextConfig} from 'next';
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: true,
+    allowedDevOrigins: [
+      'https://9003-firebase-studio-1748981876423.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev'
+    ]
+  }
+}
 
-const nextConfig: NextConfig = {
-  /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-    ],
-  },
-  allowedDevOrigins: ['https://*.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev'],
-};
-
-export default nextConfig;
+module.exports = nextConfig;
