@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Imported buttonVariants
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils'; // Imported cn
 
 interface ProductTableProps {
   groupedProducts: Map<string, Product[]>;
@@ -142,9 +143,18 @@ export function ProductTable({
                   </Badge>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 data-[state=open]:bg-accent/70">
+                       <div
+                        className={cn(
+                          buttonVariants({ variant: "ghost", size: "icon" }),
+                          "h-8 w-8 data-[state=open]:bg-accent/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
+                          // Added focus-visible styles for accessibility on the div
+                        )}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Category options"
+                      >
                         <Icon name="MoreHorizontal" className="h-4 w-4" />
-                      </Button>
+                      </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => handleOpenMarkupDialog(category)}>
@@ -293,3 +303,4 @@ export function ProductTable({
     </>
   );
 }
+
