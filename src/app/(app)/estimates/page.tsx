@@ -49,13 +49,18 @@ import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
 import type { Estimate, Product, Customer } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
-import { MOCK_CUSTOMERS, MOCK_PRODUCTS, MOCK_ESTIMATES } from '@/lib/mock-data';
-
+import { db } from '@/lib/firebase';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
 
 export default function EstimatesPage() {
-  const [estimates, setEstimates] = useState<Estimate[]>(MOCK_ESTIMATES);
-  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  
+  const [isLoadingEstimates, setIsLoadingEstimates] = useState(true);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
   const [selectedEstimateForEmail, setSelectedEstimateForEmail] = useState<Estimate | null>(null);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
@@ -71,24 +76,88 @@ export default function EstimatesPage() {
     setIsClient(true);
   }, []);
 
-  const handleSaveEstimate = (estimateToSave: Estimate) => {
-    setEstimates(prevEstimates => {
-      const index = prevEstimates.findIndex(e => e.id === estimateToSave.id);
-      if (index !== -1) {
-        const updatedEstimates = [...prevEstimates];
-        updatedEstimates[index] = estimateToSave;
-        toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
-        return updatedEstimates;
-      } else {
-        toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added.` });
-        return [...prevEstimates, { ...estimateToSave, id: estimateToSave.id || crypto.randomUUID() }];
-      }
+  // Fetch Estimates
+  useEffect(() => {
+    setIsLoadingEstimates(true);
+    const unsubscribe = onSnapshot(collection(db, 'estimates'), (snapshot) => {
+      const fetchedEstimates: Estimate[] = [];
+      snapshot.forEach((docSnap) => {
+        fetchedEstimates.push({ ...docSnap.data() as Omit<Estimate, 'id'>, id: docSnap.id });
+      });
+      setEstimates(fetchedEstimates.sort((a, b) => a.estimateNumber.localeCompare(b.estimateNumber)));
+      setIsLoadingEstimates(false);
+    }, (error) => {
+      console.error("Error fetching estimates:", error);
+      toast({ title: "Error", description: "Could not fetch estimates.", variant: "destructive" });
+      setIsLoadingEstimates(false);
     });
+    return () => unsubscribe();
+  }, [toast]);
+
+  // Fetch Customers
+  useEffect(() => {
+    setIsLoadingCustomers(true);
+    const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const fetchedCustomers: Customer[] = [];
+      snapshot.forEach((docSnap) => {
+        fetchedCustomers.push({ ...docSnap.data() as Omit<Customer, 'id'>, id: docSnap.id });
+      });
+      setCustomers(fetchedCustomers);
+      setIsLoadingCustomers(false);
+    }, (error) => {
+      console.error("Error fetching customers:", error);
+      toast({ title: "Error", description: "Could not fetch customers for estimates.", variant: "destructive" });
+      setIsLoadingCustomers(false);
+    });
+    return () => unsubscribe();
+  }, [toast]);
+
+  // Fetch Products
+  useEffect(() => {
+    setIsLoadingProducts(true);
+    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const fetchedProducts: Product[] = [];
+      snapshot.forEach((docSnap) => {
+        fetchedProducts.push({ ...docSnap.data() as Omit<Product, 'id'>, id: docSnap.id });
+      });
+      setProducts(fetchedProducts);
+      setIsLoadingProducts(false);
+    }, (error) => {
+      console.error("Error fetching products:", error);
+      toast({ title: "Error", description: "Could not fetch products for estimates.", variant: "destructive" });
+      setIsLoadingProducts(false);
+    });
+    return () => unsubscribe();
+  }, [toast]);
+
+
+  const handleSaveEstimate = async (estimateToSave: Estimate) => {
+    const { id, ...estimateData } = estimateToSave;
+    try {
+      if (id && estimates.some(e => e.id === id)) {
+        // Edit existing estimate
+        const estimateRef = doc(db, 'estimates', id);
+        await setDoc(estimateRef, estimateData, { merge: true });
+        toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
+      } else {
+        // Add new estimate
+        const docRef = await addDoc(collection(db, 'estimates'), estimateData);
+        toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
+      }
+    } catch (error) {
+        console.error("Error saving estimate:", error);
+        toast({ title: "Error", description: "Could not save estimate to database.", variant: "destructive" });
+    }
   };
 
-  const handleDeleteEstimate = (estimateId: string) => {
-    setEstimates(prevEstimates => prevEstimates.filter(e => e.id !== estimateId));
-    toast({ title: "Estimate Deleted", description: "The estimate has been removed." });
+  const handleDeleteEstimate = async (estimateId: string) => {
+    try {
+      await deleteDoc(doc(db, 'estimates', estimateId));
+      toast({ title: "Estimate Deleted", description: "The estimate has been removed." });
+    } catch (error) {
+      console.error("Error deleting estimate:", error);
+      toast({ title: "Error", description: "Could not delete estimate.", variant: "destructive" });
+    }
     setEstimateToDelete(null);
   };
 
@@ -105,7 +174,7 @@ export default function EstimatesPage() {
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
       
-      const customer = customers.find(c => c.id === estimate.customerId);
+      const customer = customers.find(c => c.id === estimate.customerId); // Use customers from state (Firestore)
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
 
@@ -162,6 +231,16 @@ export default function EstimatesPage() {
     localStorage.setItem('estimateToConvert_invoice', JSON.stringify(estimate));
     router.push('/invoices');
   };
+
+  if (isLoadingEstimates || isLoadingCustomers || isLoadingProducts) {
+    return (
+      <PageHeader title="Estimates" description="Loading estimates database...">
+        <div className="flex items-center justify-center h-32">
+          <Icon name="Loader2" className="h-8 w-8 animate-spin" />
+        </div>
+      </PageHeader>
+    );
+  }
 
   return (
     <>
@@ -247,6 +326,9 @@ export default function EstimatesPage() {
               ))}
             </TableBody>
           </Table>
+           {estimates.length === 0 && !isLoadingEstimates && (
+            <p className="p-4 text-center text-muted-foreground">No estimates found.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -307,3 +389,5 @@ export default function EstimatesPage() {
     </>
   );
 }
+
+    
