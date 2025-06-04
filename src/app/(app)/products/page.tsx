@@ -26,7 +26,7 @@ export default function ProductsPage() {
       const fetchedProducts: Product[] = [];
       const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
       snapshot.forEach((doc) => {
-        const productData = doc.data() as Omit<Product, 'id'>;
+        const productData = doc.data() as Omit<Product, 'id'>; // Firestore data won't have id field itself
         fetchedProducts.push({ ...productData, id: doc.id });
         if (productData.category) {
           categoriesFromDb.add(productData.category);
@@ -45,7 +45,7 @@ export default function ProductsPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribe(); // Cleanup subscription on component unmount
   }, [toast]);
 
   const handleAddNewCategory = (category: string) => {
@@ -63,30 +63,26 @@ export default function ProductsPage() {
   const handleSaveProduct = async (productToSave: Product) => {
     handleAddNewCategory(productToSave.category); // Keep local category list updated
 
+    // Remove id from the object to be saved if it's a new product, Firestore will generate one.
+    // For existing products, keep id for the doc() reference, but don't save it as a field within the doc.
+    const { id, ...productData } = productToSave;
+
     try {
-      if (productToSave.id && products.some(p => p.id === productToSave.id)) {
+      if (id && products.some(p => p.id === id)) {
         // Editing existing product
-        const productRef = doc(db, 'products', productToSave.id);
-        await setDoc(productRef, productToSave, { merge: true }); // Use setDoc with merge for update
+        const productRef = doc(db, 'products', id);
+        await setDoc(productRef, productData); // Use setDoc to overwrite or create
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
         });
       } else {
         // Adding new product
-        const docRef = await addDoc(collection(db, 'products'), {
-          ...productToSave,
-          id: undefined // Firestore will generate ID, or use productToSave.id if you generate it client-side
-        }); 
-        // If you want to use client-generated ID with addDoc, it's more common to use setDoc
-        // For example: await setDoc(doc(db, "products", productToSave.id || crypto.randomUUID()), productToSave);
-        // For simplicity, we let Firestore generate the ID here if it's a new item without an ID from import/mock.
-        // If productToSave.id IS present (e.g. from a previous client-side generation attempt or import), use setDoc:
-        // await setDoc(doc(db, 'products', productToSave.id), productToSave);
-
+        // Firestore will generate an ID if we don't specify one in doc()
+        const docRef = await addDoc(collection(db, 'products'), productData);
         toast({
           title: "Product Added",
-          description: `Product ${productToSave.name} has been added.`,
+          description: `Product ${productToSave.name} has been added with ID: ${docRef.id}.`,
         });
       }
     } catch (error) {
@@ -128,6 +124,7 @@ export default function ProductsPage() {
     }
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    // 'id' is removed from expected headers for CSV import as Firestore will generate IDs
     const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
     const receivedHeadersSet = new Set(headers);
     const missingRequiredHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'].filter(eh => !receivedHeadersSet.has(eh));
@@ -135,7 +132,7 @@ export default function ProductsPage() {
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected: ${expectedHeaders.join(', ')}.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected: ${expectedHeaders.join(', ')}. Note: 'id' column should not be present for new imports.`, 
             variant: "destructive",
             duration: 10000,
         });
@@ -144,27 +141,27 @@ export default function ProductsPage() {
 
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
-      const productData: any = {};
+      const productDataFromCsv: any = {};
       lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
-        productData[header] = values[index];
+        productDataFromCsv[header] = values[index];
       });
 
-      if (!productData.name || !productData.category || !productData.unit || productData.price === undefined || productData.cost === undefined || productData.markuppercentage === undefined) {
+      if (!productDataFromCsv.name || !productDataFromCsv.category || !productDataFromCsv.unit || productDataFromCsv.price === undefined || productDataFromCsv.cost === undefined || productDataFromCsv.markuppercentage === undefined) {
         console.warn(`Skipping row ${i+1}: missing required fields.`);
         continue; 
       }
       
-      const category = productData.category.trim();
+      const category = productDataFromCsv.category.trim();
       handleAddNewCategory(category); // Update local category list
 
       const newProduct: Omit<Product, 'id'> = {
-        name: productData.name,
+        name: productDataFromCsv.name,
         category: category,
-        unit: productData.unit,
-        price: parseFloat(productData.price) || 0,
-        cost: parseFloat(productData.cost) || 0,
-        markupPercentage: parseFloat(productData.markuppercentage) || 0,
-        description: productData.description || undefined,
+        unit: productDataFromCsv.unit,
+        price: parseFloat(productDataFromCsv.price) || 0,
+        cost: parseFloat(productDataFromCsv.cost) || 0,
+        markupPercentage: parseFloat(productDataFromCsv.markuppercentage) || 0,
+        description: productDataFromCsv.description || undefined,
       };
       newProducts.push(newProduct);
     }
@@ -213,6 +210,7 @@ export default function ProductsPage() {
           });
         }
       }
+      // Reset file input to allow uploading the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -228,14 +226,20 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
-    // Keep 'id' in export headers in case user re-imports and wants to match
+    // Keep 'id' in export headers in case user re-imports and wants to match (though import process currently ignores it)
+    // Or, more safely, exclude 'id' from export if the import process strictly doesn't handle it.
+    // For now, including it for completeness, but acknowledge the import logic might need adjustment if IDs are to be preserved.
     const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markupPercentage', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product => 
       headers.map(header => {
         const value = product[header as keyof Product];
         if (typeof value === 'string') {
-          return `"${value.replace(/"/g, '""')}"`; // Handle quotes in strings
+          // Escape double quotes and wrap in double quotes if value contains comma or double quote
+          if (value.includes(',') || value.includes('"')) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
         }
         return value !== undefined && value !== null ? value : '';
       }).join(',')
