@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from './providers';
+import { AuthProvider } from '@/contexts/auth-context'; // Import AuthProvider
 
 export const metadata: Metadata = {
   title: 'Delaware Fence Solutions',
@@ -22,10 +23,12 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <Providers>
-          {children}
-          <Toaster />
-        </Providers>
+        <AuthProvider> {/* Wrap with AuthProvider */}
+          <Providers>
+            {children}
+            <Toaster />
+          </Providers>
+        </AuthProvider>
       </body>
     </html>
   );
