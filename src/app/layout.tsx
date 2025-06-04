@@ -5,6 +5,7 @@ import './globals.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from './providers';
+import { cn } from '@/lib/utils'; // Import cn utility
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -19,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={cn(inter.variable, 'dark')} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
