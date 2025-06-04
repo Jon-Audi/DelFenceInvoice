@@ -11,15 +11,10 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Icon, type IconName } from "@/components/icons";
 import { NAV_ITEMS, MATERIAL_CALCULATOR_LINK } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
