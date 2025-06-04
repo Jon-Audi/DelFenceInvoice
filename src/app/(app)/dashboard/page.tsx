@@ -10,9 +10,11 @@ import { Icon } from '@/components/icons';
 import type { IconName } from '@/components/icons';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, getDocs, where, getCountFromServer } from 'firebase/firestore';
-import type { Estimate, Order, Product, Customer } from '@/types';
+import type { Estimate, Order } from '@/types'; // Product and Customer types are not directly used for data shaping here
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/auth-context'; // Import useAuth
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 interface DashboardCardProps {
   title: string;
@@ -68,6 +70,9 @@ function formatDashboardDate(date: Date): string {
 }
 
 export default function DashboardPage() {
+  const { user: authUser } = useAuth(); // Get user from AuthContext
+  const { toast } = useToast();
+
   const [totalProducts, setTotalProducts] = useState(0);
   const [activeCustomers, setActiveCustomers] = useState(0);
   const [openEstimatesCount, setOpenEstimatesCount] = useState(0);
@@ -81,6 +86,8 @@ export default function DashboardPage() {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
+      console.log("Dashboard: Attempting to fetch data...");
+
       try {
         // Fetch Product Count
         const productsSnap = await getCountFromServer(collection(db, 'products'));
@@ -151,20 +158,50 @@ export default function DashboardPage() {
             .sort((a, b) => b.date.getTime() - a.date.getTime())
             .slice(0, 5)
         );
+        console.log("Dashboard: Data fetched successfully.");
 
       } catch (err: any) {
-        console.error("Error fetching dashboard data:", err);
-        setError("Failed to load dashboard data. Please check your connection or permissions.");
-        // Data will remain at initial 0 values or last successful fetch
+        console.error("Dashboard: Detailed error fetching data:", err);
+        console.error("Dashboard: Error name:", err.name);
+        console.error("Dashboard: Error code:", err.code); // Firebase errors often have a code
+        const description = err.code === 'permission-denied' 
+          ? "Permission denied. Please ensure you are logged in and have the necessary permissions."
+          : `Failed to load dashboard data: ${err.message}.`;
+        setError(description);
+        toast({
+            title: "Dashboard Error",
+            description: description,
+            variant: "destructive",
+            duration: 7000,
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, []);
+    if (authUser) {
+      console.log("Dashboard: Auth user detected in context (UID:", authUser.uid, "), proceeding with fetchData.");
+      fetchData();
+    } else {
+      // This case should ideally be handled by AppLayout redirecting if auth is truly not loading anymore.
+      // We set isLoading to false here if we don't attempt a fetch.
+      if (!isLoading) { // Avoid if already loading from a previous authUser state.
+         // No explicit error set here, AppLayout should redirect. If it doesn't, a blank/stuck loading page is a symptom.
+      }
+      console.log("Dashboard: No authenticated user in context yet. Data fetch deferred. AppLayout should handle redirection if auth loading is complete.");
+      // If AppLayout is correctly guarding, we might not even need to set isLoading to false here,
+      // as the component might unmount or not proceed to this effect if authUser is null and auth is not loading.
+      // However, to be safe, if authUser is null, we mark loading as false.
+      if (isLoading && !authUser) { // Added a check to only set loading false if it was true
+        setIsLoading(false);
+      }
+    }
+  // Dependency array now includes authUser.
+  // toast is stable (from useToast), setError and setIsLoading are stable setters from useState.
+  }, [authUser, toast]);
 
-  if (error) {
+
+  if (error && !isLoading) { // Show error only if not actively loading
     return (
       <PageHeader title="Dashboard" description="Error loading data.">
         <div className="flex items-center justify-center h-64">
@@ -254,8 +291,10 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : !isLoading && recentActivity.length === 0 ? (
+            ) : !isLoading && recentActivity.length === 0 && !error ? (
               <p className="text-muted-foreground">No recent activity to display.</p>
+            ) : !isLoading && error && recentActivity.length === 0 ? (
+              <p className="text-muted-foreground">Recent activity could not be loaded due to an error.</p>
             ) : (
               <ul className="space-y-4">
                 {recentActivity.map((item) => (
@@ -285,4 +324,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
