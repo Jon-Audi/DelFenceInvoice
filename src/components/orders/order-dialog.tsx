@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Order, Customer, Product } from '@/types';
+import type { Order, Customer, Product, LineItem } from '@/types';
 import { OrderForm, type OrderFormData } from './order-form';
 import {
   Dialog,
@@ -18,25 +18,32 @@ interface OrderDialogProps {
   triggerButton: React.ReactElement;
   onSave: (order: Order) => void;
   customers: Customer[];
-  // products: Product[]; // Uncomment when line item editor is added
+  products: Product[]; 
 }
 
-export function OrderDialog({ order, triggerButton, onSave, customers /*, products */ }: OrderDialogProps) {
+export function OrderDialog({ order, triggerButton, onSave, customers, products }: OrderDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (formData: OrderFormData) => {
     const selectedCustomer = customers.find(c => c.id === formData.customerId);
     const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
-    // For now, lineItems come from description. This will change with full line item editor.
-    const lineItems = formData.lineItemsDescription ? [{ 
-        id: crypto.randomUUID(), 
-        productId: 'desc_prod_ord', 
-        productName: formData.lineItemsDescription.substring(0,100), // Truncate for safety
-        quantity: 1, 
-        unitPrice: formData.total, // Approximate
-        total: formData.total 
-      }] : (order?.lineItems || []);
+    const lineItems: LineItem[] = formData.lineItems.map((item) => {
+      const product = products.find(p => p.id === item.productId);
+      const unitPrice = product ? product.price : 0;
+      return {
+        id: item.id || crypto.randomUUID(),
+        productId: item.productId,
+        productName: product?.name || 'Unknown Product',
+        quantity: item.quantity,
+        unitPrice: unitPrice,
+        total: item.quantity * unitPrice,
+      };
+    });
+
+    const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
+    const taxAmount = 0; // Simplified for now
+    const total = subtotal + taxAmount;
 
     const orderToSave: Order = {
       id: order?.id || crypto.randomUUID(),
@@ -44,14 +51,15 @@ export function OrderDialog({ order, triggerButton, onSave, customers /*, produc
       customerId: formData.customerId,
       customerName: customerName,
       date: formData.date.toISOString(),
-      total: formData.total,
       status: formData.status,
       orderState: formData.orderState,
       expectedDeliveryDate: formData.expectedDeliveryDate?.toISOString(),
       readyForPickUpDate: formData.readyForPickUpDate?.toISOString(),
       pickedUpDate: formData.pickedUpDate?.toISOString(),
       lineItems: lineItems,
-      subtotal: formData.total, // Approximation until proper line items
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      total: total,
       notes: formData.notes,
     };
     onSave(orderToSave);
@@ -63,7 +71,7 @@ export function OrderDialog({ order, triggerButton, onSave, customers /*, produc
       <DialogTrigger asChild>
         {triggerButton}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{order ? 'Edit Order' : 'New Order'}</DialogTitle>
           <DialogDescription>
@@ -75,9 +83,11 @@ export function OrderDialog({ order, triggerButton, onSave, customers /*, produc
           onSubmit={handleSubmit} 
           onClose={() => setOpen(false)}
           customers={customers}
-          // products={products} // Uncomment for line item editor
+          products={products}
         />
       </DialogContent>
     </Dialog>
   );
 }
+
+    

@@ -70,10 +70,13 @@ const initialMockCustomers: Customer[] = [
   },
 ];
 
-// Mock products data (similar to estimates for potential future line item editor)
+// Mock products data
 const mockProducts: Product[] = [
   { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
+  { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
   { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
+  { id: 'prod_4', name: 'Stainless Steel Hinges', category: 'Hardware', unit: 'pair', price: 25.00, cost: 15.00, markupPercentage: 66.67, description: 'Heavy duty gate hinges' },
+  { id: 'prod_5', name: 'Post Caps', category: 'Accessories', unit: 'piece', price: 2.50, cost: 1.00, markupPercentage: 150, description: 'Decorative post cap' },
 ];
 
 
@@ -157,7 +160,9 @@ export default function OrdersPage() {
     setEditableBody('');
 
     try {
-      const orderItemsDescription = order.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Items as per order.';
+      const orderItemsDescription = order.lineItems.map(item => 
+        `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
+      ).join('\n') || 'Items as per order.';
       
       const customer = customers.find(c => c.id === order.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
@@ -166,7 +171,7 @@ export default function OrdersPage() {
 
       const result = await generateOrderEmailDraft({
         customerName: customerDisplayName,
-        customerEmail: customerEmail, // This needs to come from selected customer ideally
+        customerEmail: customerEmail,
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
@@ -215,7 +220,7 @@ export default function OrdersPage() {
           }
           onSave={handleSaveOrder}
           customers={customers}
-          // products={mockProducts} // For future line item editor
+          products={mockProducts}
         />
       </PageHeader>
 
@@ -277,7 +282,7 @@ export default function OrdersPage() {
                           }
                           onSave={handleSaveOrder}
                           customers={customers}
-                          // products={mockProducts} // For future line item editor
+                          products={mockProducts}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
@@ -355,3 +360,5 @@ export default function OrdersPage() {
     </>
   );
 }
+
+    

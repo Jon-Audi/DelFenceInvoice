@@ -1,8 +1,8 @@
 
 "use client";
 
-import React from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useEffect, useState } from 'react';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Order, DocumentStatus, Customer, Product } from '@/types';
@@ -31,23 +31,28 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
+import { Separator } from '@/components/ui/separator';
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
 
+const lineItemSchema = z.object({
+  id: z.string().optional(),
+  productId: z.string().min(1, "Product selection is required."),
+  quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
+});
 
 const orderFormSchema = z.object({
   orderNumber: z.string().min(1, "Order number is required"),
   customerId: z.string().min(1, "Customer is required"),
   customerName: z.string().optional(), // Auto-filled for display
   date: z.date({ required_error: "Order date is required." }),
-  total: z.coerce.number().min(0, "Total must be a positive number"),
   status: z.enum(ORDER_STATUSES as [typeof ORDER_STATUSES[0], ...typeof ORDER_STATUSES]),
   orderState: z.enum(ORDER_STATES as [typeof ORDER_STATES[0], ...typeof ORDER_STATES]),
   expectedDeliveryDate: z.date().optional(),
   readyForPickUpDate: z.date().optional(),
   pickedUpDate: z.date().optional(),
-  lineItemsDescription: z.string().optional().describe("A brief description of items or services."), // Will be replaced by line item editor
+  lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
 });
 
@@ -58,10 +63,10 @@ interface OrderFormProps {
   onSubmit: (data: OrderFormData) => void;
   onClose?: () => void;
   customers: Customer[];
-  // products: Product[]; // Uncomment for line item editor
+  products: Product[];
 }
 
-export function OrderForm({ order, onSubmit, onClose, customers /*, products */ }: OrderFormProps) {
+export function OrderForm({ order, onSubmit, onClose, customers, products }: OrderFormProps) {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: order ? {
@@ -72,27 +77,61 @@ export function OrderForm({ order, onSubmit, onClose, customers /*, products */ 
       pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
       customerId: order.customerId || '',
       customerName: order.customerName || '',
-      lineItemsDescription: order.lineItems.map(li => `${li.productName} (Qty: ${li.quantity})`).join('\n') || '',
+      lineItems: order.lineItems.map(li => ({
+        id: li.id,
+        productId: li.productId,
+        quantity: li.quantity,
+      })),
+      notes: order.notes || '',
     } : {
       orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
       customerId: '',
       customerName: '',
       date: new Date(),
-      total: 0,
       status: 'Draft',
       orderState: 'Open',
-      lineItemsDescription: '',
+      lineItems: [],
       notes: '',
     },
   });
 
-  const handleSubmit = (data: OrderFormData) => {
-    onSubmit(data);
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "lineItems",
+  });
+
+  const watchedLineItems = form.watch('lineItems');
+
+  const calculateSubtotal = React.useCallback(() => {
+    return watchedLineItems.reduce((acc, item) => {
+      const product = products.find(p => p.id === item.productId);
+      const price = product ? product.price : 0;
+      return acc + (price * (item.quantity || 0));
+    }, 0);
+  }, [watchedLineItems, products]);
+
+  const [subtotal, setSubtotal] = useState(0);
+  const [total, setTotal] = useState(0); // Currently same as subtotal
+
+  useEffect(() => {
+    const newSubtotal = calculateSubtotal();
+    setSubtotal(newSubtotal);
+    setTotal(newSubtotal); // Assuming no tax for now
+  }, [watchedLineItems, calculateSubtotal]);
+
+  const handleProductSelect = (index: number, productId: string) => {
+    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
+    form.trigger(`lineItems.${index}.productId`);
+  };
+  
+  const handleQuantityChange = (index: number, quantity: number) => {
+     form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
+     form.trigger(`lineItems.${index}.quantity`);
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
         <FormField control={form.control} name="orderNumber" render={({ field }) => (
           <FormItem><FormLabel>Order Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -162,10 +201,6 @@ export function OrderForm({ order, onSubmit, onClose, customers /*, products */ 
           </FormItem>
         )} />
 
-        <FormField control={form.control} name="total" render={({ field }) => (
-          <FormItem><FormLabel>Total Amount</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="status" render={({ field }) => (
             <FormItem>
@@ -232,9 +267,110 @@ export function OrderForm({ order, onSubmit, onClose, customers /*, products */ 
             </FormItem>
         )} />
 
-        <FormField control={form.control} name="lineItemsDescription" render={({ field }) => ( // This will be replaced by a line item editor later
-            <FormItem><FormLabel>Items/Services Description</FormLabel><FormControl><Textarea placeholder="Describe items or services ordered..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
-        )} />
+        <Separator />
+        <h3 className="text-lg font-medium">Line Items</h3>
+        {fields.map((field, index) => {
+          const selectedProduct = products.find(p => p.id === watchedLineItems[index]?.productId);
+          const unitPrice = selectedProduct ? selectedProduct.price : 0;
+          const quantity = watchedLineItems[index]?.quantity || 0;
+          const lineTotal = unitPrice * quantity;
+
+          return (
+            <div key={field.id} className="space-y-3 p-4 border rounded-md relative">
+              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
+                <Icon name="Trash2" className="h-4 w-4 text-destructive" />
+              </Button>
+              
+              <FormField
+                control={form.control}
+                name={`lineItems.${index}.productId`}
+                render={({ field: controllerField }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Product</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
+                            {controllerField.value ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
+                            <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search product..." />
+                          <CommandList>
+                            <CommandEmpty>No product found.</CommandEmpty>
+                            <CommandGroup>
+                              {products.map((product) => (
+                                <CommandItem
+                                  value={product.id}
+                                  key={product.id}
+                                  onSelect={() => {
+                                    handleProductSelect(index, product.id);
+                                  }}
+                                >
+                                  <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
+                                  {product.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-3 gap-4 items-end">
+                <FormItem>
+                  <FormLabel>Unit Price</FormLabel>
+                  <Input type="text" readOnly value={unitPrice > 0 ? `$${unitPrice.toFixed(2)}` : '-'} className="bg-muted" />
+                </FormItem>
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.quantity`}
+                  render={({ field: qtyField }) => (
+                    <FormItem>
+                      <FormLabel>Quantity</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...qtyField} 
+                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
+                          min="1"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormItem>
+                  <FormLabel>Line Total</FormLabel>
+                  <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted" />
+                </FormItem>
+              </div>
+            </div>
+          );
+        })}
+        <Button type="button" variant="outline" onClick={() => append({ productId: '', quantity: 1 })}>
+          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
+        </Button>
+        {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
+             <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
+        )}
+
+        <Separator />
+        <div className="flex justify-end space-x-4 text-lg font-semibold">
+          <span>Subtotal:</span>
+          <span>${subtotal.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-end space-x-4 text-xl font-bold">
+          <span>Total:</span>
+          <span>${total.toFixed(2)}</span>
+        </div>
+
         <FormField control={form.control} name="notes" render={({ field }) => (
           <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the order..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -246,3 +382,5 @@ export function OrderForm({ order, onSubmit, onClose, customers /*, products */ 
     </Form>
   );
 }
+
+    
