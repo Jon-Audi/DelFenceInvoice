@@ -52,11 +52,15 @@ export default function UsersPage() {
     // For mock purposes, you might find and update the user in mockUsers or add a new one.
   };
 
+  const handleDeleteUser = (userId: string) => {
+    console.log("Deleting user (from /users page):", userId);
+    // Here you would delete the user, possibly by refetching or updating local state.
+  };
 
   return (
     <>
       <PageHeader title="Users (Legacy)" description="Manage user accounts and roles. (Access via /settings/users)">
-         <UserDialog 
+ <UserDialog 
             triggerButton={
               <Button>
                 <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
@@ -65,8 +69,8 @@ export default function UsersPage() {
             }
             onSave={handleSaveUser}
           />
-      </PageHeader>
-      <UserTable users={mockUsers} onSave={handleSaveUser} />
+ </PageHeader>
+ <UserTable users={mockUsers} onSave={handleSaveUser} onDelete={handleDeleteUser} />
     </>
   );
 }
