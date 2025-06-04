@@ -10,48 +10,88 @@ import { CustomerDialog } from '@/components/customers/customer-dialog';
 import type { Customer, CustomerType, EmailContactType } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES } from '@/lib/constants';
-import { MOCK_CUSTOMERS } from '@/lib/mock-data';
-
+import { db } from '@/lib/firebase';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSaveCustomer = (customerToSave: Customer) => {
-    setCustomers(prevCustomers => {
-      const index = prevCustomers.findIndex(c => c.id === customerToSave.id);
-      if (index !== -1) {
+  useEffect(() => {
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const fetchedCustomers: Customer[] = [];
+      snapshot.forEach((docSnap) => {
+        const customerData = docSnap.data() as Omit<Customer, 'id'>;
+        fetchedCustomers.push({ ...customerData, id: docSnap.id });
+      });
+      setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching customers:", error);
+      toast({
+        title: "Error",
+        description: "Could not fetch customers from database.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
+
+  const handleSaveCustomer = async (customerToSave: Customer) => {
+    const { id, ...customerData } = customerToSave;
+
+    try {
+      if (id && customers.some(c => c.id === id)) {
         // Edit existing customer
-        const updatedCustomers = [...prevCustomers];
-        updatedCustomers[index] = customerToSave;
+        const customerRef = doc(db, 'customers', id);
+        await setDoc(customerRef, customerData, { merge: true }); // Use merge to avoid overwriting fields not in form
         toast({
           title: "Customer Updated",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
         });
-        return updatedCustomers;
       } else {
         // Add new customer
+        const docRef = await addDoc(collection(db, 'customers'), customerData);
         toast({
           title: "Customer Added",
-          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
+          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added with ID: ${docRef.id}.`,
         });
-        return [...prevCustomers, { ...customerToSave, id: customerToSave.id || crypto.randomUUID() }];
       }
-    });
+    } catch (error) {
+      console.error("Error saving customer:", error);
+      toast({
+        title: "Error",
+        description: "Could not save customer to database.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteCustomer = (customerId: string) => {
-    setCustomers(prevCustomers => prevCustomers.filter(c => c.id !== customerId));
-    toast({
-      title: "Customer Deleted",
-      description: "The customer has been removed.",
-      variant: "default",
-    });
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      await deleteDoc(doc(db, 'customers', customerId));
+      toast({
+        title: "Customer Deleted",
+        description: "The customer has been removed.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      toast({
+        title: "Error",
+        description: "Could not delete customer from database.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const parseCsvToCustomers = (csvData: string): Customer[] => {
-    const newCustomers: Customer[] = [];
+  const parseCsvToCustomers = (csvData: string): Omit<Customer, 'id'>[] => {
+    const newCustomersData: Omit<Customer, 'id'>[] = [];
     const lines = csvData.trim().split('\n');
     const lineCount = lines.length;
 
@@ -60,7 +100,7 @@ export default function CustomersPage() {
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '')); // Normalize headers
     const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
     
     const receivedHeadersSet = new Set(headers);
@@ -69,92 +109,99 @@ export default function CustomersPage() {
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive, no spaces): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
             variant: "destructive",
             duration: 10000,
         });
         return [];
     }
 
-
+    let parsedCustomerCount = 0;
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
-      const customerData: any = {};
-      lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
-        customerData[header] = values[index];
+      const customerDataFromCsv: any = {};
+      headers.forEach((header, index) => { // Use normalized headers from CSV
+        customerDataFromCsv[header] = values[index];
       });
 
+      const firstName = customerDataFromCsv.firstname;
+      const lastName = customerDataFromCsv.lastname;
 
-      if (!customerData.firstname || !customerData.lastname) {
+      if (!firstName || !lastName) {
         console.warn(`Skipping row ${i+1}: missing firstName or lastName.`);
         continue; 
       }
       
-      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === (customerData.primaryemailtype || '').toLowerCase()) || EMAIL_CONTACT_TYPES[0];
-      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === (customerData.customertype || '').toLowerCase()) || CUSTOMER_TYPES[0];
+      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === (customerDataFromCsv.primaryemailtype || '').toLowerCase()) || EMAIL_CONTACT_TYPES[0];
+      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === (customerDataFromCsv.customertype || '').toLowerCase()) || CUSTOMER_TYPES[0];
 
-
-      const newCustomer: Customer = {
-        id: crypto.randomUUID(),
-        firstName: customerData.firstname || '',
-        lastName: customerData.lastname || '',
-        companyName: customerData.companyname || undefined,
-        phone: customerData.phone || '',
-        emailContacts: customerData.primaryemail ? [{
-          id: crypto.randomUUID(),
+      const newCustomer: Omit<Customer, 'id'> = {
+        firstName: firstName,
+        lastName: lastName,
+        companyName: customerDataFromCsv.companyname || undefined,
+        phone: customerDataFromCsv.phone || '',
+        emailContacts: customerDataFromCsv.primaryemail ? [{
+          id: crypto.randomUUID(), // This ID is for the email contact object itself, not the customer
           type: emailType as EmailContactType,
-          email: customerData.primaryemail,
-          name: `${customerData.firstname} ${customerData.lastname}`
+          email: customerDataFromCsv.primaryemail,
+          name: `${firstName} ${lastName}`
         }] : [],
         customerType: custType as CustomerType,
-        address: (customerData.addressstreet || customerData.addresscity || customerData.addressstate || customerData.addresszip) ? {
-          street: customerData.addressstreet || '',
-          city: customerData.addresscity || '',
-          state: customerData.addressstate || '',
-          zip: customerData.addresszip || '',
+        address: (customerDataFromCsv.addressstreet || customerDataFromCsv.addresscity || customerDataFromCsv.addressstate || customerDataFromCsv.addresszip) ? {
+          street: customerDataFromCsv.addressstreet || '',
+          city: customerDataFromCsv.addresscity || '',
+          state: customerDataFromCsv.addressstate || '',
+          zip: customerDataFromCsv.addresszip || '',
         } : undefined,
-        notes: customerData.notes || undefined,
+        notes: customerDataFromCsv.notes || undefined,
       };
-      newCustomers.push(newCustomer);
+      newCustomersData.push(newCustomer);
+      parsedCustomerCount++;
     }
-    return newCustomers;
+    if (lineCount > 1 && parsedCustomerCount === 0 && missingRequiredHeaders.length === 0) {
+        toast({
+            title: "CSV Info",
+            description: "CSV headers found, but no valid customer data rows could be parsed. Please check row content for all required fields (firstName, lastName).",
+            variant: "default",
+            duration: 8000,
+        });
+    }
+    return newCustomersData;
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const csvData = e.target?.result as string;
       if (csvData) {
-        try {
-          const parsedCustomers = parseCsvToCustomers(csvData);
-          if (parsedCustomers.length > 0) {
-            setCustomers(prev => [...prev, ...parsedCustomers]);
+        const parsedCustomersData = parseCsvToCustomers(csvData);
+        
+        if (parsedCustomersData.length > 0) {
+          try {
+            const batch = writeBatch(db);
+            parsedCustomersData.forEach(customerData => {
+              const newDocRef = doc(collection(db, 'customers')); 
+              batch.set(newDocRef, customerData);
+            });
+            await batch.commit();
             toast({
               title: "Success",
-              description: `${parsedCustomers.length} customers imported successfully.`,
+              description: `${parsedCustomersData.length} customers imported successfully to Firestore.`,
             });
-          } else if (csvData.trim().split('\n').length >=2 && parseCsvToCustomers(csvData).length === 0) { 
-             // This condition is met if headers were incorrect or no valid data rows after header check
-          } else if (csvData.trim().split('\n').length <2) {
-            // Already handled by parseCsvToCustomers initial check
-          } else {
-             toast({
-              title: "Info",
-              description: "No new customers were imported. Check CSV file content and ensure it has data rows.",
-              duration: 7000,
+          } catch (error) {
+            console.error("Error importing customers to Firestore:", error);
+            toast({
+              title: "Firestore Error",
+              description: "Failed to save customers to database. Check console for details.",
+              variant: "destructive",
+              duration: 10000,
             });
           }
-        } catch (error) {
-          console.error("Error parsing CSV:", error);
-          toast({
-            title: "Error Parsing CSV",
-            description: "Failed to parse CSV file. Please check the file format, content, and ensure it meets header requirements (e.g., firstName, lastName).",
-            variant: "destructive",
-            duration: 10000,
-          });
+        } else {
+          // parseCsvToCustomers should have shown a more specific toast if headers were wrong or no valid data
         }
       }
       if (fileInputRef.current) {
@@ -162,13 +209,23 @@ export default function CustomersPage() {
       }
     };
     reader.onerror = () => {
-      toast({ title: "Error", description: "Failed to read the file.", variant: "destructive" });
+      toast({ title: "File Read Error", description: "Failed to read the file.", variant: "destructive" });
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     };
     reader.readAsText(file);
   };
+
+  if (isLoading) {
+    return (
+      <PageHeader title="Customers" description="Loading customer database...">
+        <div className="flex items-center justify-center h-32">
+          <Icon name="Loader2" className="h-8 w-8 animate-spin" />
+        </div>
+      </PageHeader>
+    );
+  }
 
   return (
     <>
