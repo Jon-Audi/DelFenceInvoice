@@ -25,9 +25,9 @@ export default function ProductsPage() {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const fetchedProducts: Product[] = [];
       const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
-      snapshot.forEach((doc) => {
-        const productData = doc.data() as Omit<Product, 'id'>; // Firestore data won't have id field itself
-        fetchedProducts.push({ ...productData, id: doc.id });
+      snapshot.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
+        const productData = docSnap.data() as Omit<Product, 'id'>; // Firestore data won't have id field itself
+        fetchedProducts.push({ ...productData, id: docSnap.id });
         if (productData.category) {
           categoriesFromDb.add(productData.category);
         }
@@ -54,31 +54,34 @@ export default function ProductsPage() {
     if (!productCategories.find(pc => pc.toLowerCase() === normalizedCategory.toLowerCase())) {
       setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
        toast({
-          title: "Category Added",
-          description: `Category "${normalizedCategory}" has been added to the list. This will be fully saved when a product uses it.`,
+          title: "Category Added Locally",
+          description: `Category "${normalizedCategory}" is available for selection. It will be saved if a product using it is saved.`,
       });
     }
   };
 
   const handleSaveProduct = async (productToSave: Product) => {
-    handleAddNewCategory(productToSave.category); // Keep local category list updated
+    // Ensure category from product is in local list for immediate UI consistency
+    // onSnapshot will later confirm it from DB.
+    if (productToSave.category) {
+        const normalizedCategory = productToSave.category.trim();
+        if (normalizedCategory && !productCategories.find(pc => pc.toLowerCase() === normalizedCategory.toLowerCase())) {
+             // This local update is mostly for UI responsiveness before Firestore confirms.
+            setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
+        }
+    }
 
-    // Remove id from the object to be saved if it's a new product, Firestore will generate one.
-    // For existing products, keep id for the doc() reference, but don't save it as a field within the doc.
     const { id, ...productData } = productToSave;
 
     try {
       if (id && products.some(p => p.id === id)) {
-        // Editing existing product
         const productRef = doc(db, 'products', id);
-        await setDoc(productRef, productData); // Use setDoc to overwrite or create
+        await setDoc(productRef, productData); 
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
         });
       } else {
-        // Adding new product
-        // Firestore will generate an ID if we don't specify one in doc()
         const docRef = await addDoc(collection(db, 'products'), productData);
         toast({
           title: "Product Added",
@@ -119,51 +122,79 @@ export default function ProductsPage() {
     const lineCount = lines.length;
 
     if (lineCount < 2) {
-      toast({ title: "Error", description: "CSV file is empty or has no data rows.", variant: "destructive" });
+      toast({ title: "CSV Error", description: "CSV file is empty or has no data rows.", variant: "destructive" });
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    // 'id' is removed from expected headers for CSV import as Firestore will generate IDs
-    const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
-    const receivedHeadersSet = new Set(headers);
-    const missingRequiredHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'].filter(eh => !receivedHeadersSet.has(eh));
+    const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage']; // description is optional
+    const receivedHeadersSet = new Set(headerLine);
+    const missingRequiredHeaders = expectedHeaders.filter(eh => !receivedHeadersSet.has(eh) && eh !== 'description'); // only core fields are strictly required for header check
 
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected: ${expectedHeaders.join(', ')}. Note: 'id' column should not be present for new imports.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected at least: ${expectedHeaders.slice(0, -1).join(', ')}.`, 
             variant: "destructive",
             duration: 10000,
         });
         return [];
     }
 
+    let parsedProductCount = 0;
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const productDataFromCsv: any = {};
-      lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
+      headerLine.forEach((header, index) => {
         productDataFromCsv[header] = values[index];
       });
 
-      if (!productDataFromCsv.name || !productDataFromCsv.category || !productDataFromCsv.unit || productDataFromCsv.price === undefined || productDataFromCsv.cost === undefined || productDataFromCsv.markuppercentage === undefined) {
-        console.warn(`Skipping row ${i+1}: missing required fields.`);
+      const name = productDataFromCsv.name;
+      const category = productDataFromCsv.category;
+      const unit = productDataFromCsv.unit;
+      const priceStr = productDataFromCsv.price;
+      const costStr = productDataFromCsv.cost;
+      const markupPercentageStr = productDataFromCsv.markuppercentage;
+
+      if (!name || !category || !unit || priceStr === undefined || costStr === undefined || markupPercentageStr === undefined) {
+        console.warn(`Skipping row ${i+1}: missing one or more required fields (name, category, unit, price, cost, markupPercentage).`);
         continue; 
       }
       
-      const category = productDataFromCsv.category.trim();
-      handleAddNewCategory(category); // Update local category list
+      const price = parseFloat(priceStr);
+      const cost = parseFloat(costStr);
+      const markupPercentage = parseFloat(markupPercentageStr);
+
+      if (isNaN(price) || isNaN(cost) || isNaN(markupPercentage)) {
+        console.warn(`Skipping row ${i+1}: price, cost, or markupPercentage is not a valid number.`);
+        continue;
+      }
+      
+      // Only call handleAddNewCategory if the product row is valid and will be added
+      const trimmedCategory = category.trim();
+      handleAddNewCategory(trimmedCategory); 
 
       const newProduct: Omit<Product, 'id'> = {
-        name: productDataFromCsv.name,
-        category: category,
-        unit: productDataFromCsv.unit,
-        price: parseFloat(productDataFromCsv.price) || 0,
-        cost: parseFloat(productDataFromCsv.cost) || 0,
-        markupPercentage: parseFloat(productDataFromCsv.markuppercentage) || 0,
-        description: productDataFromCsv.description || undefined,
+        name: name.trim(),
+        category: trimmedCategory,
+        unit: unit.trim(),
+        price: price,
+        cost: cost,
+        markupPercentage: markupPercentage,
+        description: productDataFromCsv.description?.trim() || undefined,
       };
       newProducts.push(newProduct);
+      parsedProductCount++;
+    }
+    
+    if (lineCount > 1 && parsedProductCount === 0 && missingRequiredHeaders.length === 0) {
+        // Headers were okay, but no data rows were valid
+        toast({
+            title: "CSV Info",
+            description: "CSV headers found, but no valid product data rows could be parsed. Please check row content for all required fields and correct data types.",
+            variant: "default",
+            duration: 8000,
+        });
     }
     return newProducts;
   };
@@ -176,47 +207,50 @@ export default function ProductsPage() {
     reader.onload = async (e) => {
       const csvData = e.target?.result as string;
       if (csvData) {
-        try {
-          const parsedProducts = parseCsvToProducts(csvData);
-          if (parsedProducts.length > 0) {
+        const parsedProducts = parseCsvToProducts(csvData); // Called once
+
+        if (parsedProducts.length > 0) {
+          try {
             const batch = writeBatch(db);
             parsedProducts.forEach(product => {
-              const newDocRef = doc(collection(db, 'products')); // Firestore generates ID
+              const newDocRef = doc(collection(db, 'products')); 
               batch.set(newDocRef, product);
             });
             await batch.commit();
             toast({
               title: "Success",
-              description: `${parsedProducts.length} products imported successfully.`,
+              description: `${parsedProducts.length} products imported successfully to Firestore.`,
             });
-          } else if (csvData.trim().split('\n').length >=2 && parseCsvToProducts(csvData).length === 0) { 
-            // Error handled by parseCsvToProducts
-          } else if (csvData.trim().split('\n').length <2) {
-            // Error handled by parseCsvToProducts
-          } else {
-             toast({
-              title: "Info",
-              description: "No new products were imported. Check CSV file content.",
-              duration: 7000,
+          } catch (error) {
+            console.error("Error importing CSV to Firestore:", error);
+            toast({
+              title: "Firestore Error",
+              description: "Failed to save products to database. Check console for details.",
+              variant: "destructive",
+              duration: 10000,
             });
           }
-        } catch (error) {
-          console.error("Error importing CSV to Firestore:", error);
-          toast({
-            title: "Error Importing CSV",
-            description: "Failed to save products to database. Check console for details.",
-            variant: "destructive",
-            duration: 10000,
-          });
+        } else {
+          // If parsedProducts is empty, parseCsvToProducts should have already shown a specific toast
+          // (header error, or no valid data rows). If not, this is a fallback.
+          const lines = csvData.trim().split('\n');
+          if (lines.length < 2) {
+            // This case is already handled by parseCsvToProducts' initial check
+          } else if (!toast.isActive(`csv-info-no-valid-rows`) && !toast.isActive('csv-header-error-toast')) {
+            // Check if a more specific toast was already shown.
+            // `toast.isActive` is a hypothetical check; useToast doesn't provide this.
+            // We rely on parseCsvToProducts to have already toasted appropriately.
+            // This fallback might be redundant if parseCsvToProducts covers all empty scenarios.
+            console.log("CSV Import: parsedProducts was empty, specific toasts should have handled this.");
+          }
         }
       }
-      // Reset file input to allow uploading the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     };
     reader.onerror = () => {
-      toast({ title: "Error", description: "Failed to read the file.", variant: "destructive" });
+      toast({ title: "File Read Error", description: "Failed to read the file.", variant: "destructive" });
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -226,22 +260,18 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
-    // Keep 'id' in export headers in case user re-imports and wants to match (though import process currently ignores it)
-    // Or, more safely, exclude 'id' from export if the import process strictly doesn't handle it.
-    // For now, including it for completeness, but acknowledge the import logic might need adjustment if IDs are to be preserved.
     const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markupPercentage', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product => 
       headers.map(header => {
         const value = product[header as keyof Product];
         if (typeof value === 'string') {
-          // Escape double quotes and wrap in double quotes if value contains comma or double quote
           if (value.includes(',') || value.includes('"')) {
             return `"${value.replace(/"/g, '""')}"`;
           }
           return value;
         }
-        return value !== undefined && value !== null ? value : '';
+        return value !== undefined && value !== null ? String(value) : '';
       }).join(',')
     );
     return [headerString, ...rows].join('\n');
@@ -322,3 +352,5 @@ export default function ProductsPage() {
     </>
   );
 }
+
+    
