@@ -104,6 +104,8 @@ const mockCustomer: Customer = {
 export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
+  const [editableSubject, setEditableSubject] = useState<string>('');
+  const [editableBody, setEditableBody] = useState<string>('');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
@@ -118,6 +120,8 @@ export default function OrdersPage() {
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
+    setEditableSubject('');
+    setEditableBody('');
 
     try {
       const orderItemsDescription = order.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Items as per order.';
@@ -133,6 +137,9 @@ export default function OrdersPage() {
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
+      setEditableSubject(result.subject);
+      setEditableBody(result.body);
+
     } catch (error) {
       console.error("Error generating email draft:", error);
       toast({
@@ -140,7 +147,11 @@ export default function OrdersPage() {
         description: "Failed to generate email draft.",
         variant: "destructive",
       });
-      setEmailDraft({ subject: "Error", body: "Could not generate email content."});
+      const errorSubject = "Error generating subject";
+      const errorBody = "Could not generate email content.";
+      setEmailDraft({ subject: errorSubject, body: errorBody});
+      setEditableSubject(errorSubject);
+      setEditableBody(errorBody);
     } finally {
       setIsLoadingEmail(false);
     }
@@ -149,7 +160,7 @@ export default function OrdersPage() {
   const handleSendEmail = () => {
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email for order ${selectedOrder?.orderNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for order ${selectedOrder?.orderNumber} would be sent.`,
     });
     setIsEmailModalOpen(false);
   };
@@ -241,11 +252,20 @@ export default function OrdersPage() {
               <div className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="emailSubject">Subject</Label>
-                  <Input id="emailSubject" value={emailDraft.subject} readOnly />
+                  <Input
+                    id="emailSubject"
+                    value={editableSubject}
+                    onChange={(e) => setEditableSubject(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={emailDraft.body} readOnly rows={10} className="min-h-[200px]" />
+                  <Textarea
+                    id="emailBody"
+                    value={editableBody}
+                    onChange={(e) => setEditableBody(e.target.value)}
+                    rows={10} className="min-h-[200px]"
+                  />
                 </div>
               </div>
             ) : (

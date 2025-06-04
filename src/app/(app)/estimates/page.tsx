@@ -32,34 +32,35 @@ import type { Estimate, Customer } from '@/types';
 
 // Mock data
 const mockEstimates: Estimate[] = [
-  { 
-    id: 'est_1', 
-    estimateNumber: 'EST-2024-001', 
-    customerId: 'cust_1', 
-    customerName: 'John Doe Fencing', 
-    date: '2024-07-15', 
-    total: 1250.75, 
-    status: 'Sent', 
+  {
+    id: 'est_1',
+    estimateNumber: 'EST-2024-001',
+    customerId: 'cust_1',
+    customerName: 'John Doe Fencing',
+    date: '2024-07-15',
+    total: 1250.75,
+    status: 'Sent',
     lineItems: [
       { id: 'li_est_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 50, unitPrice: 3.50, total: 175.00 },
       { id: 'li_est_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 10, unitPrice: 12.00, total: 120.00 },
-    ], 
-    subtotal: 1150.75, 
-    taxAmount: 100.00, 
+    ],
+    subtotal: 1150.75,
+    taxAmount: 100.00,
   },
-  { 
-    id: 'est_2', 
-    estimateNumber: 'EST-2024-002', 
-    customerId: 'cust_2', 
-    customerName: 'Jane Smith Landscaping', 
-    date: '2024-07-18', 
-    total: 850.00, 
-    status: 'Draft', 
+  {
+    id: 'est_2',
+    estimateNumber: 'EST-2024-002',
+    customerId: 'cust_2',
+    customerName: 'Jane Smith Landscaping',
+    date: '2024-07-18',
+    total: 850.00,
+    status: 'Draft',
     lineItems: [
       { id: 'li_est_3', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 4, unitPrice: 25.00, total: 100.00 },
-    ], 
+      { id: 'li_est_4', productId: 'prod_5', productName: 'Post Caps', quantity: 10, unitPrice: 2.50, total: 25.00 },
+    ],
     subtotal: 800.00,
-    taxAmount: 50.00, 
+    taxAmount: 50.00,
   },
 ];
 
@@ -76,6 +77,8 @@ const mockCustomer: Customer = {
 export default function EstimatesPage() {
   const [selectedEstimate, setSelectedEstimate] = useState<Estimate | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
+  const [editableSubject, setEditableSubject] = useState<string>('');
+  const [editableBody, setEditableBody] = useState<string>('');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
@@ -89,7 +92,9 @@ export default function EstimatesPage() {
     setSelectedEstimate(estimate);
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
-    setEmailDraft(null); 
+    setEmailDraft(null);
+    setEditableSubject('');
+    setEditableBody('');
 
     try {
       const customerForEstimate = mockEstimates.find(e => e.id === estimate.id)?.customerId === mockCustomer.id ? mockCustomer : {
@@ -97,26 +102,30 @@ export default function EstimatesPage() {
         lastName: estimate.customerName?.split(' ').slice(1).join(' ') || "Customer",
         companyName: estimate.customerName?.includes(" ") ? undefined : estimate.customerName, // Basic heuristic
       };
-      
+
       const estimateContent = `
         Estimate Number: ${estimate.estimateNumber}
         Date: ${estimate.date}
         Customer: ${estimate.customerName || 'Valued Customer'}
         Total: $${estimate.total.toFixed(2)}
-        Items: 
+        Items:
         ${estimate.lineItems.map(item => `- ${item.productName} (Qty: ${item.quantity}, Price: $${item.unitPrice.toFixed(2)})`).join('\n') || 'Details to be confirmed.'}
       `;
-      
+
       const result = await estimateEmailDraft({
         customerName: `${customerForEstimate.firstName} ${customerForEstimate.lastName}`,
         companyName: customerForEstimate.companyName,
         estimateContent: estimateContent,
       });
-      
-      setEmailDraft({ 
-        subject: `Estimate ${estimate.estimateNumber} from Delaware Fence Pro`, 
-        body: result.emailDraft 
+
+      const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Pro`;
+      setEmailDraft({
+        subject: subject,
+        body: result.emailDraft
       });
+      setEditableSubject(subject);
+      setEditableBody(result.emailDraft);
+
     } catch (error) {
       console.error("Error generating email draft:", error);
       toast({
@@ -124,7 +133,11 @@ export default function EstimatesPage() {
         description: "Failed to generate email draft.",
         variant: "destructive",
       });
-      setEmailDraft({ subject: "Error", body: "Could not generate email content."});
+      const errorSubject = "Error generating subject";
+      const errorBody = "Could not generate email content.";
+      setEmailDraft({ subject: errorSubject, body: errorBody});
+      setEditableSubject(errorSubject);
+      setEditableBody(errorBody);
     } finally {
       setIsLoadingEmail(false);
     }
@@ -133,7 +146,7 @@ export default function EstimatesPage() {
   const handleSendEmail = () => {
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email draft for estimate ${selectedEstimate?.estimateNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for estimate ${selectedEstimate?.estimateNumber} would be sent.`,
     });
     setIsEmailModalOpen(false);
   };
@@ -147,7 +160,7 @@ export default function EstimatesPage() {
           New Estimate
         </Button>
       </PageHeader>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>All Estimates</CardTitle>
@@ -206,11 +219,21 @@ export default function EstimatesPage() {
               <div className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="emailSubject">Subject</Label>
-                  <Input id="emailSubject" value={emailDraft.subject || ''} readOnly />
+                  <Input
+                    id="emailSubject"
+                    value={editableSubject}
+                    onChange={(e) => setEditableSubject(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={emailDraft.body || ''} readOnly rows={10} className="min-h-[200px]" />
+                  <Textarea
+                    id="emailBody"
+                    value={editableBody}
+                    onChange={(e) => setEditableBody(e.target.value)}
+                    rows={10}
+                    className="min-h-[200px]"
+                  />
                 </div>
               </div>
             ) : (
