@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -10,14 +10,43 @@ import { ProductDialog } from '@/components/products/product-dialog';
 import type { Product } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
-import { MOCK_PRODUCTS } from '@/lib/mock-data';
-
+import { db } from '@/lib/firebase';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<string[]>(INITIAL_PRODUCT_CATEGORIES);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const fetchedProducts: Product[] = [];
+      const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
+      snapshot.forEach((doc) => {
+        const productData = doc.data() as Omit<Product, 'id'>;
+        fetchedProducts.push({ ...productData, id: doc.id });
+        if (productData.category) {
+          categoriesFromDb.add(productData.category);
+        }
+      });
+      setProducts(fetchedProducts);
+      setProductCategories(Array.from(categoriesFromDb).sort((a, b) => a.localeCompare(b)));
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching products:", error);
+      toast({
+        title: "Error",
+        description: "Could not fetch products from database.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
 
   const handleAddNewCategory = (category: string) => {
     if (category.trim() === '') return;
@@ -26,46 +55,70 @@ export default function ProductsPage() {
       setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
        toast({
           title: "Category Added",
-          description: `Category "${normalizedCategory}" has been added to the list.`,
+          description: `Category "${normalizedCategory}" has been added to the list. This will be fully saved when a product uses it.`,
       });
     }
   };
 
-  const handleSaveProduct = (productToSave: Product) => {
-    // Ensure the product's category is added to the list if it's new
-    handleAddNewCategory(productToSave.category);
+  const handleSaveProduct = async (productToSave: Product) => {
+    handleAddNewCategory(productToSave.category); // Keep local category list updated
 
-    setProducts(prevProducts => {
-      const index = prevProducts.findIndex(p => p.id === productToSave.id);
-      if (index !== -1) {
-        const updatedProducts = [...prevProducts];
-        updatedProducts[index] = productToSave;
+    try {
+      if (productToSave.id && products.some(p => p.id === productToSave.id)) {
+        // Editing existing product
+        const productRef = doc(db, 'products', productToSave.id);
+        await setDoc(productRef, productToSave, { merge: true }); // Use setDoc with merge for update
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
         });
-        return updatedProducts;
       } else {
+        // Adding new product
+        const docRef = await addDoc(collection(db, 'products'), {
+          ...productToSave,
+          id: undefined // Firestore will generate ID, or use productToSave.id if you generate it client-side
+        }); 
+        // If you want to use client-generated ID with addDoc, it's more common to use setDoc
+        // For example: await setDoc(doc(db, "products", productToSave.id || crypto.randomUUID()), productToSave);
+        // For simplicity, we let Firestore generate the ID here if it's a new item without an ID from import/mock.
+        // If productToSave.id IS present (e.g. from a previous client-side generation attempt or import), use setDoc:
+        // await setDoc(doc(db, 'products', productToSave.id), productToSave);
+
         toast({
           title: "Product Added",
           description: `Product ${productToSave.name} has been added.`,
         });
-        return [...prevProducts, { ...productToSave, id: productToSave.id || crypto.randomUUID() }];
       }
-    });
+    } catch (error) {
+      console.error("Error saving product:", error);
+      toast({
+        title: "Error",
+        description: "Could not save product to database.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-    toast({
-      title: "Product Deleted",
-      description: "The product has been removed.",
-      variant: "default",
-    });
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      await deleteDoc(doc(db, 'products', productId));
+      toast({
+        title: "Product Deleted",
+        description: "The product has been removed.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      toast({
+        title: "Error",
+        description: "Could not delete product from database.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const parseCsvToProducts = (csvData: string): Product[] => {
-    const newProducts: Product[] = [];
+  const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
+    const newProducts: Omit<Product, 'id'>[] = [];
     const lines = csvData.trim().split('\n');
     const lineCount = lines.length;
 
@@ -76,15 +129,13 @@ export default function ProductsPage() {
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
     const expectedHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
-    
     const receivedHeadersSet = new Set(headers);
     const missingRequiredHeaders = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'].filter(eh => !receivedHeadersSet.has(eh));
-
 
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive): ${expectedHeaders.join(', ')}. Optional: description. Please ensure your CSV matches this format.`, 
+            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected: ${expectedHeaders.join(', ')}.`, 
             variant: "destructive",
             duration: 10000,
         });
@@ -94,27 +145,19 @@ export default function ProductsPage() {
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const productData: any = {};
-       lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
+      lines[0].split(',').map(h => h.trim().toLowerCase()).forEach((header, index) => {
         productData[header] = values[index];
       });
 
       if (!productData.name || !productData.category || !productData.unit || productData.price === undefined || productData.cost === undefined || productData.markuppercentage === undefined) {
-        toast({
-            title: "Skipped Row",
-            description: `Skipped row ${i+1} due to missing required fields (name, category, unit, price, cost, markupPercentage).`,
-            variant: "default",
-            duration: 7000,
-        });
+        console.warn(`Skipping row ${i+1}: missing required fields.`);
         continue; 
       }
       
       const category = productData.category.trim();
-      // Add category from CSV to available categories if not present
-      handleAddNewCategory(category);
+      handleAddNewCategory(category); // Update local category list
 
-
-      const newProduct: Product = {
-        id: crypto.randomUUID(),
+      const newProduct: Omit<Product, 'id'> = {
         name: productData.name,
         category: category,
         unit: productData.unit,
@@ -128,26 +171,31 @@ export default function ProductsPage() {
     return newProducts;
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const csvData = e.target?.result as string;
       if (csvData) {
         try {
           const parsedProducts = parseCsvToProducts(csvData);
           if (parsedProducts.length > 0) {
-            setProducts(prev => [...prev, ...parsedProducts]);
+            const batch = writeBatch(db);
+            parsedProducts.forEach(product => {
+              const newDocRef = doc(collection(db, 'products')); // Firestore generates ID
+              batch.set(newDocRef, product);
+            });
+            await batch.commit();
             toast({
               title: "Success",
               description: `${parsedProducts.length} products imported successfully.`,
             });
           } else if (csvData.trim().split('\n').length >=2 && parseCsvToProducts(csvData).length === 0) { 
-            // Handled by parseCsvToProducts detailed toast
+            // Error handled by parseCsvToProducts
           } else if (csvData.trim().split('\n').length <2) {
-            // Already handled by parseCsvToProducts initial check
+            // Error handled by parseCsvToProducts
           } else {
              toast({
               title: "Info",
@@ -156,10 +204,10 @@ export default function ProductsPage() {
             });
           }
         } catch (error) {
-          console.error("Error parsing CSV for products:", error);
+          console.error("Error importing CSV to Firestore:", error);
           toast({
-            title: "Error Parsing CSV",
-            description: "Failed to parse CSV file for products. Please check the file format and content.",
+            title: "Error Importing CSV",
+            description: "Failed to save products to database. Check console for details.",
             variant: "destructive",
             duration: 10000,
           });
@@ -180,13 +228,14 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
+    // Keep 'id' in export headers in case user re-imports and wants to match
     const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markupPercentage', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product => 
       headers.map(header => {
         const value = product[header as keyof Product];
         if (typeof value === 'string') {
-          return `"${value.replace(/"/g, '""')}"`;
+          return `"${value.replace(/"/g, '""')}"`; // Handle quotes in strings
         }
         return value !== undefined && value !== null ? value : '';
       }).join(',')
@@ -216,6 +265,16 @@ export default function ProductsPage() {
       toast({ title: "Export Failed", description: "Your browser doesn't support direct CSV download.", variant: "destructive" });
     }
   };
+  
+  if (isLoading) {
+    return (
+      <PageHeader title="Products" description="Loading product inventory...">
+        <div className="flex items-center justify-center h-32">
+          <Icon name="Loader2" className="h-8 w-8 animate-spin" />
+        </div>
+      </PageHeader>
+    );
+  }
 
   return (
     <>
