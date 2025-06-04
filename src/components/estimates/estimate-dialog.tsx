@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Estimate, Product, LineItem } from '@/types';
+import type { Estimate, Product, LineItem, Customer } from '@/types';
 import { EstimateForm, type EstimateFormData } from './estimate-form';
 import {
   Dialog,
@@ -18,9 +18,10 @@ interface EstimateDialogProps {
   triggerButton: React.ReactElement;
   onSave: (estimate: Estimate) => void;
   products: Product[];
+  customers: Customer[];
 }
 
-export function EstimateDialog({ estimate, triggerButton, onSave, products }: EstimateDialogProps) {
+export function EstimateDialog({ estimate, triggerButton, onSave, products, customers }: EstimateDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (formData: EstimateFormData) => {
@@ -41,11 +42,14 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products }: Es
     const taxAmount = 0; // Simplified for now
     const total = subtotal + taxAmount;
 
+    const selectedCustomer = customers.find(c => c.id === formData.customerId);
+    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
+
     const estimateToSave: Estimate = {
       id: estimate?.id || crypto.randomUUID(),
       estimateNumber: formData.estimateNumber,
-      customerId: estimate?.customerId || '', // Needs a way to select customer
-      customerName: formData.customerName,
+      customerId: formData.customerId,
+      customerName: customerName,
       date: formData.date.toISOString(),
       validUntil: formData.validUntil ? formData.validUntil.toISOString() : undefined,
       status: formData.status,
@@ -76,6 +80,7 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products }: Es
           onSubmit={handleSubmit} 
           onClose={() => setOpen(false)}
           products={products}
+          customers={customers}
         />
       </DialogContent>
     </Dialog>

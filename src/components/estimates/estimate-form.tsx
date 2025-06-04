@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Estimate, Product, DocumentStatus, LineItem as LineItemType } from '@/types';
+import type { Estimate, Product, DocumentStatus, LineItem as LineItemType, Customer } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,14 +38,13 @@ const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' |
 const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
-  // productName: z.string(), // Will be derived, not part of form data directly needed for zod
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
-  // unitPrice: z.coerce.number(), // Will be derived
 });
 
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
-  customerName: z.string().min(1, "Customer name is required"),
+  customerId: z.string().min(1, "Customer is required"),
+  customerName: z.string().optional(), // Will be auto-filled for display or if needed
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -61,15 +60,17 @@ interface EstimateFormProps {
   onSubmit: (data: EstimateFormData) => void;
   onClose?: () => void;
   products: Product[];
+  customers: Customer[];
 }
 
-export function EstimateForm({ estimate, onSubmit, onClose, products }: EstimateFormProps) {
+export function EstimateForm({ estimate, onSubmit, onClose, products, customers }: EstimateFormProps) {
   const form = useForm<EstimateFormData>({
     resolver: zodResolver(estimateFormSchema),
     defaultValues: estimate ? {
       ...estimate,
       date: new Date(estimate.date),
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
+      customerId: estimate.customerId || '',
       customerName: estimate.customerName || '',
       lineItems: estimate.lineItems.map(li => ({
         id: li.id,
@@ -79,6 +80,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products }: Estimate
       notes: estimate.notes || '',
     } : {
       estimateNumber: `EST-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
+      customerId: '',
       customerName: '',
       date: new Date(),
       status: 'Draft',
@@ -87,7 +89,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products }: Estimate
     },
   });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -98,7 +100,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products }: Estimate
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
       const price = product ? product.price : 0;
-      return acc + (price * item.quantity);
+      return acc + (price * (item.quantity || 0));
     }, 0);
   }, [watchedLineItems, products]);
 
@@ -113,16 +115,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products }: Estimate
 
 
   const handleProductSelect = (index: number, productId: string) => {
-    const product = products.find(p => p.id === productId);
-    if (product) {
-      // Get current quantity to preserve it
-      const currentQuantity = form.getValues(`lineItems.${index}.quantity`) || 1;
-       form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
-      // update(index, { ...watchedLineItems[index], productId: productId }); // Re-spread to keep other fields if any
-      // Explicitly call trigger if validation doesn't run automatically on setValue for array fields sometimes
-      form.trigger(`lineItems.${index}.productId`);
-
-    }
+    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
+    form.trigger(`lineItems.${index}.productId`);
   };
   
   const handleQuantityChange = (index: number, quantity: number) => {
@@ -130,16 +124,60 @@ export function EstimateForm({ estimate, onSubmit, onClose, products }: Estimate
      form.trigger(`lineItems.${index}.quantity`);
   };
 
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
         <FormField control={form.control} name="estimateNumber" render={({ field }) => (
           <FormItem><FormLabel>Estimate Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-        <FormField control={form.control} name="customerName" render={({ field }) => (
-          <FormItem><FormLabel>Customer Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+        
+        <FormField
+          control={form.control}
+          name="customerId"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Customer</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
+                      {field.value 
+                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` 
+                        : "Select customer"}
+                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search customer..." />
+                    <CommandList>
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((customer) => (
+                          <CommandItem
+                            value={customer.id}
+                            key={customer.id}
+                            onSelect={() => {
+                              form.setValue("customerId", customer.id, { shouldValidate: true });
+                              const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
+                              form.setValue("customerName", displayName); // Update hidden/display name
+                            }}
+                          >
+                            <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
+                            {customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="date" render={({ field }) => (
             <FormItem className="flex flex-col">

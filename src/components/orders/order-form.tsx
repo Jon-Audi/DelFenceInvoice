@@ -5,7 +5,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Order, DocumentStatus } from '@/types';
+import type { Order, DocumentStatus, Customer, Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
@@ -37,7 +38,8 @@ const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
 
 const orderFormSchema = z.object({
   orderNumber: z.string().min(1, "Order number is required"),
-  customerName: z.string().min(1, "Customer name is required"),
+  customerId: z.string().min(1, "Customer is required"),
+  customerName: z.string().optional(), // Auto-filled for display
   date: z.date({ required_error: "Order date is required." }),
   total: z.coerce.number().min(0, "Total must be a positive number"),
   status: z.enum(ORDER_STATUSES as [typeof ORDER_STATUSES[0], ...typeof ORDER_STATUSES]),
@@ -45,19 +47,21 @@ const orderFormSchema = z.object({
   expectedDeliveryDate: z.date().optional(),
   readyForPickUpDate: z.date().optional(),
   pickedUpDate: z.date().optional(),
-  lineItemsDescription: z.string().optional().describe("A brief description of items or services."),
+  lineItemsDescription: z.string().optional().describe("A brief description of items or services."), // Will be replaced by line item editor
   notes: z.string().optional(),
 });
 
-type OrderFormData = z.infer<typeof orderFormSchema>;
+export type OrderFormData = z.infer<typeof orderFormSchema>;
 
 interface OrderFormProps {
   order?: Order;
   onSubmit: (data: OrderFormData) => void;
   onClose?: () => void;
+  customers: Customer[];
+  // products: Product[]; // Uncomment for line item editor
 }
 
-export function OrderForm({ order, onSubmit, onClose }: OrderFormProps) {
+export function OrderForm({ order, onSubmit, onClose, customers /*, products */ }: OrderFormProps) {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: order ? {
@@ -66,10 +70,12 @@ export function OrderForm({ order, onSubmit, onClose }: OrderFormProps) {
       expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
       readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
       pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
+      customerId: order.customerId || '',
       customerName: order.customerName || '',
       lineItemsDescription: order.lineItems.map(li => `${li.productName} (Qty: ${li.quantity})`).join('\n') || '',
     } : {
       orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
+      customerId: '',
       customerName: '',
       date: new Date(),
       total: 0,
@@ -90,9 +96,53 @@ export function OrderForm({ order, onSubmit, onClose }: OrderFormProps) {
         <FormField control={form.control} name="orderNumber" render={({ field }) => (
           <FormItem><FormLabel>Order Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-        <FormField control={form.control} name="customerName" render={({ field }) => (
-          <FormItem><FormLabel>Customer Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+        
+        <FormField
+          control={form.control}
+          name="customerId"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Customer</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
+                      {field.value 
+                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` 
+                        : "Select customer"}
+                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search customer..." />
+                    <CommandList>
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((customer) => (
+                          <CommandItem
+                            value={customer.id}
+                            key={customer.id}
+                            onSelect={() => {
+                              form.setValue("customerId", customer.id, { shouldValidate: true });
+                              const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
+                              form.setValue("customerName", displayName);
+                            }}
+                          >
+                            <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
+                            {customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         
         <FormField control={form.control} name="date" render={({ field }) => (
           <FormItem className="flex flex-col">
@@ -182,7 +232,7 @@ export function OrderForm({ order, onSubmit, onClose }: OrderFormProps) {
             </FormItem>
         )} />
 
-        <FormField control={form.control} name="lineItemsDescription" render={({ field }) => (
+        <FormField control={form.control} name="lineItemsDescription" render={({ field }) => ( // This will be replaced by a line item editor later
             <FormItem><FormLabel>Items/Services Description</FormLabel><FormControl><Textarea placeholder="Describe items or services ordered..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
         <FormField control={form.control} name="notes" render={({ field }) => (

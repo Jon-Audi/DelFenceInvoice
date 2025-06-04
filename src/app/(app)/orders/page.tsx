@@ -45,8 +45,37 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer } from '@/types'; 
+import type { Order, Customer, Product, CustomerType, EmailContactType } from '@/types'; 
 import { OrderDialog } from '@/components/orders/order-dialog';
+
+// Initial mock data for customers
+const initialMockCustomers: Customer[] = [
+  {
+    id: 'cust_1',
+    firstName: 'John',
+    lastName: 'Doe',
+    companyName: 'Doe Fencing Co.',
+    phone: '555-1234',
+    emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }],
+    customerType: 'Fence Contractor',
+  },
+  {
+    id: 'cust_2',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    companyName: 'J. Smith Landscaping',
+    phone: '555-5678',
+    emailContacts: [{ id: 'ec_2', type: 'Main Contact', email: 'jane.smith@example.com' }],
+    customerType: 'Landscaper',
+  },
+];
+
+// Mock products data (similar to estimates for potential future line item editor)
+const mockProducts: Product[] = [
+  { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
+  { id: 'prod_3', name: 'Vinyl Gate Kit', category: 'Gates', unit: 'kit', price: 150.00, cost: 100.00, markupPercentage: 50, description: 'Complete vinyl gate kit' },
+];
+
 
 // Initial mock data for orders
 const initialMockOrders: Order[] = [
@@ -54,12 +83,12 @@ const initialMockOrders: Order[] = [
     id: 'ord_1',
     orderNumber: 'ORD-2024-001',
     customerId: 'cust_1',
-    customerName: 'John Doe Fencing',
+    customerName: 'Doe Fencing Co.',
     date: '2024-07-20T10:00:00.000Z',
-    total: 1850.50,
+    total: 350.00,
     status: 'Ordered',
     lineItems: [{id: 'li_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350}],
-    subtotal: 1850.50,
+    subtotal: 350.00,
     orderState: 'Open', 
     readyForPickUpDate: undefined,
     pickedUpDate: undefined,
@@ -68,31 +97,22 @@ const initialMockOrders: Order[] = [
     id: 'ord_2',
     orderNumber: 'ORD-2024-002',
     customerId: 'cust_2',
-    customerName: 'Jane Smith Landscaping',
+    customerName: 'J. Smith Landscaping',
     date: '2024-07-22T14:30:00.000Z',
-    total: 975.00,
+    total: 150.00,
     status: 'Ready for pick up',
     lineItems: [{id: 'li_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00}],
-    subtotal: 975.00,
+    subtotal: 150.00,
     orderState: 'Closed', 
     readyForPickUpDate: '2024-07-28T09:00:00.000Z',
     pickedUpDate: undefined,
   },
 ];
 
-// Mock customer for email purposes - in a real app, this would be fetched or resolved.
-const mockCustomer: Customer = {
-  id: 'cust_1',
-  firstName: 'John',
-  lastName: 'Doe',
-  companyName: 'Doe Fencing Co.',
-  phone: '555-1234',
-  emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }],
-  customerType: 'Fence Contractor',
-};
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>(initialMockOrders);
+  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
   const [selectedOrderForEmail, setSelectedOrderForEmail] = useState<Order | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
@@ -117,7 +137,7 @@ export default function OrdersPage() {
         return updatedOrders;
       } else {
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added.` });
-        return [...prevOrders, orderToSave];
+        return [...prevOrders, { ...orderToSave, id: orderToSave.id || crypto.randomUUID() }];
       }
     });
   };
@@ -138,13 +158,15 @@ export default function OrdersPage() {
 
     try {
       const orderItemsDescription = order.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Items as per order.';
-      const customerEmail = order.customerId === mockCustomer.id 
-        ? mockCustomer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com'
-        : 'customer@example.com'; // Fallback if customer not found
+      
+      const customer = customers.find(c => c.id === order.customerId);
+      const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
+      const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com';
+
 
       const result = await generateOrderEmailDraft({
-        customerName: order.customerName || 'Valued Customer',
-        customerEmail: customerEmail,
+        customerName: customerDisplayName,
+        customerEmail: customerEmail, // This needs to come from selected customer ideally
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
@@ -192,6 +214,8 @@ export default function OrdersPage() {
             </Button>
           }
           onSave={handleSaveOrder}
+          customers={customers}
+          // products={mockProducts} // For future line item editor
         />
       </PageHeader>
 
@@ -252,6 +276,8 @@ export default function OrdersPage() {
                             </DropdownMenuItem>
                           }
                           onSave={handleSaveOrder}
+                          customers={customers}
+                          // products={mockProducts} // For future line item editor
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft

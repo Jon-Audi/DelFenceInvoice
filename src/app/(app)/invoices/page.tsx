@@ -20,47 +20,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer } from '@/types';
+import type { Invoice, Customer, CustomerType, EmailContactType } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
-import { InvoiceTable } from '@/components/invoices/invoice-table'; // Import the new table
+import { InvoiceTable } from '@/components/invoices/invoice-table';
 
-// Initial mock data for invoices
-const initialMockInvoices: Invoice[] = [
-  { 
-    id: 'inv_1', 
-    invoiceNumber: 'INV-2024-001', 
-    customerId: 'cust_1', 
-    customerName: 'John Doe Fencing', 
-    date: '2024-07-25', 
-    total: 1850.50, 
-    status: 'Sent', 
-    dueDate: '2024-08-24', 
-    lineItems: [
-      { id: 'li_inv_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350.00 },
-      { id: 'li_inv_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00 },
-    ], 
-    subtotal: 1750.50, 
-    taxAmount: 100.00, 
-  },
-  { 
-    id: 'inv_2', 
-    invoiceNumber: 'INV-2024-002', 
-    customerId: 'cust_2', 
-    customerName: 'Jane Smith Landscaping', 
-    date: '2024-07-28', 
-    total: 975.00, 
-    status: 'Paid', 
-    dueDate: '2024-08-27', 
-    lineItems: [
-       { id: 'li_inv_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00 }
-    ], 
-    subtotal: 900.00, 
-    taxAmount: 75.00,
-  },
-];
-
-// Mock customers for email draft purposes
-const mockCustomers: Customer[] = [
+// Initial mock data for customers
+const initialMockCustomers: Customer[] = [
   { 
     id: 'cust_1', 
     firstName: 'John', 
@@ -81,8 +46,45 @@ const mockCustomers: Customer[] = [
   },
 ];
 
+// Initial mock data for invoices
+const initialMockInvoices: Invoice[] = [
+  { 
+    id: 'inv_1', 
+    invoiceNumber: 'INV-2024-001', 
+    customerId: 'cust_1', 
+    customerName: 'Doe Fencing Co.', 
+    date: '2024-07-25', 
+    total: 1850.50, 
+    status: 'Sent', 
+    dueDate: '2024-08-24', 
+    lineItems: [
+      { id: 'li_inv_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 100, unitPrice: 3.50, total: 350.00 },
+      { id: 'li_inv_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 20, unitPrice: 12.00, total: 240.00 },
+    ], 
+    subtotal: 1750.50, 
+    taxAmount: 100.00, 
+  },
+  { 
+    id: 'inv_2', 
+    invoiceNumber: 'INV-2024-002', 
+    customerId: 'cust_2', 
+    customerName: 'J. Smith Landscaping', 
+    date: '2024-07-28', 
+    total: 975.00, 
+    status: 'Paid', 
+    dueDate: '2024-08-27', 
+    lineItems: [
+       { id: 'li_inv_3', productId: 'prod_3', productName: 'Vinyl Gate Kit', quantity:1, unitPrice: 150.00, total: 150.00 }
+    ], 
+    subtotal: 900.00, 
+    taxAmount: 75.00,
+  },
+];
+
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(initialMockInvoices);
+  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -106,7 +108,7 @@ export default function InvoicesPage() {
         return updatedInvoices;
       } else {
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added.` });
-        return [...prevInvoices, invoiceToSave];
+        return [...prevInvoices, { ...invoiceToSave, id: invoiceToSave.id || crypto.randomUUID() }];
       }
     });
   };
@@ -131,19 +133,20 @@ export default function InvoicesPage() {
     setEditableBody('');
 
     try {
-      // Try to find associated customer, fallback to name on invoice or generic
-      const customer = mockCustomers.find(c => c.id === invoice.customerId);
+      const customer = customers.find(c => c.id === invoice.customerId);
+      const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (invoice.customerName || 'Valued Customer');
+      const customerCompanyName = customer?.companyName;
       const invoiceItemsDescription = invoice.lineItems.map(item => `${item.productName} (Qty: ${item.quantity})`).join(', ') || 'Services/Products as per invoice.';
       
       const result = await generateInvoiceEmailDraft({
-        customerName: invoice.customerName || (customer ? `${customer.firstName} ${customer.lastName}` : 'Valued Customer'),
-        companyName: customer?.companyName,
+        customerName: customerDisplayName,
+        companyName: customerCompanyName,
         invoiceNumber: invoice.invoiceNumber,
         invoiceDate: new Date(invoice.date).toLocaleDateString(), 
         invoiceTotal: invoice.total,
         invoiceItems: invoiceItemsDescription,
         dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined, 
-        companyNameToDisplay: "Delaware Fence Solutions", // This could be a global app setting
+        companyNameToDisplay: "Delaware Fence Solutions",
       });
       
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -179,6 +182,7 @@ export default function InvoicesPage() {
               </Button>
             }
             onSave={handleSaveInvoice}
+            customers={customers}
           />
       </PageHeader>
       
@@ -194,6 +198,7 @@ export default function InvoicesPage() {
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
             formatDate={formatDate}
+            customers={customers}
           />
         </CardContent>
       </Card>

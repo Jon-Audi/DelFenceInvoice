@@ -45,44 +45,79 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
-import type { Estimate, Product } from '@/types';
+import type { Estimate, Product, Customer, CustomerType, EmailContactType } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
+
+// Initial mock data for customers
+const initialMockCustomers: Customer[] = [
+  {
+    id: 'cust_1',
+    firstName: 'John',
+    lastName: 'Doe',
+    companyName: 'Doe Fencing Co.',
+    phone: '555-1234',
+    emailContacts: [{ id: 'ec_1', type: 'Main Contact', email: 'john.doe@doefencing.com' }],
+    customerType: 'Fence Contractor',
+    address: { street: '123 Main St', city: 'Anytown', state: 'DE', zip: '19901' }
+  },
+  {
+    id: 'cust_2',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    phone: '555-5678',
+    emailContacts: [
+      { id: 'ec_2', type: 'Main Contact', email: 'jane.smith@example.com' },
+      { id: 'ec_3', type: 'Billing', email: 'billing@jsmithscapes.com' }
+    ],
+    customerType: 'Landscaper',
+    companyName: 'J. Smith Landscaping',
+    address: { street: '456 Oak Ave', city: 'Anycity', state: 'DE', zip: '19902' }
+  },
+  {
+    id: 'cust_3',
+    firstName: 'Robert',
+    lastName: 'Johnson',
+    phone: '555-9101',
+    emailContacts: [{ id: 'ec_4', type: 'Main Contact', email: 'robert.johnson@email.com' }],
+    customerType: 'Home Owner',
+  },
+];
 
 // Initial mock data for estimates
 const initialMockEstimates: Estimate[] = [
   {
     id: 'est_1',
     estimateNumber: 'EST-2024-001',
-    customerId: 'cust_1',
-    customerName: 'John Doe Fencing',
+    customerId: 'cust_1', // Linked to John Doe Fencing
+    customerName: 'Doe Fencing Co.',
     date: '2024-07-15',
-    total: 295.00, // Updated total
+    total: 295.00, 
     status: 'Sent',
     lineItems: [
       { id: 'li_est_1', productId: 'prod_1', productName: '6ft Cedar Picket', quantity: 50, unitPrice: 3.50, total: 175.00 },
       { id: 'li_est_2', productId: 'prod_2', productName: '4x4x8 Pressure Treated Post', quantity: 10, unitPrice: 12.00, total: 120.00 },
     ],
-    subtotal: 295.00, // Updated subtotal
+    subtotal: 295.00, 
     taxAmount: 0.00,
   },
   {
     id: 'est_2',
     estimateNumber: 'EST-2024-002',
-    customerId: 'cust_2',
-    customerName: 'Jane Smith Landscaping',
+    customerId: 'cust_2', // Linked to Jane Smith Landscaping
+    customerName: 'J. Smith Landscaping',
     date: '2024-07-18',
-    total: 125.00, // Updated total
+    total: 125.00, 
     status: 'Draft',
     lineItems: [
       { id: 'li_est_3', productId: 'prod_4', productName: 'Stainless Steel Hinges', quantity: 4, unitPrice: 25.00, total: 100.00 },
       { id: 'li_est_4', productId: 'prod_5', productName: 'Post Caps', quantity: 10, unitPrice: 2.50, total: 25.00 },
     ],
-    subtotal: 125.00, // Updated subtotal
+    subtotal: 125.00, 
     taxAmount: 0.00,
   },
 ];
 
-// Mock products data - in a real app, this would come from a shared service or state
+// Mock products data 
 const mockProducts: Product[] = [
   { id: 'prod_1', name: '6ft Cedar Picket', category: 'Fencing', unit: 'piece', price: 3.50, cost: 2.00, markupPercentage: 75, description: 'Standard cedar fence picket' },
   { id: 'prod_2', name: '4x4x8 Pressure Treated Post', category: 'Posts', unit: 'piece', price: 12.00, cost: 8.00, markupPercentage: 50, description: 'Ground contact rated post' },
@@ -94,6 +129,7 @@ const mockProducts: Product[] = [
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>(initialMockEstimates);
+  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers); // Manage customers list
   const [selectedEstimateForEmail, setSelectedEstimateForEmail] = useState<Estimate | null>(null);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
@@ -118,7 +154,6 @@ export default function EstimatesPage() {
         return updatedEstimates;
       } else {
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added.` });
-        // Ensure new estimate has a unique ID if not provided (should be handled in dialog)
         return [...prevEstimates, { ...estimateToSave, id: estimateToSave.id || crypto.randomUUID() }];
       }
     });
@@ -142,19 +177,23 @@ export default function EstimatesPage() {
       const lineItemsDescription = estimate.lineItems.map(item => 
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
+      
+      const customer = customers.find(c => c.id === estimate.customerId);
+      const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
+      const customerCompanyName = customer?.companyName;
 
       const estimateContent = `
         Estimate Number: ${estimate.estimateNumber}
         Date: ${new Date(estimate.date).toLocaleDateString()}
-        Customer: ${estimate.customerName || 'Valued Customer'}
+        Customer: ${customerDisplayName}
         Total: $${estimate.total.toFixed(2)}
         Items:
         ${lineItemsDescription || 'Details to be confirmed.'}
       `;
 
       const result = await estimateEmailDraft({
-        customerName: estimate.customerName || 'Valued Customer',
-        companyName: estimate.customerName && estimate.customerName.includes(' ') ? undefined : estimate.customerName, // Basic company name guess
+        customerName: customerDisplayName,
+        companyName: customerCompanyName,
         estimateContent: estimateContent,
       });
 
@@ -199,6 +238,7 @@ export default function EstimatesPage() {
           }
           onSave={handleSaveEstimate}
           products={mockProducts}
+          customers={customers}
         />
       </PageHeader>
 
@@ -244,6 +284,7 @@ export default function EstimatesPage() {
                           }
                           onSave={handleSaveEstimate}
                           products={mockProducts}
+                          customers={customers}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
