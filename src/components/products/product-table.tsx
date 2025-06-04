@@ -98,10 +98,10 @@ export function ProductTable({
     <>
       <Accordion type="multiple" defaultValue={defaultOpenValues} className="w-full space-y-2">
         {Array.from(groupedProducts.entries()).map(([category, productsInCategory]) => (
-          <AccordionItem value={category} key={category} className="border rounded-lg shadow-sm overflow-hidden">
+          <AccordionItem value={category} key={category} className="border rounded-lg shadow-sm overflow-hidden bg-card">
             <AccordionTrigger className="px-6 py-4 hover:bg-muted/50 data-[state=open]:border-b">
               <div className="flex items-center justify-between w-full">
-                <span className="font-semibold text-lg">{category}</span>
+                <span className="font-semibold text-lg text-card-foreground">{category}</span>
                 <Badge variant="secondary" className="ml-2">{productsInCategory.length} product{productsInCategory.length === 1 ? '' : 's'}</Badge>
               </div>
             </AccordionTrigger>
@@ -111,22 +111,22 @@ export function ProductTable({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead className="text-right">Cost</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Markup</TableHead>
-                        <TableHead className="w-[80px] text-center">Actions</TableHead>
+                        <TableHead className="text-card-foreground/80">Name</TableHead>
+                        <TableHead className="text-card-foreground/80">Unit</TableHead>
+                        <TableHead className="text-right text-card-foreground/80">Cost</TableHead>
+                        <TableHead className="text-right text-card-foreground/80">Price</TableHead>
+                        <TableHead className="text-right text-card-foreground/80">Markup</TableHead>
+                        <TableHead className="w-[80px] text-center text-card-foreground/80">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {productsInCategory.map((product) => (
-                        <TableRow key={product.id}>
-                          <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>{product.unit}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
-                          <TableCell className="text-right">
+                        <TableRow key={product.id} className="hover:bg-muted/30">
+                          <TableCell className="font-medium text-card-foreground">{product.name}</TableCell>
+                          <TableCell className="text-card-foreground/90">{product.unit}</TableCell>
+                          <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.cost)}</TableCell>
+                          <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.price)}</TableCell>
+                          <TableCell className="text-right text-card-foreground/90">
                             {typeof product.markupPercentage === 'number' && !isNaN(product.markupPercentage)
                               ? `${product.markupPercentage.toFixed(2)}%`
                               : 'N/A'}
@@ -134,8 +134,8 @@ export function ProductTable({
                           <TableCell className="text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <Icon name="MoreHorizontal" className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-accent/50">
+                                  <Icon name="MoreHorizontal" className="h-4 w-4 text-card-foreground/70" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
@@ -204,3 +204,6 @@ export function ProductTable({
     </>
   );
 }
+
+
+    

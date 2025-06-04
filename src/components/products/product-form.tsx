@@ -62,7 +62,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     },
   });
 
-  const { watch, setValue, control, handleSubmit: formHandleSubmit } = form;
+  const { watch, setValue, control, handleSubmit: formHandleSubmit, trigger, formState: { errors } } = form;
   const cost = watch('cost');
   const price = watch('price');
   const markupPercentage = watch('markupPercentage');
@@ -70,20 +70,29 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
 
   const [lastEditedField, setLastEditedField] = React.useState<'price' | 'markup' | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(currentCategoryValue || "");
+  const [inputValue, setInputValue] = useState(currentCategoryValue || ""); // For the CommandInput
 
 
   useEffect(() => {
+    // Initialize inputValue when the form loads or productCategories change
     if (product?.category) {
       setInputValue(product.category);
-    } else if (productCategories.length > 0 && !product) {
-       setValue('category', productCategories[0]);
-       setInputValue(productCategories[0]);
+    } else if (!product && productCategories.length > 0 && !currentCategoryValue) {
+      // For new product, if no category is set yet, default to first available, and sync inputValue
+      setValue('category', productCategories[0], { shouldValidate: true });
+      setInputValue(productCategories[0]);
+    } else if (currentCategoryValue) {
+      setInputValue(currentCategoryValue);
+    } else {
+      setInputValue(""); // Fallback for empty categories and no current value
     }
-  }, [product, productCategories, setValue]);
+  }, [product, productCategories, setValue, currentCategoryValue]);
   
+  // Sync inputValue with form's category value if it changes externally
   useEffect(() => {
-    setInputValue(currentCategoryValue);
+    if (currentCategoryValue !== inputValue) {
+      setInputValue(currentCategoryValue);
+    }
   }, [currentCategoryValue]);
 
 
@@ -98,33 +107,40 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     if (lastEditedField === 'price' && cost > 0 && price >= 0) {
       const calculatedMarkup = cost > 0 ? ((price / cost) - 1) * 100 : 0;
       setValue('markupPercentage', parseFloat(calculatedMarkup.toFixed(2)), { shouldValidate: true });
+    } else if (cost === 0 && price >= 0) { // Handle case where cost is 0
+      setValue('markupPercentage', 0, { shouldValidate: true });
     }
   }, [cost, price, setValue, lastEditedField]);
 
-  const processSubmit = (data: ProductFormData) => {
-    // If user typed a new category directly in combobox input that wasn't formally selected
-    // ensure it's added.
-    const finalCategory = data.category.trim();
-    if (finalCategory && !productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase())) {
+  const processAndSubmit = (data: ProductFormData) => {
+    const finalCategory = inputValue.trim(); // Use inputValue which reflects user's direct input
+    
+    if (!finalCategory) {
+      // This should ideally be caught by Zod, but as a safeguard
+      form.setError("category", { type: "manual", message: "Category cannot be empty." });
+      return;
+    }
+    
+    // If the category from input isn't in the main list, add it.
+    if (!productCategories.find(pc => pc.toLowerCase() === finalCategory.toLowerCase())) {
       onAddNewCategory(finalCategory);
     }
-    onSubmit(data);
+    // Ensure the form data uses this potentially new category
+    const dataToSubmit = { ...data, category: finalCategory };
+    onSubmit(dataToSubmit);
   };
   
-  const handleCategorySelect = (selectedCategory: string) => {
-    setValue("category", selectedCategory, { shouldValidate: true });
-    setInputValue(selectedCategory);
+  const handleCategorySelect = (selectedCategoryValue: string) => {
+    setValue("category", selectedCategoryValue, { shouldValidate: true });
+    setInputValue(selectedCategoryValue); // Sync inputValue
     setComboboxOpen(false);
-    // Check if this newly selected/typed category is actually new
-    if (!productCategories.find(pc => pc.toLowerCase() === selectedCategory.toLowerCase())) {
-      onAddNewCategory(selectedCategory); // Add it to the main list
-    }
+    trigger("category"); // Manually trigger validation for category
   };
 
 
   return (
     <Form {...form}>
-      <form onSubmit={formHandleSubmit(processSubmit)} className="space-y-6">
+      <form onSubmit={formHandleSubmit(processAndSubmit)} className="space-y-6">
         <FormField
           control={control}
           name="name"
@@ -150,41 +166,40 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                       variant="outline"
                       role="combobox"
                       aria-expanded={comboboxOpen}
-                      className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                      className={cn("w-full justify-between", !inputValue && "text-muted-foreground", errors.category && "border-destructive")}
                     >
-                      {field.value
-                        ? productCategories.find(cat => cat.toLowerCase() === field.value.toLowerCase()) || field.value
-                        : "Select or type category..."}
+                      {inputValue || "Select or type category..."}
                       <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </FormControl>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command shouldFilter={false}> {/* Custom filtering below */}
+                  <Command shouldFilter={false}>
                     <CommandInput 
                       placeholder="Search or add category..."
                       value={inputValue}
                       onValueChange={(search) => {
                         setInputValue(search);
-                        // If typing directly, update form value as well
-                        // This allows submitting typed value even if not in list yet
-                        setValue("category", search, {shouldValidate: true});
+                        // Update form value in real-time for validation or if user submits by pressing Enter from input
+                        setValue("category", search, { shouldValidate: true }); 
                       }}
                     />
-                    <CommandEmpty
-                      onMouseDown={(e) => { // Use onMouseDown to prevent Popover from closing due to blur
-                        e.preventDefault();
-                        const newCat = inputValue.trim();
-                        if (newCat) {
-                         handleCategorySelect(newCat);
-                        }
-                      }}
-                      className="cursor-pointer p-2 text-sm"
-                    >
-                      Add "{inputValue}"
-                    </CommandEmpty>
-                    <CommandList>
-                      <CommandGroup>
+                     <CommandList>
+                      <CommandEmpty
+                        onMouseDown={(e) => { 
+                          e.preventDefault();
+                          const newCat = inputValue.trim();
+                          if (newCat) {
+                            handleCategorySelect(newCat);
+                          } else {
+                             // If empty, maybe set error or do nothing
+                          }
+                        }}
+                        className="cursor-pointer p-2 text-sm hover:bg-accent"
+                      >
+                        {inputValue.trim() ? `Add "${inputValue.trim()}"` : "Type to add new category"}
+                      </CommandEmpty>
+                     
                         {productCategories
                           .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
                           .map((cat) => (
@@ -233,7 +248,13 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Cost</FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} onChange={(e) => { field.onChange(e); setLastEditedField(null); }} /></FormControl>
+                <FormControl><Input type="number" step="0.01" {...field} 
+                  onChange={(e) => { 
+                    field.onChange(parseFloat(e.target.value) || 0); 
+                    setLastEditedField(null); // Reset so it doesn't immediately trigger price/markup calc
+                  }} 
+                  onBlur={()=> trigger(["price", "markupPercentage"])} // Trigger dependent fields on blur
+                /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -250,7 +271,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                     step="0.01"
                     {...field}
                     onChange={(e) => {
-                      field.onChange(e);
+                      field.onChange(parseFloat(e.target.value) || 0);
                       setLastEditedField('markup');
                     }}
                   />
@@ -271,7 +292,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
                     step="0.01"
                     {...field}
                     onChange={(e) => {
-                      field.onChange(e);
+                      field.onChange(parseFloat(e.target.value) || 0);
                       setLastEditedField('price');
                     }}
                   />
@@ -286,7 +307,7 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <FormLabel>Description (Optional)</FormLabel>
               <FormControl><Textarea placeholder="Optional product description" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
@@ -300,3 +321,6 @@ export function ProductForm({ product, onSubmit, onClose, productCategories, onA
     </Form>
   );
 }
+
+
+    

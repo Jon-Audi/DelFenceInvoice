@@ -352,13 +352,13 @@ export default function ProductsPage() {
         groups.set(category, []); // Initialize all known categories, even if empty
     });
     products.forEach(product => {
-      const category = product.category || 'Uncategorized';
+      const category = product.category || 'Uncategorized'; // Fallback for products missing a category
       if (!groups.has(category)) {
-        groups.set(category, []);
+        groups.set(category, []); // Ensure the category exists if it wasn't in productCategories initially
       }
       groups.get(category)!.push(product);
     });
-    // Sort categories that have products first, then by category name
+    // Sort categories: those with products first, then alphabetically
     return new Map([...groups.entries()].sort(([catA, prodsA], [catB, prodsB]) => {
         if (prodsA.length > 0 && prodsB.length === 0) return -1;
         if (prodsA.length === 0 && prodsB.length > 0) return 1;
@@ -419,4 +419,6 @@ export default function ProductsPage() {
     </>
   );
 }
+    
+
     
