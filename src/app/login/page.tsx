@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, FormEvent } from 'react';
+import Link from 'next/link'; // Import Link
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,11 +79,12 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" /> : 'Sign In'}
             </Button>
-            {/* Add link to signup page later if needed
             <p className="text-xs text-center text-muted-foreground">
-              Don&apos;t have an account? <a href="#" className="underline hover:text-primary">Sign up</a>
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="underline hover:text-primary">
+                Sign up
+              </Link>
             </p>
-            */}
           </CardFooter>
         </form>
       </Card>
