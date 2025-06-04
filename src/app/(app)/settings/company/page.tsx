@@ -8,13 +8,11 @@ import * as z from 'zod';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label'; // Not directly used if FormLabel is used
-// import { Textarea } from '@/components/ui/textarea'; // Not directly used if FormField is used
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-// import { db } from '@/lib/firebase'; // Temporarily commented out
-// import { doc, getDoc, setDoc } from 'firebase/firestore'; // Temporarily commented out
+import { db } from '@/lib/firebase'; // Re-enabled
+import { doc, getDoc, setDoc } from 'firebase/firestore'; // Re-enabled
 import type { CompanySettings } from '@/types';
 import { Icon } from '@/components/icons';
 
@@ -34,16 +32,16 @@ const companySettingsSchema = z.object({
 
 type CompanySettingsFormData = z.infer<typeof companySettingsSchema>;
 
-// const COMPANY_SETTINGS_DOC_ID = "main"; // Temporarily commented out
+const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function CompanySettingsPage() {
-  const [isLoading, setIsLoading] = useState(false); // Set to false initially as we're not loading
+  const [isLoading, setIsLoading] = useState(true); // Set to true initially for data fetching
   const { toast } = useToast();
 
   const form = useForm<CompanySettingsFormData>({
     resolver: zodResolver(companySettingsSchema),
-    defaultValues: {
-      companyName: 'Test Company Name', // Provide some defaults for visual confirmation
+    defaultValues: { // Sensible defaults if no data is found
+      companyName: '',
       addressLine1: '',
       addressLine2: '',
       city: '',
@@ -57,21 +55,19 @@ export default function CompanySettingsPage() {
     },
   });
 
-  /*
-  // Temporarily comment out data fetching
   useEffect(() => {
     const fetchCompanySettings = async () => {
       setIsLoading(true);
       try {
-        // const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-        // const docSnap = await getDoc(docRef);
-        // if (docSnap.exists()) {
-        //   const data = docSnap.data() as CompanySettings;
-        //   form.reset(data);
-        // } else {
-        //   console.log("No company settings document found, using defaults.");
-        // }
-        console.log("Simulating fetchCompanySettings - data fetching disabled.");
+        const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as CompanySettings;
+          form.reset(data); // Populate form with fetched data
+        } else {
+          console.log("No company settings document found, using defaults.");
+          // Form already has defaults, so no action needed here
+        }
       } catch (error) {
         console.error("Error fetching company settings:", error);
         toast({
@@ -83,56 +79,48 @@ export default function CompanySettingsPage() {
         setIsLoading(false);
       }
     };
-    // fetchCompanySettings(); // Don't call it for now
+    fetchCompanySettings();
   }, [form, toast]);
-  */
 
   const onSubmit = async (data: CompanySettingsFormData) => {
     setIsLoading(true);
-    console.log("Simulating save of company settings:", data);
-    toast({
-      title: "Settings Save (Simulated)",
-      description: "Company information save is currently disabled for diagnostics.",
-    });
-    // try {
-    //   const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-    //   await setDoc(docRef, data, { merge: true });
-    //   toast({
-    //     title: "Settings Saved",
-    //     description: "Company information has been updated successfully.",
-    //   });
-    // } catch (error) {
-    //   console.error("Error saving company settings:", error);
-    //   toast({
-    //     title: "Error Saving Settings",
-    //     description: "Could not save company settings. Please try again.",
-    //     variant: "destructive",
-    //   });
-    // } finally {
-    //   setIsLoading(false);
-    // }
-    setIsLoading(false); // Simulate finishing
+    try {
+      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+      await setDoc(docRef, data, { merge: true }); // Use merge:true to avoid overwriting fields not in the form, though schema is comprehensive
+      toast({
+        title: "Settings Saved",
+        description: "Company information has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error saving company settings:", error);
+      toast({
+        title: "Error Saving Settings",
+        description: "Could not save company settings. Please ensure you have the necessary permissions.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Removed initial loading check to ensure page attempts to render
-  // if (isLoading && form.formState.isLoading) { 
-  //   return (
-  //     <PageHeader title="Company Information" description="Manage your company's details.">
-  //        <div className="flex items-center justify-center h-64">
-  //          <Icon name="Loader2" className="h-10 w-10 animate-spin text-primary" />
-  //          <p className="ml-4 text-muted-foreground">Loading company settings...</p>
-  //        </div>
-  //     </PageHeader>
-  //   );
-  // }
+  if (isLoading && !form.formState.isDirty) { // Show loading state only on initial load
+    return (
+      <PageHeader title="Company Information" description="Manage your company's details.">
+         <div className="flex items-center justify-center h-64">
+           <Icon name="Loader2" className="h-10 w-10 animate-spin text-primary" />
+           <p className="ml-4 text-muted-foreground">Loading company settings...</p>
+         </div>
+      </PageHeader>
+    );
+  }
 
   return (
     <>
-      <PageHeader title="Company Information (Diagnostic Mode)" description="Manage your company's details. Data fetching/saving is temporarily disabled." />
+      <PageHeader title="Company Information" description="Manage your company's details." />
       <Card>
         <CardHeader>
           <CardTitle>Company Details</CardTitle>
-          <CardDescription>This information will be used throughout the application. (Currently in read-only diagnostic mode)</CardDescription>
+          <CardDescription>This information will be used throughout the application.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -185,7 +173,7 @@ export default function CompanySettingsPage() {
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={isLoading || form.formState.isSubmitting}>
                   { (isLoading || form.formState.isSubmitting) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Settings (Simulated)
+                  Save Settings
                 </Button>
               </div>
             </form>
