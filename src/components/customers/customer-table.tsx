@@ -29,7 +29,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import React from 'react';
 
@@ -82,14 +81,12 @@ export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProp
                         }
                         onSave={onSave}
                       />
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          onSelect={(e) => { e.preventDefault(); setCustomerToDelete(customer); }}
-                        >
-                          <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        onSelect={(e) => { e.preventDefault(); setCustomerToDelete(customer); }}
+                      >
+                        <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
