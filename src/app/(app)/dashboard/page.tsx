@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import type { IconName } from '@/components/icons';
-import { MOCK_PRODUCTS, MOCK_CUSTOMERS, MOCK_ESTIMATES, MOCK_ORDERS } from '@/lib/mock-data';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, limit, getDocs, where,getCountFromServer } from 'firebase/firestore';
+import type { Estimate, Order, Product, Customer } from '@/types';
+import { Badge } from '@/components/ui/badge';
 
 interface DashboardCardProps {
   title: string;
@@ -32,32 +35,115 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, iconName, value, d
   );
 };
 
-export default function DashboardPage() {
-  const totalProducts = MOCK_PRODUCTS.length;
-  const activeCustomers = MOCK_CUSTOMERS.length; // Assuming all mock customers are active for now
+interface ActivityItem {
+  id: string;
+  type: 'Estimate' | 'Order';
+  number: string;
+  customerName?: string;
+  date: Date;
+  total: number;
+  status: string;
+}
 
-  const openEstimates = MOCK_ESTIMATES.filter(
-    (estimate) => estimate.status === 'Draft' || estimate.status === 'Sent'
-  );
-  const openEstimatesCount = openEstimates.length;
-  const openEstimatesTotalValue = openEstimates.reduce((sum, est) => sum + est.total, 0);
+function formatDashboardDate(date: Date): string {
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
-  const pendingOrders = MOCK_ORDERS.filter(
-    (order) => order.status === 'Ordered' || order.status === 'Ready for pick up'
-  );
-  const pendingOrdersCount = pendingOrders.length;
+export default async function DashboardPage() {
+  let totalProducts = 0;
+  let activeCustomers = 0;
+  let openEstimatesCount = 0;
+  let openEstimatesTotalValue = 0;
+  let pendingOrdersCount = 0;
+  let recentActivity: ActivityItem[] = [];
+
+  try {
+    // Fetch Product Count
+    const productsSnap = await getCountFromServer(collection(db, 'products'));
+    totalProducts = productsSnap.data().count;
+
+    // Fetch Active Customer Count (assuming all customers in DB are active for now)
+    const customersSnap = await getCountFromServer(collection(db, 'customers'));
+    activeCustomers = customersSnap.data().count;
+
+    // Fetch Open Estimates
+    const openEstimatesQuery = query(
+      collection(db, 'estimates'),
+      where('status', 'in', ['Draft', 'Sent'])
+    );
+    const openEstimatesSnapshot = await getDocs(openEstimatesQuery);
+    openEstimatesCount = openEstimatesSnapshot.size;
+    openEstimatesSnapshot.forEach(doc => {
+      openEstimatesTotalValue += (doc.data() as Estimate).total;
+    });
+
+    // Fetch Pending Orders
+    const pendingOrdersQuery = query(
+      collection(db, 'orders'),
+      where('status', 'in', ['Ordered', 'Ready for pick up'])
+    );
+    const pendingOrdersSnapshot = await getDocs(pendingOrdersQuery);
+    pendingOrdersCount = pendingOrdersSnapshot.size;
+
+    // Fetch Recent Activity
+    const recentEstimatesQuery = query(collection(db, 'estimates'), orderBy('date', 'desc'), limit(3));
+    const recentOrdersQuery = query(collection(db, 'orders'), orderBy('date', 'desc'), limit(3));
+
+    const [recentEstimatesSnapshot, recentOrdersSnapshot] = await Promise.all([
+      getDocs(recentEstimatesQuery),
+      getDocs(recentOrdersQuery)
+    ]);
+
+    const fetchedActivities: ActivityItem[] = [];
+    recentEstimatesSnapshot.forEach(doc => {
+      const data = doc.data() as Estimate;
+      fetchedActivities.push({
+        id: doc.id,
+        type: 'Estimate',
+        number: data.estimateNumber,
+        customerName: data.customerName,
+        date: new Date(data.date),
+        total: data.total,
+        status: data.status
+      });
+    });
+    recentOrdersSnapshot.forEach(doc => {
+      const data = doc.data() as Order;
+      fetchedActivities.push({
+        id: doc.id,
+        type: 'Order',
+        number: data.orderNumber,
+        customerName: data.customerName,
+        date: new Date(data.date),
+        total: data.total,
+        status: data.status
+      });
+    });
+
+    recentActivity = fetchedActivities
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 5);
+
+  } catch (error) {
+    console.error("Error fetching dashboard data:", error);
+    // Data will remain at initial 0 values, page will render with "Error loading data" message
+  }
 
   return (
     <>
       <PageHeader title="Dashboard" description="Welcome to Delaware Fence Solutions.">
         <div className="flex gap-2">
-          <Link href="/orders" passHref>
+          <Link href="/orders/new" passHref> {/* Assuming /orders/new for creating a new order, adjust if needed */}
             <Button>
               <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
               New Order
             </Button>
           </Link>
-          <Link href="/estimates" passHref>
+          <Link href="/estimates/new" passHref> {/* Assuming /estimates/new for creating, adjust if needed */}
             <Button>
               <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
               New Estimate
@@ -70,14 +156,14 @@ export default function DashboardPage() {
           title="Total Products"
           iconName="Package"
           value={String(totalProducts)}
-          description="Total products in catalog"
+          description="Products in catalog"
           href="/products"
         />
         <DashboardCard
           title="Active Customers"
           iconName="Users"
           value={String(activeCustomers)}
-          description="Total customers registered"
+          description="Registered customers"
           href="/customers"
         />
         <DashboardCard
@@ -99,11 +185,34 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Overview of recent system events.</CardDescription>
+            <CardDescription>Overview of the latest estimates and orders.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">No recent activity to display.</p>
-            {/* Placeholder for recent activity feed */}
+            {recentActivity.length > 0 ? (
+              <ul className="space-y-4">
+                {recentActivity.map((item) => (
+                  <li key={`${item.type}-${item.id}`} className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50">
+                    <div className="flex items-center gap-3">
+                       <Icon name={item.type === 'Estimate' ? 'FileText' : 'ShoppingCart'} className="h-5 w-5 text-primary" />
+                       <div>
+                        <Link href={item.type === 'Estimate' ? `/estimates#${item.id}` : `/orders#${item.id}`} className="font-medium hover:underline">
+                          {item.type} {item.number}
+                        </Link>
+                         <p className="text-xs text-muted-foreground">
+                           {item.customerName || 'N/A Customer'} - ${item.total.toFixed(2)}
+                         </p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                        <Badge variant="outline" className="mb-1">{item.status}</Badge>
+                        <p className="text-xs text-muted-foreground">{formatDashboardDate(item.date)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No recent activity to display or error loading data.</p>
+            )}
           </CardContent>
         </Card>
       </div>
