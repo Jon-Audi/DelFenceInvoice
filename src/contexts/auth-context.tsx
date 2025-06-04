@@ -11,11 +11,11 @@ import {
   type User as FirebaseUser
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth as firebaseAuthInstance, db } from '@/lib/firebase'; // Renamed imported auth to firebaseAuthInstance
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
-import { ROLE_PERMISSIONS } from '@/lib/constants'; // Ensure this is imported
-import type { User } from '@/types'; // For consistency, though not directly used for the Firestore object literal here
+import { ROLE_PERMISSIONS } from '@/lib/constants';
+import type { User } from '@/types';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -36,7 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    if (!firebaseAuthInstance) {
+      console.error("[AuthContext] Firebase Auth instance is not available. Firebase might not have initialized correctly. Check server logs and .env file.");
+      setLoading(false);
+      setError("Firebase Auth service is not available. Please check configuration.");
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(firebaseAuthInstance, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
     });
@@ -46,8 +52,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, pass: string) => {
     setLoading(true);
     setError(null);
+    if (!firebaseAuthInstance) {
+      const errMsg = "Firebase Auth service is not available for login. Check configuration.";
+      setError(errMsg);
+      toast({ title: "Login Failed", description: errMsg, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      await signInWithEmailAndPassword(firebaseAuthInstance, email, pass);
       toast({ title: "Logged In", description: "Successfully logged in." });
       router.push('/dashboard');
     } catch (e: any) {
@@ -62,8 +75,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setLoading(true);
     setError(null);
+    if (!firebaseAuthInstance) {
+      const errMsg = "Firebase Auth service is not available for logout. Check configuration.";
+      setError(errMsg);
+      toast({ title: "Logout Failed", description: errMsg, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     try {
-      await firebaseSignOut(auth);
+      await firebaseSignOut(firebaseAuthInstance);
       toast({ title: "Logged Out", description: "Successfully logged out." });
       router.push('/login');
     } catch (e: any) {
@@ -78,20 +98,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, pass: string, firstName: string, lastName: string) => {
     setLoading(true);
     setError(null);
+    if (!firebaseAuthInstance) {
+      const errMsg = "Firebase Auth service is not available for signup. Check configuration.";
+      setError(errMsg);
+      toast({ title: "Signup Failed", description: errMsg, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      const userCredential = await createUserWithEmailAndPassword(firebaseAuthInstance, email, pass);
       const newUser = userCredential.user;
 
       if (newUser) {
-        // Update Firebase Auth profile
         try {
           await updateProfile(newUser, { displayName: `${firstName} ${lastName}` });
         } catch (profileError: any) {
           console.warn("Failed to update Firebase Auth profile displayName:", profileError);
-          // Non-critical, so just warn and continue.
         }
 
-        // Store additional user info in Firestore
+        if (!db) {
+            const firestoreErrMsg = "Firestore service is not available. Cannot save user profile.";
+            console.error("[AuthContext] " + firestoreErrMsg);
+            // Depending on desired behavior, you might want to sign out the newly created auth user
+            // or just inform them that their profile couldn't be saved.
+            // For now, we'll set an error and stop, but the auth user still exists.
+            setError(firestoreErrMsg);
+            toast({ title: "Signup Incomplete", description: firestoreErrMsg, variant: "destructive" });
+            setLoading(false);
+            return;
+        }
+
         try {
           const userDocRef = doc(db, 'users', newUser.uid);
           await setDoc(userDocRef, {
@@ -99,27 +135,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: newUser.email,
             firstName: firstName,
             lastName: lastName,
-            role: 'User', // Default role
+            role: 'User', 
             isActive: true,
-            permissions: ROLE_PERMISSIONS['User'], // Store default permissions
-            // lastLogin will be updated by specific login events or backend logic
+            permissions: ROLE_PERMISSIONS['User'], 
           });
         } catch (firestoreError: any) {
           console.error("Error creating user document in Firestore after Auth user creation:", firestoreError);
-          // This is a critical failure if the user profile can't be saved.
-          // Consider how to handle this - e.g., inform the user, attempt to delete the auth user (complex).
-          // For now, we'll let the signup fail overall.
           throw new Error(`User authenticated, but failed to save profile to database. ${firestoreError.message}`);
         }
         
         toast({ title: "Account Created", description: "Successfully signed up and logged in." });
         router.push('/dashboard');
       } else {
-        // This case should ideally not happen if createUserWithEmailAndPassword succeeds.
         throw new Error("User object not found after account creation.");
       }
     } catch (e: any) {
-      setError(e.message); // This will catch errors from createUserWithEmailAndPassword or the re-thrown error from Firestore setDoc failure
+      setError(e.message); 
       toast({ title: "Signup Failed", description: e.message, variant: "destructive" });
       console.error("Signup process error:", e);
     } finally {
