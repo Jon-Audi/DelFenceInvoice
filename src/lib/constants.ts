@@ -38,6 +38,7 @@ export const AVAILABLE_PERMISSIONS: PermissionKey[] = [
   'manage_invoices',
   'view_invoices',
   'access_settings',
+  'manage_company_settings', // Added permission
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
@@ -48,5 +49,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_customers',
     'view_estimates',
     'view_invoices',
+    // Users typically wouldn't manage company settings or other users
   ],
 };

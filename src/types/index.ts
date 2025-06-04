@@ -18,7 +18,8 @@ export type PermissionKey =
   | 'view_estimates'
   | 'manage_invoices'
   | 'view_invoices'
-  | 'access_settings';
+  | 'access_settings'
+  | 'manage_company_settings'; // Added permission for company settings
 
 export interface Product {
   id: string;
@@ -123,4 +124,21 @@ export interface User {
   isActive: boolean;
   lastLogin?: string; // ISO date string
   permissions: PermissionKey[];
+}
+
+export interface CompanySettings {
+  id?: string; // Should typically be a fixed ID like 'main'
+  companyName: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logoUrl?: string; // For future use
+  taxId?: string; // For invoices/estimates if needed
+  // Add any other relevant company details here
 }

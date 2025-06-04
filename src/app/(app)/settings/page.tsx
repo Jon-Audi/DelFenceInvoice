@@ -27,11 +27,29 @@ export default function SettingsPage() {
             </Link>
           </CardContent>
         </Card>
-        {/* Placeholder for other settings cards */}
+        
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Icon name="Paintbrush" className="mr-2 h-5 w-5" /> {/* Assuming Paintbrush icon exists for theme */}
+               <Icon name="FileText" className="mr-2 h-5 w-5" />
+              Company Information
+            </CardTitle>
+            <CardDescription>Manage your company details for estimates and invoices.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/settings/company" passHref>
+              <Button variant="outline">
+                Company Settings
+                <Icon name="ChevronRight" className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Icon name="Paintbrush" className="mr-2 h-5 w-5" />
               Appearance
             </CardTitle>
             <CardDescription>Customize the look and feel of the application.</CardDescription>
@@ -39,18 +57,6 @@ export default function SettingsPage() {
           <CardContent>
             <p className="text-sm text-muted-foreground">Theme options coming soon.</p>
             {/* Theme toggle can be here */}
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-               <Icon name="FileText" className="mr-2 h-5 w-5" /> {/* Using FileText for general company info */}
-              Company Information
-            </CardTitle>
-            <CardDescription>Manage your company details for invoices and estimates.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Company settings coming soon.</p>
           </CardContent>
         </Card>
       </div>
