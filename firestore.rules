@@ -3,61 +3,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Specific rules for companySettings
-    // Allows any authenticated user to read and write.
-    // For production, you would restrict write access, e.g., to users with an 'Admin' role.
-    match /companySettings/{settingId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-      // Example for Admin-only write access (for future reference):
-      // allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-    }
-
-    // Specific rules for user profiles
-    match /users/{userId} {
-      allow read: if request.auth != null; // Any authenticated user can read user profiles
-      allow create: if request.auth != null; // Allows user signup and admin creation of user docs
-      allow update: if request.auth != null && (
-                    request.auth.uid == userId ||
-                    (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin')
-                  ); // User can update their own profile, or an Admin can update any
-      allow delete: if request.auth != null &&
-                     (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'); // Only Admins can delete
-    }
-
-    // Development rules for products - authenticated users can do anything
-    match /products/{productId} {
-      allow read, write, create, delete: if request.auth != null;
-    }
-
-    // Development rules for customers - authenticated users can do anything
-    match /customers/{customerId} {
-      allow read, write, create, delete: if request.auth != null;
-    }
-
-    // Development rules for estimates - authenticated users can do anything
-    match /estimates/{estimateId} {
-      allow read, write, create, delete: if request.auth != null;
-    }
-
-    // Development rules for orders - authenticated users can do anything
-    match /orders/{orderId} {
-      allow read, write, create, delete: if request.auth != null;
-    }
-
-    // Development rules for invoices - authenticated users can do anything
-    match /invoices/{invoiceId} {
-      allow read, write, create, delete: if request.auth != null;
-    }
-
-    // Generic fallback for any other paths (use with caution in production)
-    // This allows authenticated users to read/write to any other unspecified collections.
-    // For a production app, you would typically remove this or make it more restrictive.
+    // Allow read and write access to all documents for development
+    // WARNING: This is insecure for production.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }
