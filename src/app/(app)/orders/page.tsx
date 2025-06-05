@@ -222,6 +222,7 @@ export default function OrdersPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setOrderForPrinting(order);
+      // Printing is now triggered by useEffect
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -499,7 +500,7 @@ export default function OrdersPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && (
+       {isLoadingCompanySettings && orderForPrinting && ( // Show loader only when actually trying to print
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable order...</p>
