@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -30,7 +31,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
-import { CustomerDialog } from '@/components/customers/customer-dialog'; // Import CustomerDialog
+import { CustomerDialog } from '@/components/customers/customer-dialog';
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
@@ -39,13 +40,13 @@ const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
-  unitPrice: z.number().optional(), // Not directly edited, but useful for schema context
+  unitPrice: z.number().optional(),
 });
 
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), 
+  customerName: z.string().optional(),
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -62,7 +63,7 @@ interface EstimateFormProps {
   products: Product[];
   customers: Customer[];
   productCategories: string[];
-  onSaveCustomer: (customerToSave: Customer) => Promise<string | void>; // Prop for saving a new customer
+  onSaveCustomer: (customerToSave: Customer) => Promise<string | void>;
 }
 
 export function EstimateForm({ estimate, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
@@ -72,7 +73,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
   useEffect(() => {
     setCustomers(initialCustomers);
   }, [initialCustomers]);
-  
+
   const defaultFormValues = useMemo((): EstimateFormData => {
     return estimate ? {
       ...estimate,
@@ -80,7 +81,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
       customerId: estimate.customerId || '',
       customerName: estimate.customerName || '',
-      lineItems: estimate.lineItems.map(li => ({ 
+      lineItems: estimate.lineItems.map(li => ({
         id: li.id,
         productId: li.productId,
         quantity: li.quantity,
@@ -109,38 +110,72 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
   });
 
   const watchedLineItems = form.watch('lineItems');
-  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
+    defaultFormValues.lineItems.map(item => {
+        if (item.productId) {
+            const product = products.find(p => p.id === item.productId);
+            return product?.category;
+        }
+        return undefined;
+    })
+  );
+
 
   useEffect(() => {
-    const initialCategories = watchedLineItems.map(item => {
+    // Initialize or synchronize category filters based on currently selected products in line items
+    const newCalculatedFilters = watchedLineItems.map(item => {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
         return product?.category;
       }
       return undefined;
     });
-    if (JSON.stringify(initialCategories) !== JSON.stringify(lineItemCategoryFilters)) {
-      setLineItemCategoryFilters(initialCategories);
+
+    let needsUpdate = false;
+    if (newCalculatedFilters.length !== lineItemCategoryFilters.length) {
+      needsUpdate = true;
+    } else {
+      for (let i = 0; i < newCalculatedFilters.length; i++) {
+        if (newCalculatedFilters[i] !== lineItemCategoryFilters[i]) {
+          needsUpdate = true;
+          break;
+        }
+      }
     }
-  }, [watchedLineItems, products, lineItemCategoryFilters]);
+
+    if (needsUpdate) {
+      setLineItemCategoryFilters(newCalculatedFilters);
+    }
+  }, [watchedLineItems, products]); // Removed lineItemCategoryFilters from dependency array
+
 
   useEffect(() => {
     form.reset(defaultFormValues);
-  }, [defaultFormValues, form]);
+    // Also reset lineItemCategoryFilters when defaultFormValues change (e.g. new estimate or different estimate loaded)
+     setLineItemCategoryFilters(
+        defaultFormValues.lineItems.map(item => {
+            if (item.productId) {
+                const product = products.find(p => p.id === item.productId);
+                return product?.category;
+            }
+            return undefined;
+        })
+     );
+  }, [defaultFormValues, form, products]);
+
 
   const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {
     const newCustomerId = await onSaveCustomer(newCustomerData);
     if (newCustomerId && typeof newCustomerId === 'string') {
       const customerToSelect = { ...newCustomerData, id: newCustomerId };
       setCustomers(prev => [...prev, customerToSelect].sort((a,b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
-      
+
       form.setValue("customerId", newCustomerId, { shouldValidate: true });
       const displayName = newCustomerData.companyName || `${newCustomerData.firstName} ${newCustomerData.lastName}`;
       form.setValue("customerName", displayName);
       setIsNewCustomerDialogOpen(false);
     }
   };
-
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -155,7 +190,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
   const addLineItem = () => {
     append({ productId: '', quantity: 1, unitPrice: 0 });
-    setLineItemCategoryFilters(prev => [...prev, undefined]); 
+    setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
   const removeLineItem = (index: number) => {
@@ -171,7 +206,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     return products;
   };
 
- const currentSubtotal = useMemo(() => {
+  const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
       const price = product ? product.price : 0;
@@ -179,7 +214,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     }, 0);
   }, [watchedLineItems, products]);
 
-  const currentTotal = currentSubtotal; 
+  const currentTotal = currentSubtotal;
 
   return (
     <Form {...form}>
@@ -187,7 +222,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         <FormField control={form.control} name="estimateNumber" render={({ field }) => (
           <FormItem><FormLabel>Estimate Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-        
+
         <FormField
           control={form.control}
           name="customerId"
@@ -219,7 +254,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                               onSelect={() => {
                                 form.setValue("customerId", customer.id, { shouldValidate: true });
                                 const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                                form.setValue("customerName", displayName); 
+                                form.setValue("customerName", displayName);
                               }}
                             >
                               <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -358,7 +393,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                                       });
                                       form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price);
                                     }
-                                    form.trigger(`lineItems.${index}.productId`); 
+                                    form.trigger(`lineItems.${index}.productId`);
                                   }}
                                 >
                                   <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
@@ -389,21 +424,21 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                       <FormControl>
                         <Input
                           type="number"
-                          ref={qtyField.ref} 
+                          ref={qtyField.ref}
                           name={qtyField.name}
                           onBlur={qtyField.onBlur}
                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === '') {
-                              qtyField.onChange(undefined); 
+                              qtyField.onChange(undefined);
                             } else {
                               const num = parseInt(val, 10);
-                              qtyField.onChange(isNaN(num) ? undefined : num); 
+                              qtyField.onChange(isNaN(num) ? undefined : num);
                             }
                           }}
                           min="1"
-                          disabled={!watchedLineItems[index]?.productId} 
+                          disabled={!watchedLineItems[index]?.productId}
                         />
                       </FormControl>
                       <FormMessage />
@@ -455,3 +490,5 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     </Form>
   );
 }
+
+    
