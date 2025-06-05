@@ -60,7 +60,9 @@ export interface LineItem {
   productId: string;
   productName: string;
   quantity: number;
-  unitPrice: number;
+  cost: number; // Cost of the product at the time of adding to document
+  unitPrice: number; // Effective unit price for this line item (can be adjusted)
+  appliedMarkupPercentage?: number; // Markup specifically applied to this line item
   total: number;
 }
 
