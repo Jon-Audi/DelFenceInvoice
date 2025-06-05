@@ -85,7 +85,7 @@ export default function InvoicesPage() {
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: undefined,
+          newPaymentNotes: '', // Ensure initialized as empty string
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -110,7 +110,7 @@ export default function InvoicesPage() {
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: undefined,
+          newPaymentNotes: '', // Ensure initialized as empty string
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -188,26 +188,58 @@ export default function InvoicesPage() {
   }, [toast]);
 
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
-    const { id, ...invoiceData } = invoiceToSave;
-    const dataToSave = {
-        ...invoiceData,
-        payments: invoiceData.payments || [],
-        amountPaid: invoiceData.amountPaid || 0,
-        balanceDue: invoiceData.balanceDue !== undefined ? invoiceData.balanceDue : (invoiceData.total - (invoiceData.amountPaid || 0)),
+    const { id, ...invoiceDataFromDialog } = invoiceToSave;
+
+    // Explicitly build the object for Firestore to avoid undefined fields
+    const dataForFirestore: Partial<Omit<Invoice, 'id'>> = {
+      invoiceNumber: invoiceDataFromDialog.invoiceNumber,
+      customerId: invoiceDataFromDialog.customerId,
+      customerName: invoiceDataFromDialog.customerName,
+      date: invoiceDataFromDialog.date, // Already stringified by dialog
+      status: invoiceDataFromDialog.status,
+      lineItems: invoiceDataFromDialog.lineItems,
+      subtotal: invoiceDataFromDialog.subtotal,
+      taxAmount: invoiceDataFromDialog.taxAmount || 0, // Default to 0
+      total: invoiceDataFromDialog.total,
+      payments: invoiceDataFromDialog.payments || [], // Ensure payments array exists
+      amountPaid: invoiceDataFromDialog.amountPaid || 0, // Default to 0
+      // balanceDue will be set below
     };
+
+    if (invoiceDataFromDialog.dueDate) {
+      dataForFirestore.dueDate = invoiceDataFromDialog.dueDate;
+    }
+    if (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') {
+      dataForFirestore.paymentTerms = invoiceDataFromDialog.paymentTerms;
+    }
+    if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
+      dataForFirestore.notes = invoiceDataFromDialog.notes;
+    }
+    
+    // Calculate balanceDue based on the potentially updated total and amountPaid
+    const currentTotal = dataForFirestore.total || 0;
+    const currentAmountPaid = dataForFirestore.amountPaid || 0;
+    dataForFirestore.balanceDue = currentTotal - currentAmountPaid;
 
     try {
       if (id && invoices.some(i => i.id === id)) {
         const invoiceRef = doc(db, 'invoices', id);
-        await setDoc(invoiceRef, dataToSave, { merge: true });
+        await setDoc(invoiceRef, dataForFirestore, { merge: true });
         toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
       } else {
-        const docRef = await addDoc(collection(db, 'invoices'), dataToSave);
+        // Ensure all required fields for a new Invoice document are present
+        const finalDataForAddDoc = {
+          ...dataForFirestore,
+          // Ensure any fields that are not optional in the Invoice type but might be in Partial here are set
+          // For example, if customerName was optional in Partial but required in Invoice (it is optional)
+        } as Invoice; // Cast if confident all required fields are present
+
+        const docRef = await addDoc(collection(db, 'invoices'), finalDataForAddDoc);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
       }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving invoice:", error);
-        toast({ title: "Error", description: "Could not save invoice to database.", variant: "destructive" });
+        toast({ title: "Error", description: `Could not save invoice to database. ${error.message}`, variant: "destructive" });
     }
 
     if (isConvertingInvoice) {
@@ -262,7 +294,6 @@ export default function InvoicesPage() {
   };
 
   const handlePrinted = () => {
-    // Reset state after printing is initiated by PrintableInvoice
     setInvoiceForPrinting(null);
     setCompanySettingsForPrinting(null);
   };
@@ -416,7 +447,6 @@ export default function InvoicesPage() {
         </Dialog>
       )}
 
-      {/* Container for the printable invoice, hidden by default */}
       <div className="print-only-container">
         {(invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
           <PrintableInvoice 
