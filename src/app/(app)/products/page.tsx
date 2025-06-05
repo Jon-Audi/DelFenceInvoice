@@ -102,8 +102,9 @@ export default function ProductsPage() {
       console.error("Error saving product:", error);
       toast({
         title: "Error Saving Product",
-        description: "Could not save product to database. Check console for details and ensure user has Admin role.",
+        description: `Could not save product. Check your Firestore '/users/${currentUser.uid}' document to ensure the 'role' field is set to 'Admin'. Details: ${(error as Error).message}`,
         variant: "destructive",
+        duration: 10000,
       });
     } finally {
       setIsLoading(false);
