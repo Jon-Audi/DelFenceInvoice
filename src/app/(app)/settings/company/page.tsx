@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { db } from '@/lib/firebase'; // Re-enabled
-import { doc, getDoc, setDoc } from 'firebase/firestore'; // Re-enabled
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { CompanySettings } from '@/types';
 import { Icon } from '@/components/icons';
 
@@ -27,6 +27,7 @@ const companySettingsSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email({ message: "Invalid email address" }).optional().or(z.literal('')),
   website: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
+  logoUrl: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')), // Added logoUrl
   taxId: z.string().optional(),
 });
 
@@ -35,12 +36,12 @@ type CompanySettingsFormData = z.infer<typeof companySettingsSchema>;
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function CompanySettingsPage() {
-  const [isLoading, setIsLoading] = useState(true); // Set to true initially for data fetching
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   const form = useForm<CompanySettingsFormData>({
     resolver: zodResolver(companySettingsSchema),
-    defaultValues: { // Sensible defaults if no data is found
+    defaultValues: {
       companyName: '',
       addressLine1: '',
       addressLine2: '',
@@ -51,6 +52,7 @@ export default function CompanySettingsPage() {
       phone: '',
       email: '',
       website: '',
+      logoUrl: '', // Default for logoUrl
       taxId: '',
     },
   });
@@ -63,10 +65,9 @@ export default function CompanySettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data() as CompanySettings;
-          form.reset(data); // Populate form with fetched data
+          form.reset(data);
         } else {
           console.log("No company settings document found, using defaults.");
-          // Form already has defaults, so no action needed here
         }
       } catch (error) {
         console.error("Error fetching company settings:", error);
@@ -86,7 +87,17 @@ export default function CompanySettingsPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-      await setDoc(docRef, data, { merge: true }); // Use merge:true to avoid overwriting fields not in the form, though schema is comprehensive
+      // Ensure empty optional URL fields are stored as null or omitted rather than empty strings if needed
+      // For this setup, Zod with .optional().or(z.literal('')) handles empty strings fine for URLs.
+      // Firebase can store empty strings.
+      const dataToSave = {
+        ...data,
+        logoUrl: data.logoUrl?.trim() === '' ? undefined : data.logoUrl,
+        website: data.website?.trim() === '' ? undefined : data.website,
+        email: data.email?.trim() === '' ? undefined : data.email,
+      };
+
+      await setDoc(docRef, dataToSave, { merge: true });
       toast({
         title: "Settings Saved",
         description: "Company information has been updated successfully.",
@@ -103,7 +114,7 @@ export default function CompanySettingsPage() {
     }
   };
 
-  if (isLoading && !form.formState.isDirty) { // Show loading state only on initial load
+  if (isLoading && !form.formState.isDirty) {
     return (
       <PageHeader title="Company Information" description="Manage your company's details.">
          <div className="flex items-center justify-center h-64">
@@ -120,7 +131,7 @@ export default function CompanySettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Company Details</CardTitle>
-          <CardDescription>This information will be used throughout the application.</CardDescription>
+          <CardDescription>This information will be used throughout the application and on printable documents.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -129,6 +140,14 @@ export default function CompanySettingsPage() {
                 <FormItem><FormLabel>Company Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               
+              <FormField control={form.control} name="logoUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo URL (Optional)</FormLabel>
+                  <FormControl><Input type="url" placeholder="https://example.com/logo.png" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField control={form.control} name="email" render={({ field }) => (
                   <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>

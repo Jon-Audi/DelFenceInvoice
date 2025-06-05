@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { Estimate, CompanySettings } from '@/types';
+import Image from 'next/image'; // Import next/image
 
 interface PrintableEstimateProps {
   estimate: Estimate | null;
@@ -24,6 +25,18 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
       {/* Estimate Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
+          {companySettings.logoUrl && (
+            <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
+              <Image 
+                src={companySettings.logoUrl} 
+                alt={`${companySettings.companyName} Logo`} 
+                width={128} // Provide explicit width
+                height={64} // Provide explicit height, adjust aspect ratio as needed
+                style={{ objectFit: 'contain' }}
+                priority // Consider priority if logo is critical for LCP
+              />
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-gray-800 mb-2">{companySettings.companyName || 'Your Company'}</h1>
           <p className="text-sm">{companySettings.addressLine1 || ''}</p>
           <p className="text-sm">{companySettings.addressLine2 || ''}</p>
@@ -47,6 +60,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
       <div className="mb-8 p-4 border border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Estimate For:</h3>
         <p className="font-medium text-gray-800">{estimate.customerName || 'N/A Customer'}</p>
+        {/* You might want to fetch and display customer's full address here if available */}
       </div>
 
       {/* Line Items Table */}

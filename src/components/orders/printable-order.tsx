@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { Order, CompanySettings } from '@/types';
+import Image from 'next/image'; // Import next/image
 
 interface PrintableOrderProps {
   order: Order | null;
@@ -25,6 +26,18 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
       {/* Order Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
+          {companySettings.logoUrl && (
+            <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
+               <Image 
+                src={companySettings.logoUrl} 
+                alt={`${companySettings.companyName} Logo`} 
+                width={128} 
+                height={64} 
+                style={{ objectFit: 'contain' }}
+                priority
+              />
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-gray-800 mb-2">{companySettings.companyName || 'Your Company'}</h1>
           <p className="text-sm">{companySettings.addressLine1 || ''}</p>
           <p className="text-sm">{companySettings.addressLine2 || ''}</p>

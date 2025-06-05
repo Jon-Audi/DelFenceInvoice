@@ -93,7 +93,7 @@ interface BaseDocument {
   customerId: string;
   customerName?: string;
   date: string; // ISO date string
-  poNumber?: string; // Added P.O. Number
+  poNumber?: string;
   lineItems: LineItem[];
   subtotal: number;
   taxRate?: number; // percentage e.g. 0.05 for 5%
@@ -153,6 +153,6 @@ export interface CompanySettings {
   phone?: string;
   email?: string;
   website?: string;
-  logoUrl?: string;
+  logoUrl?: string; // Added logoUrl
   taxId?: string;
 }
