@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -44,7 +44,7 @@ const lineItemSchema = z.object({
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), // Will be auto-filled for display or if needed
+  customerName: z.string().optional(), 
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -53,7 +53,6 @@ const estimateFormSchema = z.object({
 });
 
 export type EstimateFormData = z.infer<typeof estimateFormSchema>;
-type FormLineItem = EstimateFormData['lineItems'][number];
 
 interface EstimateFormProps {
   estimate?: Estimate;
@@ -61,9 +60,10 @@ interface EstimateFormProps {
   onClose?: () => void;
   products: Product[];
   customers: Customer[];
+  productCategories: string[]; // Added productCategories prop
 }
 
-export function EstimateForm({ estimate, onSubmit, onClose, products, customers }: EstimateFormProps) {
+export function EstimateForm({ estimate, onSubmit, onClose, products, customers, productCategories }: EstimateFormProps) {
   const defaultFormValues = useMemo((): EstimateFormData => {
     return estimate ? {
       ...estimate,
@@ -83,7 +83,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
       customerName: '',
       date: new Date(),
       status: 'Draft',
-      lineItems: [],
+      lineItems: [{ productId: '', quantity: 1 }], // Start with one empty line item
       notes: '',
     };
   }, [estimate]);
@@ -93,18 +93,42 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
     defaultValues: defaultFormValues,
   });
 
-  useEffect(() => {
-    form.reset(defaultFormValues);
-  }, [defaultFormValues, form.reset]);
-
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
   const watchedLineItems = form.watch('lineItems');
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
-  const calculateSubtotal = React.useCallback(() => {
+  useEffect(() => {
+    form.reset(defaultFormValues);
+    const initialCategories = defaultFormValues.lineItems.map(item => {
+      if (item.productId) {
+        const product = products.find(p => p.id === item.productId);
+        return product?.category;
+      }
+      return undefined;
+    });
+    setLineItemCategoryFilters(initialCategories);
+  }, [defaultFormValues, form.reset, products]);
+  
+  useEffect(() => {
+    // This effect syncs filter state if lineItems are added/removed externally or products change
+    if (watchedLineItems.length !== lineItemCategoryFilters.length) {
+        const updatedFilters = watchedLineItems.map((item, index) => {
+            if (item.productId) {
+                const product = products.find(p => p.id === item.productId);
+                return product?.category || lineItemCategoryFilters[index];
+            }
+            return lineItemCategoryFilters[index]; // Preserve existing filter if no product ID
+        });
+        setLineItemCategoryFilters(updatedFilters);
+    }
+  }, [watchedLineItems, products, lineItemCategoryFilters.length]);
+
+
+  const calculateSubtotal = useCallback(() => {
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
       const price = product ? product.price : 0;
@@ -118,18 +142,54 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
     setSubtotal(newSubtotal);
-    setTotal(newSubtotal); // Assuming no tax for now
+    setTotal(newSubtotal); 
   }, [watchedLineItems, calculateSubtotal]);
 
-
-  const handleProductSelect = (index: number, productId: string) => {
-    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
+  const handleCategoryFilterChange = (index: number, category: string | undefined) => {
+    setLineItemCategoryFilters(prevFilters => {
+      const newFilters = [...prevFilters];
+      newFilters[index] = category;
+      return newFilters;
+    });
+    // Clear product selection when category filter changes
+    update(index, { ...watchedLineItems[index], productId: '' });
     form.trigger(`lineItems.${index}.productId`);
   };
 
+  const handleProductSelect = (index: number, productId: string) => {
+    update(index, { ...watchedLineItems[index], productId });
+    form.trigger(`lineItems.${index}.productId`);
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      setLineItemCategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = product.category;
+        return newFilters;
+      });
+    }
+  };
+
   const handleQuantityChange = (index: number, quantity: number) => {
-     form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
+     update(index, { ...watchedLineItems[index], quantity });
      form.trigger(`lineItems.${index}.quantity`);
+  };
+
+  const addLineItem = () => {
+    append({ productId: '', quantity: 1 });
+    setLineItemCategoryFilters(prev => [...prev, undefined]);
+  };
+
+  const removeLineItem = (index: number) => {
+    remove(index);
+    setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getFilteredProducts = (index: number) => {
+    const selectedCategory = lineItemCategoryFilters[index];
+    if (selectedCategory) {
+      return products.filter(p => p.category === selectedCategory);
+    }
+    return products; // Show all if no category filter selected
   };
 
   return (
@@ -169,7 +229,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
                             onSelect={() => {
                               form.setValue("customerId", customer.id, { shouldValidate: true });
                               const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName); // Update hidden/display name
+                              form.setValue("customerName", displayName); 
                             }}
                           >
                             <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -240,17 +300,32 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
 
         <Separator />
         <h3 className="text-lg font-medium">Line Items</h3>
-        {fields.map((field, index) => {
-          const selectedProduct = products.find(p => p.id === watchedLineItems[index]?.productId);
-          const unitPrice = selectedProduct ? selectedProduct.price : 0;
+        {fields.map((fieldItem, index) => {
+          const selectedProductDetails = products.find(p => p.id === watchedLineItems[index]?.productId);
+          const unitPrice = selectedProductDetails ? selectedProductDetails.price : 0;
           const quantity = watchedLineItems[index]?.quantity || 0;
           const lineTotal = unitPrice * quantity;
+          const filteredProductsForLine = getFilteredProducts(index);
 
           return (
-            <div key={field.id} className="space-y-3 p-4 border rounded-md relative">
-              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
+            <div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
+              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
+
+              <FormItem>
+                <FormLabel>Category Filter</FormLabel>
+                <Select
+                  value={lineItemCategoryFilters[index] || ''}
+                  onValueChange={(value) => handleCategoryFilterChange(index, value || undefined)}
+                >
+                  <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="">All Categories</SelectItem>
+                    {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormItem>
 
               <FormField
                 control={form.control}
@@ -273,7 +348,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
                           <CommandList>
                             <CommandEmpty>No product found.</CommandEmpty>
                             <CommandGroup>
-                              {products.map((product) => (
+                              {filteredProductsForLine.map((product) => (
                                 <CommandItem
                                   value={product.id}
                                   key={product.id}
@@ -325,13 +400,12 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers 
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={() => append({ productId: '', quantity: 1 })}>
+        <Button type="button" variant="outline" onClick={addLineItem}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
         </Button>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
         )}
-
 
         <Separator />
         <div className="flex justify-end space-x-4 text-lg font-semibold">

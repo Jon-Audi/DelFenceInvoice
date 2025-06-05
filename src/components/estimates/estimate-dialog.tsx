@@ -19,9 +19,10 @@ interface EstimateDialogProps {
   onSave: (estimate: Estimate) => void;
   products: Product[];
   customers: Customer[];
+  productCategories: string[]; // Added productCategories prop
 }
 
-export function EstimateDialog({ estimate, triggerButton, onSave, products, customers }: EstimateDialogProps) {
+export function EstimateDialog({ estimate, triggerButton, onSave, products, customers, productCategories }: EstimateDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (formData: EstimateFormData) => {
@@ -81,6 +82,7 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products, cust
           onClose={() => setOpen(false)}
           products={products}
           customers={customers}
+          productCategories={productCategories} // Pass down productCategories
         />
       </DialogContent>
     </Dialog>

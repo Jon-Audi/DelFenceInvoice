@@ -130,6 +130,11 @@ export default function EstimatesPage() {
     return () => unsubscribe();
   }, [toast]);
 
+  const productCategories = useMemo(() => {
+    if (!products) return [];
+    return Array.from(new Set(products.map(p => p.category))).sort();
+  }, [products]);
+
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
     const { id, ...estimateData } = estimateToSave;
@@ -174,7 +179,7 @@ export default function EstimatesPage() {
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
       
-      const customer = customers.find(c => c.id === estimate.customerId); // Use customers from state (Firestore)
+      const customer = customers.find(c => c.id === estimate.customerId); 
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
 
@@ -255,6 +260,7 @@ export default function EstimatesPage() {
           onSave={handleSaveEstimate}
           products={products}
           customers={customers}
+          productCategories={productCategories}
         />
       </PageHeader>
 
@@ -301,6 +307,7 @@ export default function EstimatesPage() {
                           onSave={handleSaveEstimate}
                           products={products}
                           customers={customers}
+                          productCategories={productCategories}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
@@ -389,5 +396,3 @@ export default function EstimatesPage() {
     </>
   );
 }
-
-    
