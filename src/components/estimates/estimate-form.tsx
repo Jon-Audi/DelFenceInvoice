@@ -1,11 +1,10 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Estimate, Product, DocumentStatus, Customer } from '@/types';
+import type { Estimate, Product, DocumentStatus, Customer, LineItem as LineItemType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,10 +55,6 @@ const estimateFormSchema = z.object({
 
 export type EstimateFormData = z.infer<typeof estimateFormSchema>;
 
-interface FormLineItemUIData extends z.infer<typeof lineItemSchema> {
-  unitPriceForDisplay?: number; 
-}
-
 interface EstimateFormProps {
   estimate?: Estimate;
   onSubmit: (data: EstimateFormData) => void;
@@ -108,7 +103,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -136,11 +131,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
   const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {
     const newCustomerId = await onSaveCustomer(newCustomerData);
     if (newCustomerId && typeof newCustomerId === 'string') {
-      // The `customers` list in `EstimatesPage` will update via onSnapshot.
-      // We might need to manually add to the local `customers` state here for immediate reflection
-      // or rely on the parent re-rendering with the updated list.
-      // For now, let's assume the parent's onSnapshot handles updating the `customers` prop.
-      // We also need to update the local `customers` state if it's not directly tied to the prop for the combobox.
       const customerToSelect = { ...newCustomerData, id: newCustomerId };
       setCustomers(prev => [...prev, customerToSelect].sort((a,b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
       
@@ -181,7 +171,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     return products;
   };
 
-  const currentSubtotal = useMemo(() => {
+ const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
       const price = product ? product.price : 0;
@@ -457,7 +447,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
       {isNewCustomerDialogOpen && (
         <CustomerDialog
-          triggerButton={<></>} // Dialog is controlled externally, trigger is not used here
+          isOpen={isNewCustomerDialogOpen}
+          onOpenChange={setIsNewCustomerDialogOpen}
           onSave={handleSaveNewCustomerFromEstimateForm}
         />
       )}
