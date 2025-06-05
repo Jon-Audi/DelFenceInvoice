@@ -45,9 +45,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
-import type { Estimate, Product, Customer, CompanySettings } from '@/types';
+import type { Estimate, Product, Customer, CompanySettings, EmailContact } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
@@ -65,6 +67,10 @@ export default function EstimatesPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   const [selectedEstimateForEmail, setSelectedEstimateForEmail] = useState<Estimate | null>(null);
+  const [targetCustomerForEmail, setTargetCustomerForEmail] = useState<Customer | null>(null);
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const [additionalRecipientEmail, setAdditionalRecipientEmail] = useState<string>('');
+
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -284,7 +290,6 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      // Double requestAnimationFrame to ensure content is rendered before print
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
@@ -297,6 +302,11 @@ export default function EstimatesPage() {
 
   const handleGenerateEmail = async (estimate: Estimate) => {
     setSelectedEstimateForEmail(estimate);
+    const customer = customers.find(c => c.id === estimate.customerId);
+    setTargetCustomerForEmail(customer || null);
+    setSelectedRecipientEmails([]);
+    setAdditionalRecipientEmail('');
+
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
@@ -308,7 +318,6 @@ export default function EstimatesPage() {
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
 
-      const customer = customers.find(c => c.id === estimate.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
 
@@ -345,9 +354,26 @@ export default function EstimatesPage() {
   };
 
   const handleSendEmail = () => {
+    const allRecipients: string[] = [...selectedRecipientEmails];
+    if (additionalRecipientEmail.trim() !== "") {
+      // Basic email validation, can be improved
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
+        allRecipients.push(additionalRecipientEmail.trim());
+      } else {
+        toast({ title: "Invalid Email", description: "The additional email address is not valid.", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (allRecipients.length === 0) {
+      toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
+      return;
+    }
+
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for estimate ${selectedEstimateForEmail?.estimateNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for estimate ${selectedEstimateForEmail?.estimateNumber} would be sent to: ${allRecipients.join(', ')}.`,
+      duration: 7000,
     });
     setIsEmailModalOpen(false);
   };
@@ -486,19 +512,55 @@ export default function EstimatesPage() {
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
-              <div className="flex flex-col justify-center items-center h-40 space-y-2">
+              <div className="flex flex-col justify-center items-center h-60 space-y-2">
                 <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                 <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
               <div className="space-y-4 py-4">
                 <div>
+                  <Label className="text-sm font-medium mb-2 block">Recipients</Label>
+                  {targetCustomerForEmail && targetCustomerForEmail.emailContacts.length > 0 ? (
+                    <ScrollArea className="h-24 w-full rounded-md border p-2 mb-2">
+                      {targetCustomerForEmail.emailContacts.map((contact: EmailContact) => (
+                        <div key={contact.id} className="flex items-center space-x-2 mb-1">
+                          <Checkbox
+                            id={`email-contact-${contact.id}`}
+                            checked={selectedRecipientEmails.includes(contact.email)}
+                            onCheckedChange={(checked) => {
+                              setSelectedRecipientEmails(prev => 
+                                checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
+                              );
+                            }}
+                          />
+                          <Label htmlFor={`email-contact-${contact.id}`} className="text-sm font-normal">
+                            {contact.email} ({contact.type} - {contact.name || 'N/A'})
+                          </Label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-2">No saved email contacts for this customer.</p>
+                  )}
+                  <FormFieldWrapper>
+                    <Label htmlFor="additionalEmail">Or add another email:</Label>
+                    <Input 
+                      id="additionalEmail" 
+                      type="email" 
+                      placeholder="another@example.com"
+                      value={additionalRecipientEmail}
+                      onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
+                    />
+                  </FormFieldWrapper>
+                </div>
+                <Separator />
+                <div>
                   <Label htmlFor="emailSubject">Subject</Label>
                   <Input id="emailSubject" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={10} className="min-h-[200px]" />
+                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={8} className="min-h-[150px]" />
                 </div>
               </div>
             ) : ( <p className="text-center py-4">Could not load email draft.</p> )}
@@ -548,3 +610,8 @@ export default function EstimatesPage() {
     </>
   );
 }
+
+// Simple wrapper to mimic FormField structure for layout if needed
+const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div className="space-y-1">{children}</div>
+);

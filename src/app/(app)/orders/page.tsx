@@ -45,9 +45,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer, Product, Estimate, CompanySettings } from '@/types';
+import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact } from '@/types';
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
@@ -66,6 +69,10 @@ export default function OrdersPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   const [selectedOrderForEmail, setSelectedOrderForEmail] = useState<Order | null>(null);
+  const [targetCustomerForEmail, setTargetCustomerForEmail] = useState<Customer | null>(null);
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const [additionalRecipientEmail, setAdditionalRecipientEmail] = useState<string>('');
+
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
@@ -96,7 +103,7 @@ export default function OrdersPage() {
           date: new Date(),
           status: 'Ordered',
           orderState: 'Open',
-          poNumber: estimateToConvert.poNumber || '', // Carry over PO number
+          poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -184,7 +191,7 @@ export default function OrdersPage() {
     };
     
     try {
-      if (id && orders.some(o => o.id === id)) { // Editing existing order
+      if (id && orders.some(o => o.id === id)) { 
         const orderRef = doc(db, 'orders', id);
         const updatePayload = { ...basePayload };
 
@@ -200,7 +207,7 @@ export default function OrdersPage() {
 
         await setDoc(orderRef, updatePayload, { merge: true });
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
-      } else { // Adding new order
+      } else { 
         const addPayload = { ...basePayload };
 
         if (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') {
@@ -290,6 +297,11 @@ export default function OrdersPage() {
 
   const handleGenerateEmail = async (order: Order) => {
     setSelectedOrderForEmail(order);
+    const customer = customers.find(c => c.id === order.customerId);
+    setTargetCustomerForEmail(customer || null);
+    setSelectedRecipientEmails([]);
+    setAdditionalRecipientEmail('');
+
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
@@ -301,19 +313,18 @@ export default function OrdersPage() {
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n') || 'Items as per order.';
 
-      const customer = customers.find(c => c.id === order.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
       const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com';
 
 
       const result = await generateOrderEmailDraft({
         customerName: customerDisplayName,
-        customerEmail: customerEmail,
+        customerEmail: customerEmail, // This is just for the AI context, actual recipients chosen in UI
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
         orderTotal: order.total,
-        companyName: "Delaware Fence Solutions",
+        companyName: "Delaware Fence Solutions", 
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -332,9 +343,25 @@ export default function OrdersPage() {
   };
 
   const handleSendEmail = () => {
+    const allRecipients: string[] = [...selectedRecipientEmails];
+    if (additionalRecipientEmail.trim() !== "") {
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
+        allRecipients.push(additionalRecipientEmail.trim());
+      } else {
+        toast({ title: "Invalid Email", description: "The additional email address is not valid.", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (allRecipients.length === 0) {
+      toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
+      return;
+    }
+
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for order ${selectedOrderForEmail?.orderNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for order ${selectedOrderForEmail?.orderNumber} would be sent to: ${allRecipients.join(', ')}.`,
+      duration: 7000,
     });
     setIsEmailModalOpen(false);
   };
@@ -493,19 +520,55 @@ export default function OrdersPage() {
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
-              <div className="flex flex-col justify-center items-center h-40 space-y-2">
+              <div className="flex flex-col justify-center items-center h-60 space-y-2">
                  <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                  <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
               <div className="space-y-4 py-4">
                 <div>
+                  <Label className="text-sm font-medium mb-2 block">Recipients</Label>
+                  {targetCustomerForEmail && targetCustomerForEmail.emailContacts.length > 0 ? (
+                    <ScrollArea className="h-24 w-full rounded-md border p-2 mb-2">
+                      {targetCustomerForEmail.emailContacts.map((contact: EmailContact) => (
+                        <div key={contact.id} className="flex items-center space-x-2 mb-1">
+                          <Checkbox
+                            id={`email-contact-order-${contact.id}`}
+                            checked={selectedRecipientEmails.includes(contact.email)}
+                            onCheckedChange={(checked) => {
+                              setSelectedRecipientEmails(prev => 
+                                checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
+                              );
+                            }}
+                          />
+                          <Label htmlFor={`email-contact-order-${contact.id}`} className="text-sm font-normal">
+                            {contact.email} ({contact.type} - {contact.name || 'N/A'})
+                          </Label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-2">No saved email contacts for this customer.</p>
+                  )}
+                  <FormFieldWrapper>
+                    <Label htmlFor="additionalEmailOrder">Or add another email:</Label>
+                    <Input 
+                      id="additionalEmailOrder" 
+                      type="email" 
+                      placeholder="another@example.com"
+                      value={additionalRecipientEmail}
+                      onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
+                    />
+                  </FormFieldWrapper>
+                </div>
+                <Separator />
+                <div>
                   <Label htmlFor="emailSubject">Subject</Label>
                   <Input id="emailSubject" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={10} className="min-h-[200px]" />
+                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={8} className="min-h-[150px]" />
                 </div>
               </div>
             ) : ( <p className="text-center py-4">Could not load email draft.</p> )}
@@ -555,3 +618,7 @@ export default function OrdersPage() {
     </>
   );
 }
+
+const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div className="space-y-1">{children}</div>
+);

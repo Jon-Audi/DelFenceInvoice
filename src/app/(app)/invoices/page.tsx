@@ -19,9 +19,12 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, Estimate, Order, CompanySettings } from '@/types';
+import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
@@ -41,6 +44,10 @@ export default function InvoicesPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
+  const [targetCustomerForEmail, setTargetCustomerForEmail] = useState<Customer | null>(null);
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const [additionalRecipientEmail, setAdditionalRecipientEmail] = useState<string>('');
+
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
   const [editableBody, setEditableBody] = useState<string>('');
@@ -75,7 +82,7 @@ export default function InvoicesPage() {
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Draft',
-          poNumber: estimateToConvert.poNumber || '', // Carry over PO number
+          poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -101,7 +108,7 @@ export default function InvoicesPage() {
           customerId: orderToConvert.customerId,
           date: new Date(),
           status: 'Draft',
-          poNumber: orderToConvert.poNumber || '', // Carry over PO number
+          poNumber: orderToConvert.poNumber || '', 
           lineItems: orderToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -210,7 +217,7 @@ export default function InvoicesPage() {
 
 
     try {
-      if (id && invoices.some(i => i.id === id)) { // Editing existing invoice
+      if (id && invoices.some(i => i.id === id)) { 
         const invoiceRef = doc(db, 'invoices', id);
         const updatePayload = { ...basePayload };
 
@@ -227,7 +234,7 @@ export default function InvoicesPage() {
         
         await setDoc(invoiceRef, updatePayload, { merge: true });
         toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
-      } else { // Adding new invoice
+      } else { 
         const addPayload = { ...basePayload };
 
         if (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') {
@@ -321,6 +328,11 @@ export default function InvoicesPage() {
 
   const handleGenerateEmail = async (invoice: Invoice) => {
     setSelectedInvoiceForEmail(invoice);
+    const customer = customers.find(c => c.id === invoice.customerId);
+    setTargetCustomerForEmail(customer || null);
+    setSelectedRecipientEmails([]);
+    setAdditionalRecipientEmail('');
+
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
@@ -328,13 +340,15 @@ export default function InvoicesPage() {
     setEditableBody('');
 
     try {
-      const customer = customers.find(c => c.id === invoice.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (invoice.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
 
       const invoiceItemsDescription = invoice.lineItems.map(item =>
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n') || 'Services/Products as per invoice.';
+      
+      const companyNameForDisplay = (await fetchCompanySettings())?.companyName || "Delaware Fence Solutions";
+
 
       const result = await generateInvoiceEmailDraft({
         customerName: customerDisplayName,
@@ -344,7 +358,7 @@ export default function InvoicesPage() {
         invoiceTotal: invoice.total,
         invoiceItems: invoiceItemsDescription,
         dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined,
-        companyNameToDisplay: companySettingsForPrinting?.companyName || "Delaware Fence Solutions", // Use fetched company name
+        companyNameToDisplay: companyNameForDisplay,
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -362,9 +376,25 @@ export default function InvoicesPage() {
   };
 
   const handleSendEmail = () => {
+    const allRecipients: string[] = [...selectedRecipientEmails];
+    if (additionalRecipientEmail.trim() !== "") {
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
+        allRecipients.push(additionalRecipientEmail.trim());
+      } else {
+        toast({ title: "Invalid Email", description: "The additional email address is not valid.", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (allRecipients.length === 0) {
+      toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
+      return;
+    }
+    
     toast({
       title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for invoice ${selectedInvoiceForEmail?.invoiceNumber} would be sent.`,
+      description: `Email with subject "${editableSubject}" for invoice ${selectedInvoiceForEmail?.invoiceNumber} would be sent to: ${allRecipients.join(', ')}.`,
+      duration: 7000,
     });
     setIsEmailModalOpen(false);
   };
@@ -441,19 +471,55 @@ export default function InvoicesPage() {
               </DialogDescription>
             </DialogHeader>
             {isLoadingEmail ? (
-              <div className="flex flex-col justify-center items-center h-40 space-y-2">
+              <div className="flex flex-col justify-center items-center h-60 space-y-2">
                  <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                  <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
               <div className="space-y-4 py-4">
                 <div>
+                  <Label className="text-sm font-medium mb-2 block">Recipients</Label>
+                  {targetCustomerForEmail && targetCustomerForEmail.emailContacts.length > 0 ? (
+                    <ScrollArea className="h-24 w-full rounded-md border p-2 mb-2">
+                      {targetCustomerForEmail.emailContacts.map((contact: EmailContact) => (
+                        <div key={contact.id} className="flex items-center space-x-2 mb-1">
+                          <Checkbox
+                            id={`email-contact-invoice-${contact.id}`}
+                            checked={selectedRecipientEmails.includes(contact.email)}
+                            onCheckedChange={(checked) => {
+                              setSelectedRecipientEmails(prev => 
+                                checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
+                              );
+                            }}
+                          />
+                          <Label htmlFor={`email-contact-invoice-${contact.id}`} className="text-sm font-normal">
+                            {contact.email} ({contact.type} - {contact.name || 'N/A'})
+                          </Label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-2">No saved email contacts for this customer.</p>
+                  )}
+                  <FormFieldWrapper>
+                    <Label htmlFor="additionalEmailInvoice">Or add another email:</Label>
+                    <Input 
+                      id="additionalEmailInvoice" 
+                      type="email" 
+                      placeholder="another@example.com"
+                      value={additionalRecipientEmail}
+                      onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
+                    />
+                  </FormFieldWrapper>
+                </div>
+                <Separator />
+                <div>
                   <Label htmlFor="emailSubjectInvoice">Subject</Label>
                   <Input id="emailSubjectInvoice" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="emailBodyInvoice">Body</Label>
-                  <Textarea id="emailBodyInvoice" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={10} className="min-h-[200px]" />
+                  <Textarea id="emailBodyInvoice" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={8} className="min-h-[150px]" />
                 </div>
               </div>
             ) : ( <p className="text-center py-4">Could not load email draft.</p> )}
@@ -484,3 +550,7 @@ export default function InvoicesPage() {
     </>
   );
 }
+
+const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div className="space-y-1">{children}</div>
+);
