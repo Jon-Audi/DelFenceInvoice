@@ -34,7 +34,6 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 
-// Updated statuses
 const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided'];
 
 const lineItemSchema = z.object({
@@ -50,23 +49,22 @@ const invoiceFormSchema = z.object({
   date: z.date({ required_error: "Invoice date is required." }),
   dueDate: z.date().optional(),
   status: z.enum(INVOICE_STATUSES as [typeof INVOICE_STATUSES[0], ...typeof INVOICE_STATUSES]),
+  poNumber: z.string().optional(), // Added P.O. Number
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
-  // Fields for recording a new payment
   newPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
   newPaymentDate: z.date().optional(),
   newPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
   newPaymentNotes: z.string().optional(),
 }).refine(data => {
-    // If payment amount is entered, payment date and method become required
     if (data.newPaymentAmount && data.newPaymentAmount > 0) {
         return !!data.newPaymentDate && !!data.newPaymentMethod;
     }
     return true;
 }, {
     message: "Payment date and method are required if payment amount is entered.",
-    path: ["newPaymentMethod"], // Or path: ["newPaymentDate"] or a general path
+    path: ["newPaymentMethod"], 
 });
 
 export type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
@@ -90,6 +88,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         date: new Date(invoice.date),
         dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
         status: invoice.status,
+        poNumber: invoice.poNumber || '',
         lineItems: invoice.lineItems.map(li => ({
           id: li.id,
           productId: li.productId,
@@ -101,6 +100,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     : initialData
     ? {
         ...initialData,
+        poNumber: initialData.poNumber || (invoice?.poNumber || ''), // Carry over PO from estimate/order
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
       }
@@ -110,12 +110,12 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         customerId: '',
         date: new Date(),
         status: 'Draft',
+        poNumber: '',
         lineItems: [],
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
       };
-      // Ensure new payment fields are not carried over unless explicitly set for a new form session
       return {
         ...base,
         newPaymentAmount: undefined,
@@ -166,8 +166,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
-    form.reset({ // Reset payment fields after submission
-        ...data, // keep other form data
+    form.reset({ 
+        ...data, 
         newPaymentAmount: undefined,
         newPaymentDate: undefined,
         newPaymentMethod: undefined,
@@ -227,6 +227,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </FormItem>
           )}
         />
+        
+        <FormField control={form.control} name="poNumber" render={({ field }) => (
+          <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
+        )} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="date" render={({ field }) => (

@@ -93,6 +93,7 @@ interface BaseDocument {
   customerId: string;
   customerName?: string;
   date: string; // ISO date string
+  poNumber?: string; // Added P.O. Number
   lineItems: LineItem[];
   subtotal: number;
   taxRate?: number; // percentage e.g. 0.05 for 5%

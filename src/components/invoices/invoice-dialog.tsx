@@ -63,7 +63,7 @@ export function InvoiceDialog({
     });
 
     const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
-    const currentTaxAmount = 0; // Simplified
+    const currentTaxAmount = 0; 
     const currentTotal = currentSubtotal + currentTaxAmount;
 
     let existingPayments: Payment[] = invoice?.payments ? [...invoice.payments] : [];
@@ -83,19 +83,16 @@ export function InvoiceDialog({
     const totalAmountPaid = existingPayments.reduce((acc, p) => acc + p.amount, 0);
     const balanceDue = currentTotal - totalAmountPaid;
 
-    // Auto-update status based on payment, but only if not 'Voided'
     if (newStatus !== 'Voided') {
         if (balanceDue <= 0 && totalAmountPaid >= currentTotal && currentTotal > 0) {
             newStatus = 'Paid';
         } else if (totalAmountPaid > 0 && balanceDue > 0) {
             newStatus = 'Partially Paid';
         } else if (totalAmountPaid === 0 && formData.status !== 'Draft' && formData.status !== 'Sent') {
-             // If no payments and status was something like Paid/Partially Paid, revert to Sent or Draft
-            newStatus = invoice?.status === 'Sent' ? 'Sent' : 'Draft'; // Or just 'Sent' if it was ever sent
+            newStatus = invoice?.status === 'Sent' ? 'Sent' : 'Draft';
         }
-        // If status was manually set to Draft/Sent/Voided by user, respect that unless payment makes it Paid/Partially Paid
         if (formData.status === 'Draft' || formData.status === 'Sent' || formData.status === 'Voided') {
-            if (newStatus !== 'Paid' && newStatus !== 'Partially Paid') { // User set status takes precedence if no payment changes it
+            if (newStatus !== 'Paid' && newStatus !== 'Partially Paid') { 
                 newStatus = formData.status;
             }
         }
@@ -110,6 +107,7 @@ export function InvoiceDialog({
       date: formData.date.toISOString(),
       dueDate: formData.dueDate?.toISOString(),
       status: newStatus,
+      poNumber: formData.poNumber, // Added P.O. Number
       lineItems: lineItems,
       subtotal: currentSubtotal,
       taxAmount: currentTaxAmount,
@@ -124,8 +122,8 @@ export function InvoiceDialog({
     setOpen(false);
   };
 
-  const dialogTitle = invoice ? 'Edit Invoice' : (initialData ? 'Create New Invoice from Estimate' : 'New Invoice');
-  const dialogDescription = invoice ? 'Update the details of this invoice.' : (initialData ? 'Review and confirm the details for this new invoice based on the estimate.' : 'Fill in the details for the new invoice.');
+  const dialogTitle = invoice ? 'Edit Invoice' : (initialData ? 'Create New Invoice from Conversion' : 'New Invoice');
+  const dialogDescription = invoice ? 'Update the details of this invoice.' : (initialData ? 'Review and confirm the details for this new invoice.' : 'Fill in the details for the new invoice.');
 
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>

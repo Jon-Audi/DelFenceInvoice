@@ -15,7 +15,7 @@ import {
 
 interface OrderDialogProps {
   order?: Order;
-  triggerButton?: React.ReactElement; // Make trigger optional for programmatic opening
+  triggerButton?: React.ReactElement; 
   onSave: (order: Order) => void;
   customers: Customer[];
   products: Product[]; 
@@ -39,9 +39,8 @@ export function OrderDialog({
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
 
-  // Open dialog if initialData is provided and it's a new conversion
   React.useEffect(() => {
-    if (initialData && controlledIsOpen === undefined) { // Only if not controlled externally for this specific case
+    if (initialData && controlledIsOpen === undefined) { 
         setInternalOpen(true);
     }
   }, [initialData, controlledIsOpen]);
@@ -65,17 +64,18 @@ export function OrderDialog({
     });
 
     const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
-    const taxAmount = 0; // Simplified for now
+    const taxAmount = 0; 
     const total = subtotal + taxAmount;
 
     const orderToSave: Order = {
-      id: order?.id || initialData?.id || crypto.randomUUID(), // Use initialData id if present
+      id: order?.id || initialData?.id || crypto.randomUUID(),
       orderNumber: formData.orderNumber,
       customerId: formData.customerId,
       customerName: customerName,
       date: formData.date.toISOString(),
       status: formData.status,
       orderState: formData.orderState,
+      poNumber: formData.poNumber, // Added P.O. Number
       expectedDeliveryDate: formData.expectedDeliveryDate?.toISOString(),
       readyForPickUpDate: formData.readyForPickUpDate?.toISOString(),
       pickedUpDate: formData.pickedUpDate?.toISOString(),
@@ -113,5 +113,3 @@ export function OrderDialog({
     </Dialog>
   );
 }
-
-    

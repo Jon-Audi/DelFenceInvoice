@@ -7,14 +7,9 @@ import type { Invoice, CompanySettings } from '@/types';
 interface PrintableInvoiceProps {
   invoice: Invoice | null;
   companySettings: CompanySettings | null;
-  // onPrinted prop is removed as parent will handle post-print cleanup
 }
 
 export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
-  const printRef = React.useRef<HTMLDivElement>(null);
-
-  // useEffect for calling window.print() is removed from here.
-
   if (!invoice || !companySettings) {
     return null;
   }
@@ -25,7 +20,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
   };
 
   return (
-    <div ref={printRef} className="print-only p-8 bg-white text-black font-sans">
+    <div className="print-only p-8 bg-white text-black font-sans">
       {/* Invoice Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
@@ -44,6 +39,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
           <p className="text-md"><span className="font-semibold">Invoice #:</span> {invoice.invoiceNumber}</p>
           <p className="text-md"><span className="font-semibold">Date:</span> {formatDate(invoice.date)}</p>
           {invoice.dueDate && <p className="text-md"><span className="font-semibold">Due Date:</span> {formatDate(invoice.dueDate)}</p>}
+          {invoice.poNumber && <p className="text-md"><span className="font-semibold">P.O. #:</span> {invoice.poNumber}</p>}
         </div>
       </div>
 
@@ -51,7 +47,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
       <div className="mb-8 p-4 border border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Bill To:</h3>
         <p className="font-medium text-gray-800">{invoice.customerName || 'N/A Customer'}</p>
-        {/* Add more customer address details here if available and needed */}
       </div>
 
       {/* Line Items Table */}

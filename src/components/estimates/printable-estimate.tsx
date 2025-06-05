@@ -7,14 +7,9 @@ import type { Estimate, CompanySettings } from '@/types';
 interface PrintableEstimateProps {
   estimate: Estimate | null;
   companySettings: CompanySettings | null;
-  // onPrinted prop is removed
 }
 
 export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, companySettings }) => {
-  const printRef = React.useRef<HTMLDivElement>(null);
-
-  // useEffect for calling window.print() is removed from here.
-
   if (!estimate || !companySettings) {
     return null;
   }
@@ -25,7 +20,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
   };
 
   return (
-    <div ref={printRef} className="print-only p-8 bg-white text-black font-sans">
+    <div className="print-only p-8 bg-white text-black font-sans">
       {/* Estimate Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
@@ -44,6 +39,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
           <p className="text-md"><span className="font-semibold">Estimate #:</span> {estimate.estimateNumber}</p>
           <p className="text-md"><span className="font-semibold">Date:</span> {formatDate(estimate.date)}</p>
           {estimate.validUntil && <p className="text-md"><span className="font-semibold">Valid Until:</span> {formatDate(estimate.validUntil)}</p>}
+          {estimate.poNumber && <p className="text-md"><span className="font-semibold">P.O. #:</span> {estimate.poNumber}</p>}
         </div>
       </div>
 
@@ -51,7 +47,6 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
       <div className="mb-8 p-4 border border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Estimate For:</h3>
         <p className="font-medium text-gray-800">{estimate.customerName || 'N/A Customer'}</p>
-        {/* Consider adding customer address if available in estimate.customer object and needed */}
       </div>
 
       {/* Line Items Table */}
@@ -113,4 +108,3 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     </div>
   );
 };
-    

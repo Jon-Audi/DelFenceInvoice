@@ -84,7 +84,6 @@ export default function EstimatesPage() {
     setIsClient(true);
   }, []);
 
-  // Fetch Estimates
   useEffect(() => {
     setIsLoadingEstimates(true);
     const unsubscribe = onSnapshot(collection(db, 'estimates'), (snapshot) => {
@@ -102,7 +101,6 @@ export default function EstimatesPage() {
     return () => unsubscribe();
   }, [toast]);
 
-  // Fetch Customers
   useEffect(() => {
     setIsLoadingCustomers(true);
     const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
@@ -120,7 +118,6 @@ export default function EstimatesPage() {
     return () => unsubscribe();
   }, [toast]);
 
-  // Fetch Products
   useEffect(() => {
     setIsLoadingProducts(true);
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
@@ -138,7 +135,6 @@ export default function EstimatesPage() {
     return () => unsubscribe();
   }, [toast]);
 
-  // Effect to stabilize productCategories
   useEffect(() => {
     if (products && products.length > 0) {
       const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
@@ -164,6 +160,7 @@ export default function EstimatesPage() {
       subtotal: estimateDataFromDialog.subtotal,
       taxAmount: estimateDataFromDialog.taxAmount || 0,
       total: estimateDataFromDialog.total,
+      poNumber: estimateDataFromDialog.poNumber || undefined, // Added P.O. Number
     };
 
     if (estimateDataFromDialog.validUntil) {
@@ -302,6 +299,7 @@ export default function EstimatesPage() {
         Estimate Number: ${estimate.estimateNumber}
         Date: ${new Date(estimate.date).toLocaleDateString()}
         Customer: ${customerDisplayName}
+        ${estimate.poNumber ? `P.O. Number: ${estimate.poNumber}` : ''}
         Total: $${estimate.total.toFixed(2)}
         Items:
         ${lineItemsDescription || 'Details to be confirmed.'}
@@ -391,6 +389,7 @@ export default function EstimatesPage() {
               <TableRow>
                 <TableHead>Number</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>P.O. #</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
@@ -402,6 +401,7 @@ export default function EstimatesPage() {
                 <TableRow key={estimate.id}>
                   <TableCell>{estimate.estimateNumber}</TableCell>
                   <TableCell>{estimate.customerName}</TableCell>
+                  <TableCell>{estimate.poNumber || 'N/A'}</TableCell>
                   <TableCell>{formatDateForDisplay(estimate.date)}</TableCell>
                   <TableCell>${estimate.total.toFixed(2)}</TableCell>
                   <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
@@ -522,7 +522,7 @@ export default function EstimatesPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && estimateForPrinting && ( 
+       {(isLoadingCompanySettings && estimateForPrinting) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable estimate...</p>

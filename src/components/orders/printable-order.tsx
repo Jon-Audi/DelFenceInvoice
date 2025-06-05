@@ -7,14 +7,9 @@ import type { Order, CompanySettings } from '@/types';
 interface PrintableOrderProps {
   order: Order | null;
   companySettings: CompanySettings | null;
-  // onPrinted prop is removed
 }
 
 export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySettings }) => {
-  const printRef = React.useRef<HTMLDivElement>(null);
-
-  // useEffect for calling window.print() is removed from here.
-
   if (!order || !companySettings) {
     return null;
   }
@@ -26,7 +21,7 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
   };
 
   return (
-    <div ref={printRef} className="print-only p-8 bg-white text-black font-sans">
+    <div className="print-only p-8 bg-white text-black font-sans">
       {/* Order Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
@@ -44,6 +39,7 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
           <h2 className="text-4xl font-bold text-gray-700 mb-2">ORDER CONFIRMATION</h2>
           <p className="text-md"><span className="font-semibold">Order #:</span> {order.orderNumber}</p>
           <p className="text-md"><span className="font-semibold">Date:</span> {formatDate(order.date, true)}</p>
+          {order.poNumber && <p className="text-md"><span className="font-semibold">P.O. #:</span> {order.poNumber}</p>}
           <p className="text-md"><span className="font-semibold">Status:</span> {order.status}</p>
           {order.expectedDeliveryDate && <p className="text-md"><span className="font-semibold">Expected Delivery:</span> {formatDate(order.expectedDeliveryDate)}</p>}
           {order.readyForPickUpDate && <p className="text-md"><span className="font-semibold">Ready for Pickup:</span> {formatDate(order.readyForPickUpDate)}</p>}
@@ -54,7 +50,6 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
       <div className="mb-8 p-4 border border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Customer:</h3>
         <p className="font-medium text-gray-800">{order.customerName || 'N/A Customer'}</p>
-        {/* Consider adding customer address/contact if available */}
       </div>
 
       {/* Line Items Table */}
@@ -116,5 +111,3 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
     </div>
   );
 };
-
-    

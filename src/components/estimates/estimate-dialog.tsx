@@ -17,7 +17,7 @@ interface EstimateDialogProps {
   estimate?: Estimate;
   triggerButton: React.ReactElement;
   onSave: (estimate: Estimate) => void;
-  onSaveCustomer: (customer: Customer) => Promise<string | void>; // Added this prop
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
   products: Product[];
   customers: Customer[];
   productCategories: string[];
@@ -56,6 +56,7 @@ export function EstimateDialog({ estimate, triggerButton, onSave, onSaveCustomer
       date: formData.date.toISOString(),
       validUntil: formData.validUntil ? formData.validUntil.toISOString() : undefined,
       status: formData.status,
+      poNumber: formData.poNumber, // Added P.O. Number
       lineItems: lineItems,
       subtotal: subtotal,
       taxAmount: taxAmount,
@@ -85,7 +86,7 @@ export function EstimateDialog({ estimate, triggerButton, onSave, onSaveCustomer
           products={products}
           customers={customers}
           productCategories={productCategories}
-          onSaveCustomer={onSaveCustomer} // Pass the function here
+          onSaveCustomer={onSaveCustomer}
         />
       </DialogContent>
     </Dialog>

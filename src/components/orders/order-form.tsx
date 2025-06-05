@@ -49,6 +49,7 @@ const orderFormSchema = z.object({
   date: z.date({ required_error: "Order date is required." }),
   status: z.enum(ORDER_STATUSES as [typeof ORDER_STATUSES[0], ...typeof ORDER_STATUSES]),
   orderState: z.enum(ORDER_STATES as [typeof ORDER_STATES[0], ...typeof ORDER_STATES]),
+  poNumber: z.string().optional(), // Added P.O. Number
   expectedDeliveryDate: z.date().optional(),
   readyForPickUpDate: z.date().optional(),
   pickedUpDate: z.date().optional(),
@@ -59,8 +60,8 @@ const orderFormSchema = z.object({
 export type OrderFormData = z.infer<typeof orderFormSchema>;
 
 interface OrderFormProps {
-  order?: Order; // For editing an existing order
-  initialData?: OrderFormData | null; // For pre-filling from conversion
+  order?: Order;
+  initialData?: OrderFormData | null;
   onSubmit: (data: OrderFormData) => void;
   onClose?: () => void;
   customers: Customer[];
@@ -70,13 +71,14 @@ interface OrderFormProps {
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products }: OrderFormProps) {
   const defaultFormValues = useMemo((): OrderFormData => {
     return order
-    ? { // Editing existing order
+    ? { 
         id: order.id,
         orderNumber: order.orderNumber,
         customerId: order.customerId,
         date: new Date(order.date),
         status: order.status,
         orderState: order.orderState,
+        poNumber: order.poNumber || '',
         expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
         readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
         pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
@@ -88,20 +90,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         notes: order.notes || '',
       }
     : initialData
-    ? { // Pre-filling from conversion (initialData is already OrderFormData)
+    ? { 
         ...initialData,
-        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date), // Ensure date is Date object
+        poNumber: initialData.poNumber || (order?.poNumber || ''), // Carry over from estimate if converted
+        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
       }
-    : { // Creating a new order from scratch
+    : { 
         id: undefined,
         orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
         customerId: '',
         date: new Date(),
         status: 'Draft',
         orderState: 'Open',
+        poNumber: '',
         lineItems: [],
         notes: '',
         expectedDeliveryDate: undefined,
@@ -115,7 +119,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     defaultValues: defaultFormValues,
   });
 
-  // Effect to reset form when defaultFormValues change (i.e., when order or initialData props change)
   useEffect(() => {
     form.reset(defaultFormValues);
   }, [defaultFormValues, form.reset]);
@@ -142,7 +145,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
     setSubtotal(newSubtotal);
-    setTotal(newSubtotal); // Assuming no tax for now
+    setTotal(newSubtotal); 
   }, [watchedLineItems, calculateSubtotal]);
 
   const handleProductSelect = (index: number, productId: string) => {
@@ -206,6 +209,10 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </FormItem>
           )}
         />
+        
+        <FormField control={form.control} name="poNumber" render={({ field }) => (
+          <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
+        )} />
 
         <FormField control={form.control} name="date" render={({ field }) => (
           <FormItem className="flex flex-col">

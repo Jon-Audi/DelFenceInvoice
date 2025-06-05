@@ -96,6 +96,7 @@ export default function OrdersPage() {
           date: new Date(),
           status: 'Ordered',
           orderState: 'Open',
+          poNumber: estimateToConvert.poNumber || '', // Carry over PO number
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -168,13 +169,19 @@ export default function OrdersPage() {
 
   const handleSaveOrder = async (orderToSave: Order) => {
     const { id, ...orderData } = orderToSave;
+    
+    const dataForFirestore = { ...orderData };
+    if (!dataForFirestore.poNumber) { // Ensure empty string PO is not saved as undefined
+        delete (dataForFirestore as any).poNumber;
+    }
+    
     try {
       if (id && orders.some(o => o.id === id)) {
         const orderRef = doc(db, 'orders', id);
-        await setDoc(orderRef, orderData, { merge: true });
+        await setDoc(orderRef, dataForFirestore, { merge: true });
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
       } else {
-        const docRef = await addDoc(collection(db, 'orders'), orderData);
+        const docRef = await addDoc(collection(db, 'orders'), dataForFirestore);
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
@@ -357,6 +364,7 @@ export default function OrdersPage() {
               <TableRow>
                 <TableHead>Number</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>P.O. #</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
@@ -369,6 +377,7 @@ export default function OrdersPage() {
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.customerName}</TableCell>
+                  <TableCell>{order.poNumber || 'N/A'}</TableCell>
                   <TableCell>{formatDateForDisplay(order.date)}</TableCell>
                   <TableCell>${order.total.toFixed(2)}</TableCell>
                   <TableCell>
@@ -499,7 +508,7 @@ export default function OrdersPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && orderForPrinting && ( 
+       {(isLoadingCompanySettings && orderForPrinting) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable order...</p>

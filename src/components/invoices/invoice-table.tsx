@@ -39,7 +39,7 @@ interface InvoiceTableProps {
   onSave: (invoice: Invoice) => void;
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
-  onPrint: (invoice: Invoice) => void; // New prop for printing
+  onPrint: (invoice: Invoice) => void;
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
   products: Product[];
@@ -73,6 +73,7 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
           <TableRow>
             <TableHead>Number</TableHead>
             <TableHead>Customer</TableHead>
+            <TableHead>P.O. #</TableHead>
             <TableHead>Date</TableHead>
             <TableHead>Due Date</TableHead>
             <TableHead className="text-right">Total</TableHead>
@@ -87,6 +88,7 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
             <TableRow key={invoice.id}>
               <TableCell>{invoice.invoiceNumber}</TableCell>
               <TableCell>{invoice.customerName}</TableCell>
+              <TableCell>{invoice.poNumber || 'N/A'}</TableCell>
               <TableCell>{formatDate(invoice.date)}</TableCell>
               <TableCell>{formatDate(invoice.dueDate)}</TableCell>
               <TableCell className="text-right">${invoice.total.toFixed(2)}</TableCell>

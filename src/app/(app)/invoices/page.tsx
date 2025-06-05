@@ -58,7 +58,7 @@ export default function InvoicesPage() {
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
   useEffect(() => {
-    setIsClient(true); // For date formatting
+    setIsClient(true); 
   }, []);
 
   useEffect(() => {
@@ -75,6 +75,7 @@ export default function InvoicesPage() {
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Draft',
+          poNumber: estimateToConvert.poNumber || '', // Carry over PO number
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -100,6 +101,7 @@ export default function InvoicesPage() {
           customerId: orderToConvert.customerId,
           date: new Date(),
           status: 'Draft',
+          poNumber: orderToConvert.poNumber || '', // Carry over PO number
           lineItems: orderToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
@@ -141,6 +143,7 @@ export default function InvoicesPage() {
              amountPaid: data.amountPaid || 0,
              balanceDue: data.balanceDue !== undefined ? data.balanceDue : (data.total || 0) - (data.amountPaid || 0),
              payments: data.payments || [],
+             poNumber: data.poNumber || undefined,
            });
       });
       setInvoices(fetchedInvoices.sort((a, b) => a.invoiceNumber.localeCompare(b.invoiceNumber)));
@@ -196,6 +199,7 @@ export default function InvoicesPage() {
       customerName: invoiceDataFromDialog.customerName,
       date: invoiceDataFromDialog.date,
       status: invoiceDataFromDialog.status,
+      poNumber: invoiceDataFromDialog.poNumber || undefined, // Added P.O. Number
       lineItems: invoiceDataFromDialog.lineItems,
       subtotal: invoiceDataFromDialog.subtotal,
       taxAmount: invoiceDataFromDialog.taxAmount || 0,
@@ -329,7 +333,7 @@ export default function InvoicesPage() {
         invoiceTotal: invoice.total,
         invoiceItems: invoiceItemsDescription,
         dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : undefined,
-        companyNameToDisplay: "Delaware Fence Solutions",
+        companyNameToDisplay: companySettingsForPrinting?.companyName || "Delaware Fence Solutions", // Use fetched company name
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -460,7 +464,7 @@ export default function InvoicesPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && invoiceForPrinting && ( 
+       {(isLoadingCompanySettings && invoiceForPrinting) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable invoice...</p>

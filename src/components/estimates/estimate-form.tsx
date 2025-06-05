@@ -50,6 +50,7 @@ const estimateFormSchema = z.object({
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
+  poNumber: z.string().optional(), // Added P.O. Number
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
 });
@@ -81,6 +82,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
       customerId: estimate.customerId || '',
       customerName: estimate.customerName || '',
+      poNumber: estimate.poNumber || '',
       lineItems: estimate.lineItems.map(li => ({
         id: li.id,
         productId: li.productId,
@@ -94,6 +96,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       customerName: '',
       date: new Date(),
       status: 'Draft',
+      poNumber: '',
       lineItems: [{ productId: '', quantity: 1, unitPrice: 0 }],
       notes: '',
     };
@@ -146,12 +149,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     if (needsUpdate) {
       setLineItemCategoryFilters(newCalculatedFilters);
     }
-  }, [watchedLineItems, products]); // Removed lineItemCategoryFilters from dependency array
+  }, [watchedLineItems, products]);
 
 
   useEffect(() => {
     form.reset(defaultFormValues);
-    // Also reset lineItemCategoryFilters when defaultFormValues change (e.g. new estimate or different estimate loaded)
      setLineItemCategoryFilters(
         defaultFormValues.lineItems.map(item => {
             if (item.productId) {
@@ -274,6 +276,10 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
             </FormItem>
           )}
         />
+        
+        <FormField control={form.control} name="poNumber" render={({ field }) => (
+          <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
+        )} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="date" render={({ field }) => (
@@ -490,5 +496,3 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     </Form>
   );
 }
-
-    
