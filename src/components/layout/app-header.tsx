@@ -21,13 +21,6 @@ export function AppHeader() {
   const { toast } = useToast();
   const { user, logout, loading } = useAuth(); // Get user and logout function
 
-  const handleProfileClick = () => {
-    toast({
-      title: "Profile Clicked",
-      description: "User profile page functionality would be here.",
-    });
-  };
-
   const handleLogoutClick = async () => {
     await logout();
     // Navigation is handled within the logout function in AuthContext
@@ -55,11 +48,15 @@ export function AppHeader() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>{user.displayName || user.email || 'My Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleProfileClick} disabled={loading}>
-                Profile
-              </DropdownMenuItem>
+              <Link href="/settings/profile" passHref>
+                <DropdownMenuItem disabled={loading}>
+                  <Icon name="UserCog" className="mr-2 h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
+              </Link>
               <Link href="/settings" passHref>
                 <DropdownMenuItem disabled={loading}>
+                  <Icon name="Settings" className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
               </Link>

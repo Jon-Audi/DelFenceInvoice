@@ -14,9 +14,27 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Icon name="UserCog" className="mr-2 h-5 w-5" />
+              User Profile
+            </CardTitle>
+            <CardDescription>View and manage your personal profile information.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/settings/profile" passHref>
+              <Button variant="outline">
+                View Profile
+                <Icon name="ChevronRight" className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Icon name="UsersRound" className="mr-2 h-5 w-5" /> {/* Changed Icon */}
               User Management
             </CardTitle>
-            <CardDescription>Manage user accounts, roles, and permissions.</CardDescription>
+            <CardDescription>Manage all user accounts, roles, and permissions.</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/settings/users" passHref>
