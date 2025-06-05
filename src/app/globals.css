@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -104,5 +105,123 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-inter), sans-serif;
+  }
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact; /* Chrome, Safari */
+    color-adjust: exact; /* Firefox, Edge */
+    background-color: white !important; /* Ensure background is white for print */
+    color: black !important; /* Ensure text is black for print */
+    font-size: 10pt; /* Adjust base font size for print */
+  }
+
+  /* Hide all elements by default in print mode */
+  body > :not(.print-only-container) {
+    display: none !important;
+  }
+  
+  /* Ensure the print-only container and its content are visible */
+  .print-only-container,
+  .print-only-container .print-only {
+    display: block !important;
+    width: 100% !important;
+    position: static !important; /* Override any fixed/absolute positioning */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .print-only {
+    display: block !important;
+    font-family: Arial, sans-serif; /* Use a common print-friendly font */
+  }
+
+  .print-only h1, .print-only h2, .print-only h3, .print-only h4, .print-only h5, .print-only h6 {
+    color: black !important;
+  }
+  
+  .print-only table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .print-only th, .print-only td {
+    border: 1px solid #ccc !important; /* Lighter border for print */
+    padding: 6px; /* Adjust padding for print */
+    color: black !important;
+  }
+  .print-only th {
+    background-color: #f0f0f0 !important; /* Light gray background for table headers */
+  }
+
+  /* Prevent page breaks inside these elements */
+  .print-only tr, .print-only table, .print-only .mb-10, .print-only .mb-8 {
+    page-break-inside: avoid;
+  }
+  .print-only .grid {
+      display: grid !important; /* Ensure Tailwind grid works */
+  }
+  .print-only .grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .print-only .grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .print-only .text-right { text-align: right !important; }
+  .print-only .text-left { text-align: left !important; }
+  .print-only .text-center { text-align: center !important; }
+  .print-only .font-bold { font-weight: bold !important; }
+  .print-only .font-semibold { font-weight: 600 !important; }
+  .print-only .mb-2 { margin-bottom: 0.5rem !important; }
+  .print-only .mb-8 { margin-bottom: 2rem !important; }
+  .print-only .mb-10 { margin-bottom: 2.5rem !important; }
+  .print-only .p-2 { padding: 0.5rem !important; }
+  .print-only .p-4 { padding: 1rem !important; }
+  .print-only .p-8 { padding: 2rem !important; } /* Typically page margins are handled by printer settings */
+  .print-only .text-sm { font-size: 0.875rem !important; }
+  .print-only .text-md { font-size: 1rem !important; }
+  .print-only .text-lg { font-size: 1.125rem !important; }
+  .print-only .text-xl { font-size: 1.25rem !important; }
+  .print-only .text-3xl { font-size: 1.875rem !important; }
+  .print-only .text-4xl { font-size: 2.25rem !important; }
+  .print-only .text-gray-500 { color: #6b7280 !important; }
+  .print-only .text-gray-600 { color: #4b5563 !important; }
+  .print-only .text-gray-700 { color: #374151 !important; }
+  .print-only .text-gray-800 { color: #1f2937 !important; }
+  .print-only .text-green-600 { color: #16a34a !important; }
+  .print-only .border { border-width: 1px !important; }
+  .print-only .border-gray-200 { border-color: #e5e7eb !important; }
+  .print-only .border-gray-300 { border-color: #d1d5db !important; }
+  .print-only .border-gray-400 { border-color: #9ca3af !important; }
+  .print-only .border-t { border-top-width: 1px !important; }
+  .print-only .rounded-md { border-radius: 0.375rem !important; }
+  .print-only .bg-gray-50 { background-color: #f9fafb !important; }
+  .print-only .bg-gray-100 { background-color: #f3f4f6 !important; }
+  .print-only .pt-2 { padding-top: 0.5rem !important; }
+  .print-only .mt-2 { margin-top: 0.5rem !important; }
+  .print-only .pt-8 { padding-top: 2rem !important; }
+  .print-only .whitespace-pre-line { white-space: pre-line !important; }
+
+
+  /* Ensure links don't show URL by default unless explicitly styled */
+  .print-only a {
+    text-decoration: none;
+    color: inherit;
+  }
+  .print-only a[href]:after {
+    content: ""; /* Remove URL display for general links in print */
+  }
+
+  /* Specific classes from PrintableInvoice for clarity */
+  .print-only .gap-8 { gap: 2rem !important; }
+  .print-only .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem !important; }
+
+  @page {
+    margin: 0.75in; /* Adjust page margins as needed */
+    size: auto; /* auto is the initial value */
   }
 }

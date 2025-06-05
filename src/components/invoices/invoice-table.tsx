@@ -19,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -31,30 +32,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
   onSave: (invoice: Invoice) => void;
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
+  onPrint: (invoice: Invoice) => void; // New prop for printing
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
   products: Product[];
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, formatDate, customers, products }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, formatDate, customers, products }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
     switch (status) {
       case 'Paid':
-        return 'default'; // Typically green or primary
+        return 'default'; 
       case 'Partially Paid':
-        return 'secondary'; // Amber or another distinct color
+        return 'secondary'; 
       case 'Sent':
-        return 'outline'; // Blue or neutral
+        return 'outline'; 
       case 'Draft':
-        return 'outline'; // Gray or neutral
+        return 'outline'; 
       case 'Voided':
         return 'destructive';
       default:
@@ -121,6 +124,10 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, form
                     <DropdownMenuItem onClick={() => onGenerateEmail(invoice)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Invoice
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onPrint(invoice)}>
+                      <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Invoice
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive focus:bg-destructive/10"
                       onSelect={() => setInvoiceToDelete(invoice)}

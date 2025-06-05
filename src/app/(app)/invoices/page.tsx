@@ -21,13 +21,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, Estimate, Order } from '@/types'; // Added Order type
+import type { Invoice, Customer, Product, Estimate, Order, CompanySettings } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 
+const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -51,11 +53,17 @@ export default function InvoicesPage() {
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
   const [conversionInvoiceData, setConversionInvoiceData] = useState<InvoiceFormData | null>(null);
 
+  const [invoiceForPrinting, setInvoiceForPrinting] = useState<Invoice | null>(null);
+  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
+  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+
   useEffect(() => {
-    setIsClient(true);
+    setIsClient(true); // For date formatting
+  }, []);
+
+  useEffect(() => {
     const pendingEstimateRaw = localStorage.getItem('estimateToConvert_invoice');
     const pendingOrderRaw = localStorage.getItem('orderToConvert_invoice');
-
     let newInvoiceData: InvoiceFormData | null = null;
 
     if (pendingEstimateRaw) {
@@ -90,15 +98,15 @@ export default function InvoicesPage() {
          newInvoiceData = {
           invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: orderToConvert.customerId,
-          date: new Date(), // Invoice date is today
+          date: new Date(), 
           status: 'Draft',
           lineItems: orderToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
-          paymentTerms: 'Due upon receipt', // Default payment terms
-          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), // Default due date
+          paymentTerms: 'Due upon receipt', 
+          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), 
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
@@ -110,11 +118,14 @@ export default function InvoicesPage() {
       }
     }
 
-    if (newInvoiceData) {
-      setConversionInvoiceData(newInvoiceData);
+    setConversionInvoiceData(newInvoiceData); 
+  }, [toast]);
+
+  useEffect(() => {
+    if (conversionInvoiceData && !isLoadingProducts && !isLoadingCustomers) {
       setIsConvertingInvoice(true);
     }
-  }, [toast]);
+  }, [conversionInvoiceData, isLoadingProducts, isLoadingCustomers]);
 
 
   useEffect(() => {
@@ -221,6 +232,42 @@ export default function InvoicesPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
+    setIsLoadingCompanySettings(true);
+    try {
+      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as CompanySettings;
+      }
+      toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
+      return null;
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
+      return null;
+    } finally {
+      setIsLoadingCompanySettings(false);
+    }
+  };
+
+  const handlePrintInvoice = async (invoice: Invoice) => {
+    const settings = await fetchCompanySettings();
+    if (settings) {
+      setCompanySettingsForPrinting(settings);
+      setInvoiceForPrinting(invoice);
+    } else {
+      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+    }
+  };
+
+  const handlePrinted = () => {
+    // Reset state after printing is initiated by PrintableInvoice
+    setInvoiceForPrinting(null);
+    setCompanySettingsForPrinting(null);
+  };
+
+
   const handleGenerateEmail = async (invoice: Invoice) => {
     setSelectedInvoiceForEmail(invoice);
     setIsEmailModalOpen(true);
@@ -322,6 +369,7 @@ export default function InvoicesPage() {
             onSave={handleSaveInvoice}
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
+            onPrint={handlePrintInvoice}
             formatDate={formatDate}
             customers={customers}
             products={products}
@@ -366,6 +414,23 @@ export default function InvoicesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Container for the printable invoice, hidden by default */}
+      <div className="print-only-container">
+        {(invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
+          <PrintableInvoice 
+            invoice={invoiceForPrinting} 
+            companySettings={companySettingsForPrinting}
+            onPrinted={handlePrinted} 
+          />
+        )}
+      </div>
+       {isLoadingCompanySettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
+            <p className="ml-2 text-white">Preparing printable invoice...</p>
+        </div>
       )}
     </>
   );

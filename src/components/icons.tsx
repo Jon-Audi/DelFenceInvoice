@@ -35,7 +35,8 @@ import {
   ChevronsUpDown,
   Check,
   CalendarDays,
-  TrendingUp, // Added TrendingUp
+  TrendingUp,
+  Printer, // Added Printer icon
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -77,7 +78,8 @@ const iconComponents = {
   ChevronsUpDown,
   Check,
   Calendar: CalendarDays,
-  TrendingUp, // Added TrendingUp
+  TrendingUp,
+  Printer, // Added Printer icon
 };
 
 interface IconProps extends LucideProps {
