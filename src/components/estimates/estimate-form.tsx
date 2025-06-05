@@ -34,6 +34,7 @@ import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
+const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_"; // Special value for "All Categories"
 
 const lineItemSchema = z.object({
   id: z.string().optional(),
@@ -44,7 +45,7 @@ const lineItemSchema = z.object({
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), 
+  customerName: z.string().optional(),
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -60,7 +61,7 @@ interface EstimateFormProps {
   onClose?: () => void;
   products: Product[];
   customers: Customer[];
-  productCategories: string[]; // Added productCategories prop
+  productCategories: string[];
 }
 
 export function EstimateForm({ estimate, onSubmit, onClose, products, customers, productCategories }: EstimateFormProps) {
@@ -83,7 +84,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       customerName: '',
       date: new Date(),
       status: 'Draft',
-      lineItems: [{ productId: '', quantity: 1 }], // Start with one empty line item
+      lineItems: [{ productId: '', quantity: 1 }],
       notes: '',
     };
   }, [estimate]);
@@ -102,7 +103,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
   useEffect(() => {
-    form.reset(defaultFormValues);
+    // form.reset(defaultFormValues); // This might be causing issues if called too often or resetting filters
     const initialCategories = defaultFormValues.lineItems.map(item => {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
@@ -111,21 +112,27 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       return undefined;
     });
     setLineItemCategoryFilters(initialCategories);
-  }, [defaultFormValues, form.reset, products]);
+  }, [defaultFormValues, products]); // Removed form.reset from here to see if it helps with stale closures or re-renders
   
+  // Effect to re-initialize form if estimate prop changes
   useEffect(() => {
-    // This effect syncs filter state if lineItems are added/removed externally or products change
+    form.reset(defaultFormValues);
+  }, [estimate, defaultFormValues, form.reset]);
+
+
+  useEffect(() => {
     if (watchedLineItems.length !== lineItemCategoryFilters.length) {
         const updatedFilters = watchedLineItems.map((item, index) => {
+            if (lineItemCategoryFilters[index] !== undefined) return lineItemCategoryFilters[index]; // Preserve existing if already set
             if (item.productId) {
                 const product = products.find(p => p.id === item.productId);
-                return product?.category || lineItemCategoryFilters[index];
+                return product?.category;
             }
-            return lineItemCategoryFilters[index]; // Preserve existing filter if no product ID
+            return undefined;
         });
         setLineItemCategoryFilters(updatedFilters);
     }
-  }, [watchedLineItems, products, lineItemCategoryFilters.length]);
+  }, [watchedLineItems, products, lineItemCategoryFilters]);
 
 
   const calculateSubtotal = useCallback(() => {
@@ -142,13 +149,14 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   useEffect(() => {
     const newSubtotal = calculateSubtotal();
     setSubtotal(newSubtotal);
-    setTotal(newSubtotal); 
+    setTotal(newSubtotal);
   }, [watchedLineItems, calculateSubtotal]);
 
-  const handleCategoryFilterChange = (index: number, category: string | undefined) => {
+  const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
+    const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
     setLineItemCategoryFilters(prevFilters => {
       const newFilters = [...prevFilters];
-      newFilters[index] = category;
+      newFilters[index] = newCategoryFilter;
       return newFilters;
     });
     // Clear product selection when category filter changes
@@ -189,7 +197,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     if (selectedCategory) {
       return products.filter(p => p.category === selectedCategory);
     }
-    return products; // Show all if no category filter selected
+    return products;
   };
 
   return (
@@ -229,7 +237,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                             onSelect={() => {
                               form.setValue("customerId", customer.id, { shouldValidate: true });
                               const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName); 
+                              form.setValue("customerName", displayName);
                             }}
                           >
                             <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -316,12 +324,12 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
               <FormItem>
                 <FormLabel>Category Filter</FormLabel>
                 <Select
-                  value={lineItemCategoryFilters[index] || ''}
-                  onValueChange={(value) => handleCategoryFilterChange(index, value || undefined)}
+                  value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                  onValueChange={(value) => handleCategoryFilterChange(index, value)}
                 >
                   <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
                   <SelectContent>
-                    <SelectItem value="">All Categories</SelectItem>
+                    <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
                     {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
                   </SelectContent>
                 </Select>
