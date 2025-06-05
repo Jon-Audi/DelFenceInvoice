@@ -47,10 +47,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
-import type { Estimate, Product, Customer } from '@/types';
+import type { Estimate, Product, Customer, CompanySettings } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { PrintableEstimate } from '@/components/estimates/printable-estimate'; // Added import
+
+const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -72,6 +75,10 @@ export default function EstimatesPage() {
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
   const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
+
+  const [estimateForPrinting, setEstimateForPrinting] = useState<Estimate | null>(null);
+  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
+  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -189,7 +196,6 @@ export default function EstimatesPage() {
     const { id, ...customerData } = customerToSave;
     try {
       if (id && customers.some(c => c.id === id)) {
-        // Edit existing customer
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, customerData, { merge: true });
         toast({
@@ -198,8 +204,6 @@ export default function EstimatesPage() {
         });
         return id;
       } else {
-        // Add new customer
-        // Remove temporary ID if it exists from client-side generation before saving to Firestore
         const dataToSave = { ...customerData };
         if (dataToSave.id) delete (dataToSave as any).id;
 
@@ -208,7 +212,7 @@ export default function EstimatesPage() {
           title: "Customer Added",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
         });
-        return docRef.id; // Return the new ID
+        return docRef.id; 
       }
     } catch (error) {
       console.error("Error saving customer:", error);
@@ -230,6 +234,41 @@ export default function EstimatesPage() {
     }
     setEstimateToDelete(null);
   };
+
+  const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
+    setIsLoadingCompanySettings(true);
+    try {
+      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as CompanySettings;
+      }
+      toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
+      return null;
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
+      return null;
+    } finally {
+      setIsLoadingCompanySettings(false);
+    }
+  };
+
+  const handlePrintEstimate = async (estimate: Estimate) => {
+    const settings = await fetchCompanySettings();
+    if (settings) {
+      setCompanySettingsForPrinting(settings);
+      setEstimateForPrinting(estimate);
+    } else {
+      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+    }
+  };
+
+  const handlePrinted = () => {
+    setEstimateForPrinting(null);
+    setCompanySettingsForPrinting(null);
+  };
+
 
   const handleGenerateEmail = async (estimate: Estimate) => {
     setSelectedEstimateForEmail(estimate);
@@ -287,7 +326,7 @@ export default function EstimatesPage() {
     setIsEmailModalOpen(false);
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDateForDisplay = (dateString: string) => {
     if (!isClient) return new Date(dateString).toISOString().split('T')[0];
     return new Date(dateString).toLocaleDateString();
   };
@@ -352,7 +391,7 @@ export default function EstimatesPage() {
                 <TableRow key={estimate.id}>
                   <TableCell>{estimate.estimateNumber}</TableCell>
                   <TableCell>{estimate.customerName}</TableCell>
-                  <TableCell>{formatDate(estimate.date)}</TableCell>
+                  <TableCell>{formatDateForDisplay(estimate.date)}</TableCell>
                   <TableCell>${estimate.total.toFixed(2)}</TableCell>
                   <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
                   <TableCell>
@@ -378,6 +417,9 @@ export default function EstimatesPage() {
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintEstimate(estimate)}>
+                           <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Estimate
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleConvertToOrder(estimate)}>
@@ -460,6 +502,24 @@ export default function EstimatesPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <div className="print-only-container">
+        {(estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
+          <PrintableEstimate 
+            estimate={estimateForPrinting} 
+            companySettings={companySettingsForPrinting}
+            onPrinted={handlePrinted} 
+          />
+        )}
+      </div>
+       {isLoadingCompanySettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
+            <p className="ml-2 text-white">Preparing printable estimate...</p>
+        </div>
+      )}
     </>
   );
 }
+
+    
