@@ -71,6 +71,7 @@ export default function EstimatesPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
+  const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
 
   useEffect(() => {
     setIsClient(true);
@@ -120,7 +121,7 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedProducts.push({ ...docSnap.data() as Omit<Product, 'id'>, id: docSnap.id });
       });
-      setProducts(fetchedProducts);
+      setProducts(fetchedProducts); // Update products state
       setIsLoadingProducts(false);
     }, (error) => {
       console.error("Error fetching products:", error);
@@ -130,10 +131,18 @@ export default function EstimatesPage() {
     return () => unsubscribe();
   }, [toast]);
 
-  const productCategories = useMemo(() => {
-    if (!products) return [];
-    return Array.from(new Set(products.map(p => p.category))).sort();
-  }, [products]);
+  // Effect to stabilize productCategories
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
+      // Only update if the actual categories have changed to prevent unnecessary re-renders
+      if (JSON.stringify(newCategories) !== JSON.stringify(stableProductCategories)) {
+        setStableProductCategories(newCategories);
+      }
+    } else if (stableProductCategories.length > 0) { // Products cleared
+        setStableProductCategories([]);
+    }
+  }, [products, stableProductCategories]);
 
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
@@ -260,7 +269,7 @@ export default function EstimatesPage() {
           onSave={handleSaveEstimate}
           products={products}
           customers={customers}
-          productCategories={productCategories}
+          productCategories={stableProductCategories}
         />
       </PageHeader>
 
@@ -307,7 +316,7 @@ export default function EstimatesPage() {
                           onSave={handleSaveEstimate}
                           products={products}
                           customers={customers}
-                          productCategories={productCategories}
+                          productCategories={stableProductCategories}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
