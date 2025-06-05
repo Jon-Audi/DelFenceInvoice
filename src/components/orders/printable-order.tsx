@@ -7,21 +7,13 @@ import type { Order, CompanySettings } from '@/types';
 interface PrintableOrderProps {
   order: Order | null;
   companySettings: CompanySettings | null;
-  onPrinted: () => void;
+  // onPrinted prop is removed
 }
 
-export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySettings, onPrinted }) => {
+export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySettings }) => {
   const printRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (order && companySettings && printRef.current) {
-      const timer = setTimeout(() => {
-        window.print();
-        onPrinted();
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [order, companySettings, onPrinted]);
+  // useEffect for calling window.print() is removed from here.
 
   if (!order || !companySettings) {
     return null;

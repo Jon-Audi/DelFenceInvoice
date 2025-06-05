@@ -85,7 +85,7 @@ export default function InvoicesPage() {
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: '', // Ensure initialized as empty string
+          newPaymentNotes: '', 
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -110,7 +110,7 @@ export default function InvoicesPage() {
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: '', // Ensure initialized as empty string
+          newPaymentNotes: '', 
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -190,20 +190,18 @@ export default function InvoicesPage() {
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     const { id, ...invoiceDataFromDialog } = invoiceToSave;
 
-    // Explicitly build the object for Firestore to avoid undefined fields
     const dataForFirestore: Partial<Omit<Invoice, 'id'>> = {
       invoiceNumber: invoiceDataFromDialog.invoiceNumber,
       customerId: invoiceDataFromDialog.customerId,
       customerName: invoiceDataFromDialog.customerName,
-      date: invoiceDataFromDialog.date, // Already stringified by dialog
+      date: invoiceDataFromDialog.date, 
       status: invoiceDataFromDialog.status,
       lineItems: invoiceDataFromDialog.lineItems,
       subtotal: invoiceDataFromDialog.subtotal,
-      taxAmount: invoiceDataFromDialog.taxAmount || 0, // Default to 0
+      taxAmount: invoiceDataFromDialog.taxAmount || 0, 
       total: invoiceDataFromDialog.total,
-      payments: invoiceDataFromDialog.payments || [], // Ensure payments array exists
-      amountPaid: invoiceDataFromDialog.amountPaid || 0, // Default to 0
-      // balanceDue will be set below
+      payments: invoiceDataFromDialog.payments || [], 
+      amountPaid: invoiceDataFromDialog.amountPaid || 0, 
     };
 
     if (invoiceDataFromDialog.dueDate) {
@@ -216,7 +214,6 @@ export default function InvoicesPage() {
       dataForFirestore.notes = invoiceDataFromDialog.notes;
     }
     
-    // Calculate balanceDue based on the potentially updated total and amountPaid
     const currentTotal = dataForFirestore.total || 0;
     const currentAmountPaid = dataForFirestore.amountPaid || 0;
     dataForFirestore.balanceDue = currentTotal - currentAmountPaid;
@@ -227,12 +224,9 @@ export default function InvoicesPage() {
         await setDoc(invoiceRef, dataForFirestore, { merge: true });
         toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
       } else {
-        // Ensure all required fields for a new Invoice document are present
         const finalDataForAddDoc = {
           ...dataForFirestore,
-          // Ensure any fields that are not optional in the Invoice type but might be in Partial here are set
-          // For example, if customerName was optional in Partial but required in Invoice (it is optional)
-        } as Invoice; // Cast if confident all required fields are present
+        } as Invoice; 
 
         const docRef = await addDoc(collection(db, 'invoices'), finalDataForAddDoc);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
@@ -288,6 +282,7 @@ export default function InvoicesPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setInvoiceForPrinting(invoice);
+      // window.print() will be called by useEffect in this component
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -297,6 +292,16 @@ export default function InvoicesPage() {
     setInvoiceForPrinting(null);
     setCompanySettingsForPrinting(null);
   };
+
+  useEffect(() => {
+    if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      const printTimer = setTimeout(() => {
+        window.print();
+        handlePrinted(); // Reset state after print dialog is likely closed/actioned
+      }, 100); // Delay to allow content to render
+      return () => clearTimeout(printTimer);
+    }
+  }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
 
   const handleGenerateEmail = async (invoice: Invoice) => {
@@ -452,7 +457,7 @@ export default function InvoicesPage() {
           <PrintableInvoice 
             invoice={invoiceForPrinting} 
             companySettings={companySettingsForPrinting}
-            onPrinted={handlePrinted} 
+            // onPrinted prop is removed
           />
         )}
       </div>

@@ -7,21 +7,13 @@ import type { Estimate, CompanySettings } from '@/types';
 interface PrintableEstimateProps {
   estimate: Estimate | null;
   companySettings: CompanySettings | null;
-  onPrinted: () => void;
+  // onPrinted prop is removed
 }
 
-export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, companySettings, onPrinted }) => {
+export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, companySettings }) => {
   const printRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (estimate && companySettings && printRef.current) {
-      const timer = setTimeout(() => {
-        window.print();
-        onPrinted();
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [estimate, companySettings, onPrinted]);
+  // useEffect for calling window.print() is removed from here.
 
   if (!estimate || !companySettings) {
     return null;
@@ -121,5 +113,4 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     </div>
   );
 };
-
     

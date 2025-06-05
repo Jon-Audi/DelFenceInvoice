@@ -7,22 +7,13 @@ import type { Invoice, CompanySettings } from '@/types';
 interface PrintableInvoiceProps {
   invoice: Invoice | null;
   companySettings: CompanySettings | null;
-  onPrinted: () => void; // Callback to notify when printing is initiated
+  // onPrinted prop is removed as parent will handle post-print cleanup
 }
 
-export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings, onPrinted }) => {
+export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
   const printRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (invoice && companySettings && printRef.current) {
-      // Delay slightly to ensure content is rendered before printing
-      const timer = setTimeout(() => {
-        window.print();
-        onPrinted(); // Notify parent that print was triggered
-      }, 250); // Adjust delay as needed
-      return () => clearTimeout(timer);
-    }
-  }, [invoice, companySettings, onPrinted]);
+  // useEffect for calling window.print() is removed from here.
 
   if (!invoice || !companySettings) {
     return null;

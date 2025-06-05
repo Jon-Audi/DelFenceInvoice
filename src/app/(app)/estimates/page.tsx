@@ -51,7 +51,7 @@ import type { Estimate, Product, Customer, CompanySettings } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { PrintableEstimate } from '@/components/estimates/printable-estimate'; // Added import
+import { PrintableEstimate } from '@/components/estimates/printable-estimate'; 
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -259,6 +259,7 @@ export default function EstimatesPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setEstimateForPrinting(estimate);
+      // window.print() will be called by a useEffect in this component (see below)
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -268,6 +269,16 @@ export default function EstimatesPage() {
     setEstimateForPrinting(null);
     setCompanySettingsForPrinting(null);
   };
+  
+  useEffect(() => {
+    if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      const printTimer = setTimeout(() => {
+        window.print();
+        handlePrinted(); 
+      }, 100); 
+      return () => clearTimeout(printTimer);
+    }
+  }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
 
   const handleGenerateEmail = async (estimate: Estimate) => {
@@ -508,7 +519,7 @@ export default function EstimatesPage() {
           <PrintableEstimate 
             estimate={estimateForPrinting} 
             companySettings={companySettingsForPrinting}
-            onPrinted={handlePrinted} 
+            // onPrinted prop is removed
           />
         )}
       </div>
