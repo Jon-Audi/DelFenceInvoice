@@ -47,6 +47,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
 import type { Estimate, Product, Customer, CompanySettings, EmailContact } from '@/types';
@@ -290,6 +291,8 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      console.log("[EstimatesPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
+      console.log("[EstimatesPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
