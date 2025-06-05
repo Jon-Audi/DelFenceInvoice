@@ -26,7 +26,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -193,13 +193,12 @@ export default function InvoicesPage() {
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     const { id, ...invoiceDataFromDialog } = invoiceToSave;
 
-    const dataForFirestore: Partial<Omit<Invoice, 'id'>> = {
+    const basePayload: any = {
       invoiceNumber: invoiceDataFromDialog.invoiceNumber,
       customerId: invoiceDataFromDialog.customerId,
       customerName: invoiceDataFromDialog.customerName,
       date: invoiceDataFromDialog.date,
       status: invoiceDataFromDialog.status,
-      poNumber: invoiceDataFromDialog.poNumber || undefined, // Added P.O. Number
       lineItems: invoiceDataFromDialog.lineItems,
       subtotal: invoiceDataFromDialog.subtotal,
       taxAmount: invoiceDataFromDialog.taxAmount || 0,
@@ -207,32 +206,44 @@ export default function InvoicesPage() {
       payments: invoiceDataFromDialog.payments || [],
       amountPaid: invoiceDataFromDialog.amountPaid || 0,
     };
+    basePayload.balanceDue = (basePayload.total || 0) - (basePayload.amountPaid || 0);
 
-    if (invoiceDataFromDialog.dueDate) {
-      dataForFirestore.dueDate = invoiceDataFromDialog.dueDate;
-    }
-    if (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') {
-      dataForFirestore.paymentTerms = invoiceDataFromDialog.paymentTerms;
-    }
-    if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
-      dataForFirestore.notes = invoiceDataFromDialog.notes;
-    }
-
-    const currentTotal = dataForFirestore.total || 0;
-    const currentAmountPaid = dataForFirestore.amountPaid || 0;
-    dataForFirestore.balanceDue = currentTotal - currentAmountPaid;
 
     try {
-      if (id && invoices.some(i => i.id === id)) {
+      if (id && invoices.some(i => i.id === id)) { // Editing existing invoice
         const invoiceRef = doc(db, 'invoices', id);
-        await setDoc(invoiceRef, dataForFirestore, { merge: true });
-        toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
-      } else {
-        const finalDataForAddDoc = {
-          ...dataForFirestore,
-        } as Invoice;
+        const updatePayload = { ...basePayload };
 
-        const docRef = await addDoc(collection(db, 'invoices'), finalDataForAddDoc);
+        updatePayload.poNumber = (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') 
+                                  ? invoiceDataFromDialog.poNumber.trim() 
+                                  : deleteField();
+        updatePayload.dueDate = invoiceDataFromDialog.dueDate ? invoiceDataFromDialog.dueDate : deleteField();
+        updatePayload.paymentTerms = (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') 
+                                     ? invoiceDataFromDialog.paymentTerms.trim() 
+                                     : deleteField();
+        updatePayload.notes = (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') 
+                               ? invoiceDataFromDialog.notes.trim() 
+                               : deleteField();
+        
+        await setDoc(invoiceRef, updatePayload, { merge: true });
+        toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
+      } else { // Adding new invoice
+        const addPayload = { ...basePayload };
+
+        if (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') {
+          addPayload.poNumber = invoiceDataFromDialog.poNumber.trim();
+        }
+        if (invoiceDataFromDialog.dueDate) {
+          addPayload.dueDate = invoiceDataFromDialog.dueDate;
+        }
+        if (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') {
+          addPayload.paymentTerms = invoiceDataFromDialog.paymentTerms.trim();
+        }
+        if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
+          addPayload.notes = invoiceDataFromDialog.notes.trim();
+        }
+        
+        const docRef = await addDoc(collection(db, 'invoices'), addPayload);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {

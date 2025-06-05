@@ -51,7 +51,7 @@ import type { Order, Customer, Product, Estimate, CompanySettings } from '@/type
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -168,20 +168,58 @@ export default function OrdersPage() {
 
 
   const handleSaveOrder = async (orderToSave: Order) => {
-    const { id, ...orderData } = orderToSave;
+    const { id, ...orderDataFromDialog } = orderToSave;
     
-    const dataForFirestore = { ...orderData };
-    if (!dataForFirestore.poNumber) { // Ensure empty string PO is not saved as undefined
-        delete (dataForFirestore as any).poNumber;
-    }
+    const basePayload: any = {
+      orderNumber: orderDataFromDialog.orderNumber,
+      customerId: orderDataFromDialog.customerId,
+      customerName: orderDataFromDialog.customerName,
+      date: orderDataFromDialog.date,
+      status: orderDataFromDialog.status,
+      orderState: orderDataFromDialog.orderState,
+      lineItems: orderDataFromDialog.lineItems,
+      subtotal: orderDataFromDialog.subtotal,
+      taxAmount: orderDataFromDialog.taxAmount || 0,
+      total: orderDataFromDialog.total,
+    };
     
     try {
-      if (id && orders.some(o => o.id === id)) {
+      if (id && orders.some(o => o.id === id)) { // Editing existing order
         const orderRef = doc(db, 'orders', id);
-        await setDoc(orderRef, dataForFirestore, { merge: true });
+        const updatePayload = { ...basePayload };
+
+        updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') 
+                                  ? orderDataFromDialog.poNumber.trim() 
+                                  : deleteField();
+        updatePayload.expectedDeliveryDate = orderDataFromDialog.expectedDeliveryDate ? orderDataFromDialog.expectedDeliveryDate : deleteField();
+        updatePayload.readyForPickUpDate = orderDataFromDialog.readyForPickUpDate ? orderDataFromDialog.readyForPickUpDate : deleteField();
+        updatePayload.pickedUpDate = orderDataFromDialog.pickedUpDate ? orderDataFromDialog.pickedUpDate : deleteField();
+        updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') 
+                               ? orderDataFromDialog.notes.trim() 
+                               : deleteField();
+
+        await setDoc(orderRef, updatePayload, { merge: true });
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
-      } else {
-        const docRef = await addDoc(collection(db, 'orders'), dataForFirestore);
+      } else { // Adding new order
+        const addPayload = { ...basePayload };
+
+        if (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') {
+          addPayload.poNumber = orderDataFromDialog.poNumber.trim();
+        }
+        if (orderDataFromDialog.expectedDeliveryDate) {
+          addPayload.expectedDeliveryDate = orderDataFromDialog.expectedDeliveryDate;
+        }
+        if (orderDataFromDialog.readyForPickUpDate) {
+          addPayload.readyForPickUpDate = orderDataFromDialog.readyForPickUpDate;
+        }
+        if (orderDataFromDialog.pickedUpDate) {
+          addPayload.pickedUpDate = orderDataFromDialog.pickedUpDate;
+        }
+        if (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') {
+          addPayload.notes = orderDataFromDialog.notes.trim();
+        }
+
+        const docRef = await addDoc(collection(db, 'orders'), addPayload);
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {

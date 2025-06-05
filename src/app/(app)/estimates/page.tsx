@@ -50,7 +50,7 @@ import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
 import type { Estimate, Product, Customer, CompanySettings } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableEstimate } from '@/components/estimates/printable-estimate';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -150,7 +150,7 @@ export default function EstimatesPage() {
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
     const { id, ...estimateDataFromDialog } = estimateToSave;
 
-    const dataForFirestore: Partial<Omit<Estimate, 'id'>> = {
+    const basePayload: any = {
       estimateNumber: estimateDataFromDialog.estimateNumber,
       customerId: estimateDataFromDialog.customerId,
       customerName: estimateDataFromDialog.customerName,
@@ -160,27 +160,43 @@ export default function EstimatesPage() {
       subtotal: estimateDataFromDialog.subtotal,
       taxAmount: estimateDataFromDialog.taxAmount || 0,
       total: estimateDataFromDialog.total,
-      poNumber: estimateDataFromDialog.poNumber || undefined, // Added P.O. Number
     };
 
-    if (estimateDataFromDialog.validUntil) {
-      dataForFirestore.validUntil = estimateDataFromDialog.validUntil;
-    }
-    if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') {
-      dataForFirestore.notes = estimateDataFromDialog.notes;
-    }
-    if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') {
-        dataForFirestore.internalNotes = estimateDataFromDialog.internalNotes;
-    }
-
     try {
-      if (id && estimates.some(e => e.id === id)) {
+      if (id && estimates.some(e => e.id === id)) { // Editing existing estimate
         const estimateRef = doc(db, 'estimates', id);
-        await setDoc(estimateRef, dataForFirestore, { merge: true });
+        const updatePayload = { ...basePayload };
+
+        updatePayload.poNumber = (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') 
+                                  ? estimateDataFromDialog.poNumber.trim() 
+                                  : deleteField();
+        updatePayload.validUntil = estimateDataFromDialog.validUntil ? estimateDataFromDialog.validUntil : deleteField();
+        updatePayload.notes = (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') 
+                               ? estimateDataFromDialog.notes.trim() 
+                               : deleteField();
+        updatePayload.internalNotes = (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') 
+                                      ? estimateDataFromDialog.internalNotes.trim() 
+                                      : deleteField();
+        
+        await setDoc(estimateRef, updatePayload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
-      } else {
-        const finalDataForAddDoc = dataForFirestore as Estimate;
-        const docRef = await addDoc(collection(db, 'estimates'), finalDataForAddDoc);
+      } else { // Adding new estimate
+        const addPayload = { ...basePayload };
+
+        if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') {
+          addPayload.poNumber = estimateDataFromDialog.poNumber.trim();
+        }
+        if (estimateDataFromDialog.validUntil) {
+          addPayload.validUntil = estimateDataFromDialog.validUntil;
+        }
+        if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') {
+          addPayload.notes = estimateDataFromDialog.notes.trim();
+        }
+        if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') {
+          addPayload.internalNotes = estimateDataFromDialog.internalNotes.trim();
+        }
+        
+        const docRef = await addDoc(collection(db, 'estimates'), addPayload);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
@@ -268,10 +284,11 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      // Double requestAnimationFrame to ensure content is rendered before print
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
-          handlePrinted();
+          handlePrinted(); 
         });
       });
     }
