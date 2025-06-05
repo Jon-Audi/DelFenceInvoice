@@ -293,12 +293,16 @@ export default function InvoicesPage() {
     setCompanySettingsForPrinting(null);
   };
 
- useEffect(() => {
+  useEffect(() => {
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          const printContainer = document.querySelector('.print-only-container');
+          const printableContent = printContainer ? printContainer.innerHTML : 'Print container not found';
+          console.log('[InvoicesPage] Before print - Container found:', !!printContainer);
+          console.log('[InvoicesPage] Before print - Container innerHTML (first 200 chars):', printableContent.substring(0, 200));
           window.print();
-          handlePrinted(); // Reset state after print dialog is handled
+          handlePrinted();
         });
       });
     }
@@ -461,7 +465,7 @@ export default function InvoicesPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && invoiceForPrinting && ( // Show loader only when actually trying to print
+       {isLoadingCompanySettings && invoiceForPrinting && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable invoice...</p>
@@ -470,3 +474,5 @@ export default function InvoicesPage() {
     </>
   );
 }
+
+    

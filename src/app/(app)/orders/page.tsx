@@ -222,7 +222,6 @@ export default function OrdersPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setOrderForPrinting(order);
-      // Printing is now triggered by useEffect
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -237,6 +236,10 @@ export default function OrdersPage() {
     if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          const printContainer = document.querySelector('.print-only-container');
+          const printableContent = printContainer ? printContainer.innerHTML : 'Print container not found';
+          console.log('[OrdersPage] Before print - Container found:', !!printContainer);
+          console.log('[OrdersPage] Before print - Container innerHTML (first 200 chars):', printableContent.substring(0, 200));
           window.print();
           handlePrinted();
         });
@@ -500,7 +503,7 @@ export default function OrdersPage() {
           />
         )}
       </div>
-       {isLoadingCompanySettings && orderForPrinting && ( // Show loader only when actually trying to print
+       {isLoadingCompanySettings && orderForPrinting && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable order...</p>
@@ -509,3 +512,5 @@ export default function OrdersPage() {
     </>
   );
 }
+
+    
