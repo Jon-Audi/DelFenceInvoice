@@ -1,8 +1,8 @@
 
-"use client"; 
+"use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -47,20 +47,20 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
-import type { Order, Customer, Product, Estimate, CompanySettings } from '@/types'; 
+import type { Order, Customer, Product, Estimate, CompanySettings } from '@/types';
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
-import { db } from '@/lib/firebase'; 
+import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { PrintableOrder } from '@/components/orders/printable-order'; 
+import { PrintableOrder } from '@/components/orders/printable-order';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]); 
+  const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  
+
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
@@ -74,7 +74,7 @@ export default function OrdersPage() {
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
-  const router = useRouter(); 
+  const router = useRouter();
 
   const [isConvertingOrder, setIsConvertingOrder] = useState(false);
   const [conversionOrderData, setConversionOrderData] = useState<OrderFormData | null>(null);
@@ -97,7 +97,7 @@ export default function OrdersPage() {
           status: 'Ordered',
           orderState: 'Open',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            productId: li.productId, 
+            productId: li.productId,
             quantity: li.quantity,
           })),
           notes: estimateToConvert.notes || '',
@@ -252,10 +252,10 @@ export default function OrdersPage() {
     setEditableBody('');
 
     try {
-      const orderItemsDescription = order.lineItems.map(item => 
+      const orderItemsDescription = order.lineItems.map(item =>
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n') || 'Items as per order.';
-      
+
       const customer = customers.find(c => c.id === order.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
       const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com';
@@ -296,7 +296,7 @@ export default function OrdersPage() {
 
   const formatDateForDisplay = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
     if (!dateString) return '';
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; 
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0];
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
@@ -493,8 +493,8 @@ export default function OrdersPage() {
 
       <div className="print-only-container">
         {(orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableOrder 
-            order={orderForPrinting} 
+          <PrintableOrder
+            order={orderForPrinting}
             companySettings={companySettingsForPrinting}
           />
         )}
@@ -508,5 +508,3 @@ export default function OrdersPage() {
     </>
   );
 }
-
-    

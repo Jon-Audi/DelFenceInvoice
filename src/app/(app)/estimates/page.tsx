@@ -1,5 +1,5 @@
 
-"use client"; 
+"use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -51,7 +51,7 @@ import type { Estimate, Product, Customer, CompanySettings } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { PrintableEstimate } from '@/components/estimates/printable-estimate'; 
+import { PrintableEstimate } from '@/components/estimates/printable-estimate';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -59,7 +59,7 @@ export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  
+
   const [isLoadingEstimates, setIsLoadingEstimates] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
@@ -128,7 +128,7 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedProducts.push({ ...docSnap.data() as Omit<Product, 'id'>, id: docSnap.id });
       });
-      setProducts(fetchedProducts); 
+      setProducts(fetchedProducts);
       setIsLoadingProducts(false);
     }, (error) => {
       console.error("Error fetching products:", error);
@@ -145,7 +145,7 @@ export default function EstimatesPage() {
       if (JSON.stringify(newCategories) !== JSON.stringify(stableProductCategories)) {
         setStableProductCategories(newCategories);
       }
-    } else if (stableProductCategories.length > 0) { 
+    } else if (stableProductCategories.length > 0) {
         setStableProductCategories([]);
     }
   }, [products, stableProductCategories]);
@@ -212,7 +212,7 @@ export default function EstimatesPage() {
           title: "Customer Added",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
         });
-        return docRef.id; 
+        return docRef.id;
       }
     } catch (error) {
       console.error("Error saving customer:", error);
@@ -268,7 +268,7 @@ export default function EstimatesPage() {
     setEstimateForPrinting(null);
     setCompanySettingsForPrinting(null);
   };
-  
+
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
       requestAnimationFrame(() => {
@@ -290,11 +290,11 @@ export default function EstimatesPage() {
     setEditableBody('');
 
     try {
-      const lineItemsDescription = estimate.lineItems.map(item => 
+      const lineItemsDescription = estimate.lineItems.map(item =>
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
-      
-      const customer = customers.find(c => c.id === estimate.customerId); 
+
+      const customer = customers.find(c => c.id === estimate.customerId);
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
 
@@ -516,8 +516,8 @@ export default function EstimatesPage() {
 
       <div className="print-only-container">
         {(estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableEstimate 
-            estimate={estimateForPrinting} 
+          <PrintableEstimate
+            estimate={estimateForPrinting}
             companySettings={companySettingsForPrinting}
           />
         )}
@@ -531,5 +531,3 @@ export default function EstimatesPage() {
     </>
   );
 }
-
-    

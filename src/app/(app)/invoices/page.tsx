@@ -85,7 +85,7 @@ export default function InvoicesPage() {
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: '', 
+          newPaymentNotes: '',
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -98,19 +98,19 @@ export default function InvoicesPage() {
          newInvoiceData = {
           invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: orderToConvert.customerId,
-          date: new Date(), 
+          date: new Date(),
           status: 'Draft',
           lineItems: orderToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
-          paymentTerms: 'Due upon receipt', 
-          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), 
+          paymentTerms: 'Due upon receipt',
+          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
-          newPaymentNotes: '', 
+          newPaymentNotes: '',
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -118,7 +118,7 @@ export default function InvoicesPage() {
       }
     }
 
-    setConversionInvoiceData(newInvoiceData); 
+    setConversionInvoiceData(newInvoiceData);
   }, [toast]);
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function InvoicesPage() {
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         fetchedInvoices.push({
-             ...data as Omit<Invoice, 'id' | 'total' | 'amountPaid' | 'balanceDue'>, 
+             ...data as Omit<Invoice, 'id' | 'total' | 'amountPaid' | 'balanceDue'>,
              id: docSnap.id,
              total: data.total || 0,
              amountPaid: data.amountPaid || 0,
@@ -194,14 +194,14 @@ export default function InvoicesPage() {
       invoiceNumber: invoiceDataFromDialog.invoiceNumber,
       customerId: invoiceDataFromDialog.customerId,
       customerName: invoiceDataFromDialog.customerName,
-      date: invoiceDataFromDialog.date, 
+      date: invoiceDataFromDialog.date,
       status: invoiceDataFromDialog.status,
       lineItems: invoiceDataFromDialog.lineItems,
       subtotal: invoiceDataFromDialog.subtotal,
-      taxAmount: invoiceDataFromDialog.taxAmount || 0, 
+      taxAmount: invoiceDataFromDialog.taxAmount || 0,
       total: invoiceDataFromDialog.total,
-      payments: invoiceDataFromDialog.payments || [], 
-      amountPaid: invoiceDataFromDialog.amountPaid || 0, 
+      payments: invoiceDataFromDialog.payments || [],
+      amountPaid: invoiceDataFromDialog.amountPaid || 0,
     };
 
     if (invoiceDataFromDialog.dueDate) {
@@ -213,7 +213,7 @@ export default function InvoicesPage() {
     if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
       dataForFirestore.notes = invoiceDataFromDialog.notes;
     }
-    
+
     const currentTotal = dataForFirestore.total || 0;
     const currentAmountPaid = dataForFirestore.amountPaid || 0;
     dataForFirestore.balanceDue = currentTotal - currentAmountPaid;
@@ -226,7 +226,7 @@ export default function InvoicesPage() {
       } else {
         const finalDataForAddDoc = {
           ...dataForFirestore,
-        } as Invoice; 
+        } as Invoice;
 
         const docRef = await addDoc(collection(db, 'invoices'), finalDataForAddDoc);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
@@ -454,8 +454,8 @@ export default function InvoicesPage() {
 
       <div className="print-only-container">
         {(invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableInvoice 
-            invoice={invoiceForPrinting} 
+          <PrintableInvoice
+            invoice={invoiceForPrinting}
             companySettings={companySettingsForPrinting}
           />
         )}
@@ -469,5 +469,3 @@ export default function InvoicesPage() {
     </>
   );
 }
-
-    
