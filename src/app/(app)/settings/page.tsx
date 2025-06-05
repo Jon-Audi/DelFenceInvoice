@@ -31,7 +31,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-               <Icon name="FileText" className="mr-2 h-5 w-5" />
+               <Icon name="Settings" className="mr-2 h-5 w-5" />
               Company Information
             </CardTitle>
             <CardDescription>Manage your company details for estimates and invoices.</CardDescription>
