@@ -132,6 +132,7 @@
     color: black !important;
     font-size: 10pt !important;
     z-index: 9999 !important; /* Ensure it's on top */
+    /* border: 2px solid red !important; */ /* DEBUG: Removed red border */
   }
 
   /* Styles for the actual content block inside the container */

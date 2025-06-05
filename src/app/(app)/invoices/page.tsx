@@ -282,7 +282,6 @@ export default function InvoicesPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setInvoiceForPrinting(invoice);
-      // Printing is now triggered by useEffect
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -297,10 +296,6 @@ export default function InvoicesPage() {
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const printContainer = document.querySelector('.print-only-container');
-          const printableContent = printContainer ? printContainer.innerHTML : 'Print container not found';
-          console.log('[InvoicesPage] Before print - Container found:', !!printContainer);
-          console.log('[InvoicesPage] Before print - Container innerHTML (first 200 chars):', printableContent.substring(0, 200));
           window.print();
           handlePrinted();
         });
@@ -474,5 +469,3 @@ export default function InvoicesPage() {
     </>
   );
 }
-
-    
