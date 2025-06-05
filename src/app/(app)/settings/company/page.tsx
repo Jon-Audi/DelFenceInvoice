@@ -27,7 +27,7 @@ const companySettingsSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email({ message: "Invalid email address" }).optional().or(z.literal('')),
   website: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
-  logoUrl: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')), // Added logoUrl
+  logoUrl: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   taxId: z.string().optional(),
 });
 
@@ -52,7 +52,7 @@ export default function CompanySettingsPage() {
       phone: '',
       email: '',
       website: '',
-      logoUrl: '', // Default for logoUrl
+      logoUrl: '',
       taxId: '',
     },
   });
@@ -64,9 +64,25 @@ export default function CompanySettingsPage() {
         const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data() as CompanySettings;
-          form.reset(data);
+          const fetchedData = docSnap.data() as CompanySettings;
+          // Normalize fetchedData to ensure all optional string fields are at least ''
+          const normalizedData: CompanySettingsFormData = {
+            companyName: fetchedData.companyName || '', // Should always exist if document exists and schema is followed
+            addressLine1: fetchedData.addressLine1 || '',
+            addressLine2: fetchedData.addressLine2 || '',
+            city: fetchedData.city || '',
+            state: fetchedData.state || '',
+            zipCode: fetchedData.zipCode || '',
+            country: fetchedData.country || 'USA',
+            phone: fetchedData.phone || '',
+            email: fetchedData.email || '',
+            website: fetchedData.website || '',
+            logoUrl: fetchedData.logoUrl || '',
+            taxId: fetchedData.taxId || '',
+          };
+          form.reset(normalizedData);
         } else {
+          // No existing settings, form will use defaultValues which are already ''
           console.log("No company settings document found, using defaults.");
         }
       } catch (error) {
@@ -81,20 +97,19 @@ export default function CompanySettingsPage() {
       }
     };
     fetchCompanySettings();
-  }, [form, toast]);
+  }, [form, toast]); // form.reset is stable, so form is a fine dependency
 
   const onSubmit = async (data: CompanySettingsFormData) => {
     setIsLoading(true);
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-      // Ensure empty optional URL fields are stored as null or omitted rather than empty strings if needed
-      // For this setup, Zod with .optional().or(z.literal('')) handles empty strings fine for URLs.
-      // Firebase can store empty strings.
       const dataToSave = {
         ...data,
-        logoUrl: data.logoUrl?.trim() === '' ? undefined : data.logoUrl,
-        website: data.website?.trim() === '' ? undefined : data.website,
-        email: data.email?.trim() === '' ? undefined : data.email,
+        // Convert empty strings for optional URL/email fields to undefined if desired for Firestore
+        // For simplicity, Firestore can store empty strings. If undefined is preferred:
+        // email: data.email?.trim() === '' ? undefined : data.email,
+        // website: data.website?.trim() === '' ? undefined : data.website,
+        // logoUrl: data.logoUrl?.trim() === '' ? undefined : data.logoUrl,
       };
 
       await setDoc(docRef, dataToSave, { merge: true });
@@ -114,7 +129,7 @@ export default function CompanySettingsPage() {
     }
   };
 
-  if (isLoading && !form.formState.isDirty) {
+  if (isLoading && !form.formState.isDirty && !form.formState.isSubmitted) {
     return (
       <PageHeader title="Company Information" description="Manage your company's details.">
          <div className="flex items-center justify-center h-64">
