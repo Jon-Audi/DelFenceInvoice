@@ -87,6 +87,9 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
       console.log("Dashboard: fetchData called.");
+      console.log("Dashboard: AuthUser from context in useEffect:", authUser?.uid);
+      console.log("Dashboard: firebaseAuthInstance.currentUser in useEffect:", firebaseAuthInstance.currentUser?.uid);
+
 
       try {
         console.log("Dashboard: Attempting to fetch Product Count...");
@@ -192,7 +195,7 @@ export default function DashboardPage() {
     }
 
     if (authUser) {
-      console.log("Dashboard: Auth user context is (UID:", authUser.uid, "), authLoading is false. Attempting data fetch.");
+      console.log("Dashboard: AuthUser context is (UID:", authUser.uid, "), authLoading is false. Attempting data fetch.");
       console.log("Dashboard: firebaseAuthInstance.currentUser right before fetch:", firebaseAuthInstance.currentUser?.uid);
       fetchData();
     } else {
@@ -264,13 +267,13 @@ export default function DashboardPage() {
     <>
       <PageHeader title="Dashboard" description="Welcome to Delaware Fence Solutions.">
         <div className="flex gap-2">
-          <Link href="/orders/new" passHref>
+          <Link href="/orders" passHref>
             <Button>
               <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
               New Order
             </Button>
           </Link>
-          <Link href="/estimates/new" passHref>
+          <Link href="/estimates" passHref>
             <Button>
               <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
               New Estimate
