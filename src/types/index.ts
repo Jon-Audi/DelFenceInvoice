@@ -1,5 +1,4 @@
 
-
 export type ProductCategory = string; // Changed from union type to string
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -19,16 +18,16 @@ export type PermissionKey =
   | 'manage_invoices'
   | 'view_invoices'
   | 'access_settings'
-  | 'manage_company_settings'; // Added permission for company settings
+  | 'manage_company_settings';
 
 export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
-  unit: string; // e.g., 'piece', 'foot', 'linear ft', 'sq ft'
-  price: number; // selling price
+  unit: string;
+  price: number;
   cost: number;
-  markupPercentage: number; 
+  markupPercentage: number;
   description?: string;
 }
 
@@ -36,7 +35,7 @@ export interface EmailContact {
   id: string;
   type: EmailContactType;
   email: string;
-  name?: string; 
+  name?: string;
 }
 
 export interface Customer {
@@ -59,23 +58,34 @@ export interface Customer {
 export interface LineItem {
   id: string;
   productId: string;
-  productName: string; 
+  productName: string;
   quantity: number;
-  unitPrice: number; 
-  total: number; 
+  unitPrice: number;
+  total: number;
 }
 
-export type DocumentStatus = 
-  'Draft' | 
-  'Sent' | 
-  'Accepted' | 
-  'Rejected' | 
-  'Ordered' | 
-  'Ready for pick up' | 
-  'Picked up' | 
-  'Invoiced' | 
-  'Paid' | 
-  'Voided';
+export type PaymentMethod = 'Cash' | 'Check' | 'Credit Card' | 'Bank Transfer' | 'Other';
+
+export interface Payment {
+  id: string;
+  date: string; // ISO date string
+  amount: number;
+  method: PaymentMethod;
+  notes?: string;
+}
+
+export type DocumentStatus =
+  | 'Draft'
+  | 'Sent'
+  | 'Accepted'
+  | 'Rejected'
+  | 'Ordered'
+  | 'Ready for pick up'
+  | 'Picked up'
+  | 'Invoiced'
+  | 'Partially Paid' // Added new status
+  | 'Paid'
+  | 'Voided';
 
 interface BaseDocument {
   id: string;
@@ -99,20 +109,23 @@ export interface Estimate extends BaseDocument {
 
 export interface Order extends BaseDocument {
   orderNumber: string;
-  estimateId?: string; // Optional link to an estimate
+  estimateId?: string;
   status: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>;
-  expectedDeliveryDate?: string; // ISO date string
-  readyForPickUpDate?: string; // ISO date string, set when status becomes 'Ready for pick up'
-  pickedUpDate?: string; // ISO date string, set when status becomes 'Picked up'
-  orderState: 'Open' | 'Closed'; // 'Open' if customer might add more, 'Closed' if finalized
+  expectedDeliveryDate?: string;
+  readyForPickUpDate?: string;
+  pickedUpDate?: string;
+  orderState: 'Open' | 'Closed';
 }
 
 export interface Invoice extends BaseDocument {
   invoiceNumber: string;
-  orderId?: string; // Optional link to an order
-  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Paid' | 'Voided'>;
-  dueDate?: string; // ISO date string
+  orderId?: string;
+  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>; // Added Partially Paid
+  dueDate?: string;
   paymentTerms?: string;
+  payments?: Payment[];
+  amountPaid?: number;
+  balanceDue?: number;
 }
 
 export interface User {
@@ -122,12 +135,12 @@ export interface User {
   email: string;
   role: UserRole;
   isActive: boolean;
-  lastLogin?: string; // ISO date string
+  lastLogin?: string;
   permissions: PermissionKey[];
 }
 
 export interface CompanySettings {
-  id?: string; // Should typically be a fixed ID like 'main'
+  id?: string;
   companyName: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -138,7 +151,6 @@ export interface CompanySettings {
   phone?: string;
   email?: string;
   website?: string;
-  logoUrl?: string; // For future use
-  taxId?: string; // For invoices/estimates if needed
-  // Add any other relevant company details here
+  logoUrl?: string;
+  taxId?: string;
 }

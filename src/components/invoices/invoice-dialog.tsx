@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Invoice, Customer, Product, LineItem } from '@/types';
+import type { Invoice, Customer, Product, LineItem, Payment, DocumentStatus } from '@/types';
 import { InvoiceForm, type InvoiceFormData } from './invoice-form';
 import {
   Dialog,
@@ -15,7 +15,7 @@ import {
 
 interface InvoiceDialogProps {
   invoice?: Invoice;
-  triggerButton?: React.ReactElement; // Make trigger optional
+  triggerButton?: React.ReactElement;
   onSave: (invoice: Invoice) => void;
   customers: Customer[];
   products: Product[];
@@ -24,24 +24,23 @@ interface InvoiceDialogProps {
   initialData?: InvoiceFormData | null;
 }
 
-export function InvoiceDialog({ 
-  invoice, 
-  triggerButton, 
-  onSave, 
-  customers, 
+export function InvoiceDialog({
+  invoice,
+  triggerButton,
+  onSave,
+  customers,
   products,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
-  initialData 
+  initialData
 }: InvoiceDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
 
-  // Open dialog if initialData is provided and it's a new conversion
   React.useEffect(() => {
-    if (initialData && controlledIsOpen === undefined) { // Only if not controlled externally for this specific case
+    if (initialData && controlledIsOpen === undefined) {
         setInternalOpen(true);
     }
   }, [initialData, controlledIsOpen]);
@@ -51,22 +50,58 @@ export function InvoiceDialog({
     const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
-      const product = products.find(p => p.id === item.productId);
-      const unitPrice = product ? product.price : 0;
+      const productDetails = products.find(p => p.id === item.productId);
+      const unitPrice = productDetails ? productDetails.price : 0;
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
-        productName: product?.name || 'Unknown Product',
+        productName: productDetails?.name || 'Unknown Product',
         quantity: item.quantity,
         unitPrice: unitPrice,
         total: item.quantity * unitPrice,
       };
     });
 
-    const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
-    const taxAmount = 0; // Simplified for now
-    const total = subtotal + taxAmount;
-      
+    const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
+    const currentTaxAmount = 0; // Simplified
+    const currentTotal = currentSubtotal + currentTaxAmount;
+
+    let existingPayments: Payment[] = invoice?.payments ? [...invoice.payments] : [];
+    let newStatus = formData.status;
+
+    if (formData.newPaymentAmount && formData.newPaymentAmount > 0 && formData.newPaymentDate && formData.newPaymentMethod) {
+      const newPayment: Payment = {
+        id: crypto.randomUUID(),
+        date: formData.newPaymentDate.toISOString(),
+        amount: formData.newPaymentAmount,
+        method: formData.newPaymentMethod,
+        notes: formData.newPaymentNotes,
+      };
+      existingPayments.push(newPayment);
+    }
+
+    const totalAmountPaid = existingPayments.reduce((acc, p) => acc + p.amount, 0);
+    const balanceDue = currentTotal - totalAmountPaid;
+
+    // Auto-update status based on payment, but only if not 'Voided'
+    if (newStatus !== 'Voided') {
+        if (balanceDue <= 0 && totalAmountPaid >= currentTotal && currentTotal > 0) {
+            newStatus = 'Paid';
+        } else if (totalAmountPaid > 0 && balanceDue > 0) {
+            newStatus = 'Partially Paid';
+        } else if (totalAmountPaid === 0 && formData.status !== 'Draft' && formData.status !== 'Sent') {
+             // If no payments and status was something like Paid/Partially Paid, revert to Sent or Draft
+            newStatus = invoice?.status === 'Sent' ? 'Sent' : 'Draft'; // Or just 'Sent' if it was ever sent
+        }
+        // If status was manually set to Draft/Sent/Voided by user, respect that unless payment makes it Paid/Partially Paid
+        if (formData.status === 'Draft' || formData.status === 'Sent' || formData.status === 'Voided') {
+            if (newStatus !== 'Paid' && newStatus !== 'Partially Paid') { // User set status takes precedence if no payment changes it
+                newStatus = formData.status;
+            }
+        }
+    }
+
+
     const invoiceToSave: Invoice = {
       id: invoice?.id || initialData?.id || crypto.randomUUID(),
       invoiceNumber: formData.invoiceNumber,
@@ -74,13 +109,16 @@ export function InvoiceDialog({
       customerName: customerName,
       date: formData.date.toISOString(),
       dueDate: formData.dueDate?.toISOString(),
-      status: formData.status,
+      status: newStatus,
       lineItems: lineItems,
-      subtotal: subtotal,
-      taxAmount: taxAmount,
-      total: total,
+      subtotal: currentSubtotal,
+      taxAmount: currentTaxAmount,
+      total: currentTotal,
       paymentTerms: formData.paymentTerms,
       notes: formData.notes,
+      payments: existingPayments,
+      amountPaid: totalAmountPaid,
+      balanceDue: balanceDue,
     };
     onSave(invoiceToSave);
     setOpen(false);
@@ -97,16 +135,15 @@ export function InvoiceDialog({
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <InvoiceForm 
-          invoice={invoice} 
+        <InvoiceForm
+          invoice={invoice}
           initialData={initialData}
-          onSubmit={handleSubmit} 
+          onSubmit={handleSubmit}
           onClose={() => setOpen(false)}
-          customers={customers} 
+          customers={customers}
           products={products}
         />
       </DialogContent>
     </Dialog>
   );
 }
-

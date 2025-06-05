@@ -5,7 +5,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Invoice, DocumentStatus, Customer, Product } from '@/types';
+import type { Invoice, DocumentStatus, Customer, Product, PaymentMethod } from '@/types';
+import { PAYMENT_METHODS } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +34,8 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 
-const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Paid', 'Voided'];
+// Updated statuses
+const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided'];
 
 const lineItemSchema = z.object({
   id: z.string().optional(),
@@ -42,7 +44,7 @@ const lineItemSchema = z.object({
 });
 
 const invoiceFormSchema = z.object({
-  id: z.string().optional(), // For initialData from conversion
+  id: z.string().optional(),
   invoiceNumber: z.string().min(1, "Invoice number is required"),
   customerId: z.string().min(1, "Customer is required"),
   date: z.date({ required_error: "Invoice date is required." }),
@@ -51,13 +53,27 @@ const invoiceFormSchema = z.object({
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
+  // Fields for recording a new payment
+  newPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
+  newPaymentDate: z.date().optional(),
+  newPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
+  newPaymentNotes: z.string().optional(),
+}).refine(data => {
+    // If payment amount is entered, payment date and method become required
+    if (data.newPaymentAmount && data.newPaymentAmount > 0) {
+        return !!data.newPaymentDate && !!data.newPaymentMethod;
+    }
+    return true;
+}, {
+    message: "Payment date and method are required if payment amount is entered.",
+    path: ["newPaymentMethod"], // Or path: ["newPaymentDate"] or a general path
 });
 
 export type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
 interface InvoiceFormProps {
   invoice?: Invoice;
-  initialData?: InvoiceFormData | null; // For pre-filling from conversion
+  initialData?: InvoiceFormData | null;
   onSubmit: (data: InvoiceFormData) => void;
   onClose?: () => void;
   customers: Customer[];
@@ -66,8 +82,8 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products }: InvoiceFormProps) {
   const defaultFormValues = useMemo((): InvoiceFormData => {
-    return invoice
-    ? { // Editing existing invoice
+    const base = invoice
+    ? {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         customerId: invoice.customerId,
@@ -83,12 +99,12 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         notes: invoice.notes || '',
       }
     : initialData
-    ? { // Pre-filling from conversion
+    ? {
         ...initialData,
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
       }
-    : { // Creating a new invoice from scratch
+    : {
         id: undefined,
         invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
         customerId: '',
@@ -98,6 +114,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
+      };
+      // Ensure new payment fields are not carried over unless explicitly set for a new form session
+      return {
+        ...base,
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: undefined,
       };
   }, [invoice, initialData]);
 
@@ -116,8 +140,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   });
 
   const watchedLineItems = form.watch('lineItems');
-
-  const calculateSubtotal = React.useCallback(() => {
+  const currentInvoiceTotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
       const price = product ? product.price : 0;
@@ -125,14 +148,11 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     }, 0);
   }, [watchedLineItems, products]);
 
-  const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0);
+  const amountAlreadyPaid = invoice?.amountPaid || 0;
+  const newPaymentAmount = form.watch("newPaymentAmount") || 0;
+  const totalPaidDisplay = amountAlreadyPaid + newPaymentAmount;
+  const balanceDueDisplay = currentInvoiceTotal - totalPaidDisplay;
 
-  useEffect(() => {
-    const newSubtotal = calculateSubtotal();
-    setSubtotal(newSubtotal);
-    setTotal(newSubtotal);
-  }, [watchedLineItems, calculateSubtotal]);
 
   const handleProductSelect = (index: number, productId: string) => {
     form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
@@ -143,10 +163,22 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
      form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
      form.trigger(`lineItems.${index}.quantity`);
   };
+  
+  const handleFormSubmit = (data: InvoiceFormData) => {
+    onSubmit(data);
+    form.reset({ // Reset payment fields after submission
+        ...data, // keep other form data
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: undefined,
+    });
+  };
+
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
         <FormField control={form.control} name="invoiceNumber" render={({ field }) => (
           <FormItem><FormLabel>Invoice Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -237,6 +269,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             <FormMessage />
           </FormItem>
         )} />
+        
+        <FormField control={form.control} name="paymentTerms" render={({ field }) => (
+          <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} placeholder="e.g., Due on receipt, NET 30" /></FormControl><FormMessage /></FormItem>
+        )} />
 
         <Separator />
         <h3 className="text-lg font-medium">Line Items</h3>
@@ -251,76 +287,40 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
-
               <FormField
                 control={form.control}
                 name={`lineItems.${index}.productId`}
                 render={({ field: controllerField }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Product</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
+                    <Popover><PopoverTrigger asChild><FormControl>
                           <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
                             {controllerField.value ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
                             <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                          <CommandInput placeholder="Search product..." />
-                          <CommandList>
-                            <CommandEmpty>No product found.</CommandEmpty>
-                            <CommandGroup>
-                              {products.map((product) => (
-                                <CommandItem
-                                  value={product.id}
-                                  key={product.id}
-                                  onSelect={() => {
-                                    handleProductSelect(index, product.id);
-                                  }}
-                                >
-                                  <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                  {product.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
+                    </FormControl></PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command>
+                        <CommandInput placeholder="Search product..." /><CommandList><CommandEmpty>No product found.</CommandEmpty>
+                        <CommandGroup>
+                          {products.map((product) => (
+                            <CommandItem value={product.id} key={product.id} onSelect={() => handleProductSelect(index, product.id)}>
+                              <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
+                              {product.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup></CommandList>
+                    </Command></PopoverContent></Popover><FormMessage />
                   </FormItem>
                 )}
               />
               <div className="grid grid-cols-3 gap-4 items-end">
-                <FormItem>
-                  <FormLabel>Unit Price</FormLabel>
-                  <Input type="text" readOnly value={unitPrice > 0 ? `$${unitPrice.toFixed(2)}` : '-'} className="bg-muted" />
-                </FormItem>
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.quantity`}
-                  render={({ field: qtyField }) => (
-                    <FormItem>
-                      <FormLabel>Quantity</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          {...qtyField}
-                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
-                          min="1"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormItem>
-                  <FormLabel>Line Total</FormLabel>
-                  <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted" />
-                </FormItem>
+                <FormItem><FormLabel>Unit Price</FormLabel><Input type="text" readOnly value={unitPrice > 0 ? `$${unitPrice.toFixed(2)}` : '-'} className="bg-muted" /></FormItem>
+                <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field: qtyField }) => (
+                    <FormItem><FormLabel>Quantity</FormLabel><FormControl>
+                        <Input type="number" {...qtyField} onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)} min="1"/>
+                    </FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormItem><FormLabel>Line Total</FormLabel><Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted" /></FormItem>
               </div>
             </div>
           );
@@ -333,21 +333,60 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         )}
 
         <Separator />
-        <div className="flex justify-end space-x-4 text-lg font-semibold">
-          <span>Subtotal:</span>
-          <span>${subtotal.toFixed(2)}</span>
+        <div className="space-y-2 text-right font-medium">
+            <div>Invoice Total: <span className="font-semibold">${currentInvoiceTotal.toFixed(2)}</span></div>
+            {invoice && amountAlreadyPaid > 0 && (
+                 <div>Previously Paid: <span className="text-green-600">(${amountAlreadyPaid.toFixed(2)})</span></div>
+            )}
+            {newPaymentAmount > 0 && (
+                 <div>New Payment: <span className="text-green-600">(${newPaymentAmount.toFixed(2)})</span></div>
+            )}
+            <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-        <div className="flex justify-end space-x-4 text-xl font-bold">
-          <span>Total:</span>
-          <span>${total.toFixed(2)}</span>
+        
+        <Separator />
+        <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={form.control} name="newPaymentAmount" render={({ field }) => (
+                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="newPaymentDate" render={({ field }) => (
+                <FormItem className="flex flex-col">
+                <FormLabel>Payment Date</FormLabel>
+                <Popover><PopoverTrigger asChild><FormControl>
+                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                        <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                </FormControl></PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                </Popover><FormMessage />
+                </FormItem>
+            )} />
         </div>
+        <FormField control={form.control} name="newPaymentMethod" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Payment Method</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger></FormControl>
+                <SelectContent>{PAYMENT_METHODS.map(method => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+            </FormItem>
+        )} />
+        <FormField control={form.control} name="newPaymentNotes" render={({ field }) => (
+          <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Check #123" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
+        )} />
+        {(form.formState.errors.newPaymentMethod || form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount")) && (
+             <p className="text-sm font-medium text-destructive">{form.formState.errors.newPaymentMethod?.message || form.formState.errors.newPaymentDate?.message}</p>
+        )}
 
-        <FormField control={form.control} name="paymentTerms" render={({ field }) => (
-          <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+
+        <Separator />
         <FormField control={form.control} name="notes" render={({ field }) => (
-          <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the invoice..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>Invoice Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Thank you for your business!" {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
+
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
           <Button type="submit">{invoice || initialData ? 'Save Changes' : 'Create Invoice'}</Button>

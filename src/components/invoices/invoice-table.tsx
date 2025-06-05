@@ -45,6 +45,24 @@ interface InvoiceTableProps {
 export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, formatDate, customers, products }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
+  const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
+    switch (status) {
+      case 'Paid':
+        return 'default'; // Typically green or primary
+      case 'Partially Paid':
+        return 'secondary'; // Amber or another distinct color
+      case 'Sent':
+        return 'outline'; // Blue or neutral
+      case 'Draft':
+        return 'outline'; // Gray or neutral
+      case 'Voided':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+
   return (
     <>
       <Table>
@@ -54,9 +72,11 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, form
             <TableHead>Customer</TableHead>
             <TableHead>Date</TableHead>
             <TableHead>Due Date</TableHead>
-            <TableHead>Total</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="text-right">Paid</TableHead>
+            <TableHead className="text-right">Balance</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-[80px]">Actions</TableHead>
+            <TableHead className="w-[80px] text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -66,9 +86,20 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, form
               <TableCell>{invoice.customerName}</TableCell>
               <TableCell>{formatDate(invoice.date)}</TableCell>
               <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-              <TableCell>${invoice.total.toFixed(2)}</TableCell>
-              <TableCell><Badge variant={invoice.status === 'Paid' ? 'default' : (invoice.status === 'Sent' ? 'secondary' : 'outline')}>{invoice.status}</Badge></TableCell>
+              <TableCell className="text-right">${invoice.total.toFixed(2)}</TableCell>
+              <TableCell className="text-right">${(invoice.amountPaid || 0).toFixed(2)}</TableCell>
+              <TableCell className="text-right">${(invoice.balanceDue || invoice.total).toFixed(2)}</TableCell>
               <TableCell>
+                <Badge variant={getStatusVariant(invoice.status)}
+                       className={cn(
+                           invoice.status === 'Paid' && 'bg-green-500 hover:bg-green-600 text-white',
+                           invoice.status === 'Partially Paid' && 'bg-yellow-500 hover:bg-yellow-600 text-black',
+                       )}
+                >
+                    {invoice.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">

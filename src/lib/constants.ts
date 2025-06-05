@@ -1,12 +1,13 @@
 
-import type { CustomerType, EmailContactType, UserRole, PermissionKey } from '@/types';
+import type { CustomerType, EmailContactType, UserRole, PermissionKey, PaymentMethod } from '@/types';
 
-// Renamed and updated to be initial values, 'Other' removed.
 export const INITIAL_PRODUCT_CATEGORIES: string[] = ['Fencing', 'Posts', 'Gates', 'Hardware', 'Accessories'];
 
 export const CUSTOMER_TYPES: CustomerType[] = ['Fence Contractor', 'Landscaper', 'Home Owner', 'Government', 'Commercial', 'Other'];
 export const EMAIL_CONTACT_TYPES: EmailContactType[] = ['Main Contact', 'Accounts Payable', 'Owner', 'Billing', 'Shipping', 'Other'];
 export const USER_ROLES: UserRole[] = ['Admin', 'User'];
+
+export const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'Check', 'Credit Card', 'Bank Transfer', 'Other'];
 
 export const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -38,7 +39,7 @@ export const AVAILABLE_PERMISSIONS: PermissionKey[] = [
   'manage_invoices',
   'view_invoices',
   'access_settings',
-  'manage_company_settings', // Added permission
+  'manage_company_settings',
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
@@ -49,6 +50,5 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_customers',
     'view_estimates',
     'view_invoices',
-    // Users typically wouldn't manage company settings or other users
   ],
 };
