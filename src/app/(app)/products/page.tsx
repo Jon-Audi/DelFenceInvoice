@@ -10,7 +10,7 @@ import { ProductDialog } from '@/components/products/product-dialog';
 import type { Product } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
-import { db } from '@/lib/firebase';
+import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; // Import firebaseAuthInstance
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 
 export default function ProductsPage() {
@@ -70,6 +70,18 @@ export default function ProductsPage() {
 
     const { id, ...productData } = productToSave;
 
+    const currentUser = firebaseAuthInstance.currentUser;
+    if (!currentUser) {
+      toast({
+        title: "Authentication Error",
+        description: "No user logged in. Cannot save product.",
+        variant: "destructive",
+      });
+      return;
+    }
+    console.log(`Attempting to save product. User UID: ${currentUser.uid}. Please ensure this user has 'Admin' role in Firestore /users/${currentUser.uid} for write access.`);
+
+
     try {
       setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
@@ -89,8 +101,8 @@ export default function ProductsPage() {
     } catch (error) {
       console.error("Error saving product:", error);
       toast({
-        title: "Error",
-        description: "Could not save product to database.",
+        title: "Error Saving Product",
+        description: "Could not save product to database. Check console for details and ensure user has Admin role.",
         variant: "destructive",
       });
     } finally {
@@ -491,3 +503,4 @@ export default function ProductsPage() {
     </>
   );
 }
+
