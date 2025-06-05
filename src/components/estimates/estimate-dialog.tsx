@@ -28,18 +28,14 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products, cust
   const handleSubmit = (formData: EstimateFormData) => {
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
-      // item.unitPrice is now the effective, potentially adjusted price from the form
-      // item.cost is the product's cost
-      // item.appliedMarkupPercentage is the markup used for this line item
+      const unitPrice = product ? product.price : 0; // Use product's actual price
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
         productName: product?.name || 'Unknown Product',
         quantity: item.quantity,
-        cost: item.cost, // Ensure cost from form item is saved
-        unitPrice: item.unitPrice, // This is the effective unit price
-        appliedMarkupPercentage: item.appliedMarkupPercentage, // Save the applied markup
-        total: item.quantity * item.unitPrice,
+        unitPrice: unitPrice,
+        total: item.quantity * unitPrice,
       };
     });
 
@@ -80,9 +76,9 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products, cust
             {estimate ? 'Update the details of this estimate.' : 'Fill in the details for the new estimate.'}
           </DialogDescription>
         </DialogHeader>
-        <EstimateForm 
-          estimate={estimate} 
-          onSubmit={handleSubmit} 
+        <EstimateForm
+          estimate={estimate}
+          onSubmit={handleSubmit}
           onClose={() => setOpen(false)}
           products={products}
           customers={customers}

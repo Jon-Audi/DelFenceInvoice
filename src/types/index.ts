@@ -1,5 +1,5 @@
 
-export type ProductCategory = string; // Changed from union type to string
+export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
 export type UserRole = 'Admin' | 'User';
@@ -58,13 +58,12 @@ export interface Customer {
 export interface LineItem {
   id: string;
   productId: string;
-  productName: string;
+  productName: string; // Denormalized
   quantity: number;
-  cost: number; // Cost of the product at the time of adding to document
-  unitPrice: number; // Effective unit price for this line item (can be adjusted)
-  appliedMarkupPercentage?: number; // Markup specifically applied to this line item
+  unitPrice: number; // Price of the product at the time of adding
   total: number;
 }
+
 
 export type PaymentMethod = 'Cash' | 'Check' | 'Credit Card' | 'Bank Transfer' | 'Other';
 
@@ -85,14 +84,14 @@ export type DocumentStatus =
   | 'Ready for pick up'
   | 'Picked up'
   | 'Invoiced'
-  | 'Partially Paid' // Added new status
+  | 'Partially Paid'
   | 'Paid'
   | 'Voided';
 
 interface BaseDocument {
   id: string;
   customerId: string;
-  customerName?: string; // denormalized
+  customerName?: string;
   date: string; // ISO date string
   lineItems: LineItem[];
   subtotal: number;
@@ -122,7 +121,7 @@ export interface Order extends BaseDocument {
 export interface Invoice extends BaseDocument {
   invoiceNumber: string;
   orderId?: string;
-  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>; // Added Partially Paid
+  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>;
   dueDate?: string;
   paymentTerms?: string;
   payments?: Payment[];

@@ -35,19 +35,18 @@ import { Separator } from '@/components/ui/separator';
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
+// Zod schema for a line item, values that are directly edited/validated by form
 const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
-  cost: z.number().default(0), // Will be set from product
-  unitPrice: z.number().default(0), // Effective unit price, will be calculated
-  appliedMarkupPercentage: z.coerce.number().min(0, "Markup must be non-negative").optional(),
 });
 
+// Zod schema for the overall form data
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(),
+  customerName: z.string().optional(), // This will be populated based on customerId
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -56,6 +55,12 @@ const estimateFormSchema = z.object({
 });
 
 export type EstimateFormData = z.infer<typeof estimateFormSchema>;
+
+// Interface for line items as they are managed within the form's state,
+// potentially including transient UI fields like unitPrice for display.
+interface FormLineItemUIData extends z.infer<typeof lineItemSchema> {
+  unitPriceForDisplay?: number; // For displaying the unit price based on selected product
+}
 
 interface EstimateFormProps {
   estimate?: Estimate;
@@ -74,13 +79,10 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
       customerId: estimate.customerId || '',
       customerName: estimate.customerName || '',
-      lineItems: estimate.lineItems.map(li => ({
+      lineItems: estimate.lineItems.map(li => ({ // Map to the schema, unitPrice is handled by product lookup
         id: li.id,
         productId: li.productId,
         quantity: li.quantity,
-        cost: li.cost,
-        unitPrice: li.unitPrice,
-        appliedMarkupPercentage: li.appliedMarkupPercentage,
       })),
       notes: estimate.notes || '',
     } : {
@@ -89,7 +91,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       customerName: '',
       date: new Date(),
       status: 'Draft',
-      lineItems: [{ productId: '', quantity: 1, cost: 0, unitPrice: 0, appliedMarkupPercentage: 0 }],
+      lineItems: [{ productId: '', quantity: 1 }], // Start with one empty line item
       notes: '',
     };
   }, [estimate]);
@@ -99,7 +101,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -107,46 +109,25 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   const watchedLineItems = form.watch('lineItems');
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
+  // Effect to initialize/sync category filters when form data or products change
   useEffect(() => {
-    form.reset(defaultFormValues);
-    const initialCategories = defaultFormValues.lineItems.map(item => {
+    const initialCategories = watchedLineItems.map(item => {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
         return product?.category;
       }
       return undefined;
     });
-    setLineItemCategoryFilters(initialCategories);
-  }, [defaultFormValues, products, form.reset]);
-
-
-  useEffect(() => {
-    if (watchedLineItems.length !== lineItemCategoryFilters.length) {
-        const updatedFilters = watchedLineItems.map((item, index) => {
-            if (lineItemCategoryFilters[index] !== undefined) return lineItemCategoryFilters[index];
-            if (item.productId) {
-                const product = products.find(p => p.id === item.productId);
-                return product?.category;
-            }
-            return undefined;
-        });
-        setLineItemCategoryFilters(updatedFilters);
+    if (JSON.stringify(initialCategories) !== JSON.stringify(lineItemCategoryFilters)) {
+      setLineItemCategoryFilters(initialCategories);
     }
   }, [watchedLineItems, products, lineItemCategoryFilters]);
 
-  // Effect to recalculate unitPrice when cost or appliedMarkupPercentage changes for a line item
+
+  // Effect to reset form when defaultFormValues change (e.g. estimate prop changes)
   useEffect(() => {
-    watchedLineItems.forEach((item, index) => {
-      const currentCost = item.cost;
-      const currentMarkup = item.appliedMarkupPercentage;
-      if (typeof currentCost === 'number' && typeof currentMarkup === 'number') {
-        const newUnitPrice = parseFloat((currentCost * (1 + currentMarkup / 100)).toFixed(2));
-        if (item.unitPrice !== newUnitPrice) {
-          form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
-        }
-      }
-    });
-  }, [watchedLineItems, form]);
+    form.reset(defaultFormValues);
+  }, [defaultFormValues, form]);
 
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
@@ -156,13 +137,14 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
+    // Clear the product selection when category filter changes
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
 
   const addLineItem = () => {
-    append({ productId: '', quantity: 1, cost: 0, unitPrice: 0, appliedMarkupPercentage: 0 });
-    setLineItemCategoryFilters(prev => [...prev, undefined]);
+    append({ productId: '', quantity: 1 });
+    setLineItemCategoryFilters(prev => [...prev, undefined]); // Add a filter placeholder for the new item
   };
 
   const removeLineItem = (index: number) => {
@@ -178,12 +160,14 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     return products;
   };
 
+  // Calculate subtotal and total directly for display
   const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
-      const price = item.unitPrice || 0; // Use the potentially adjusted unitPrice
+      const product = products.find(p => p.id === item.productId);
+      const price = product ? product.price : 0;
       return acc + (price * (item.quantity || 0));
     }, 0);
-  }, [watchedLineItems]);
+  }, [watchedLineItems, products]);
 
   const currentTotal = currentSubtotal; // Assuming no tax for now
 
@@ -224,7 +208,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                             onSelect={() => {
                               form.setValue("customerId", customer.id, { shouldValidate: true });
                               const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName);
+                              form.setValue("customerName", displayName); // Set denormalized name
                             }}
                           >
                             <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
@@ -296,12 +280,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
         <Separator />
         <h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
-          const selectedProductDetails = products.find(p => p.id === watchedLineItems[index]?.productId);
-          const lineCost = watchedLineItems[index]?.cost || 0;
-          const lineUnitPrice = watchedLineItems[index]?.unitPrice || 0;
-          const lineAppliedMarkup = watchedLineItems[index]?.appliedMarkupPercentage;
-          const quantity = watchedLineItems[index]?.quantity || 0;
-          const lineTotal = lineUnitPrice * quantity;
+          const currentLineItem = watchedLineItems[index];
+          const selectedProductDetails = currentLineItem ? products.find(p => p.id === currentLineItem.productId) : undefined;
+          const unitPriceForDisplay = selectedProductDetails ? selectedProductDetails.price : 0;
+          const quantity = currentLineItem?.quantity || 0;
+          const lineTotal = unitPriceForDisplay * quantity;
           const filteredProductsForLine = getFilteredProducts(index);
 
           return (
@@ -351,10 +334,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                                   key={product.id}
                                   onSelect={() => {
                                     controllerField.onChange(product.id);
-                                    form.setValue(`lineItems.${index}.cost`, product.cost);
-                                    form.setValue(`lineItems.${index}.appliedMarkupPercentage`, product.markupPercentage);
-                                    // Unit price will be set by the useEffect watching cost and markup
-                                    form.trigger(`lineItems.${index}.productId`);
+                                    // Also update category filter to match selected product
                                     const selectedProd = products.find(p => p.id === product.id);
                                     if (selectedProd) {
                                       setLineItemCategoryFilters(prevFilters => {
@@ -363,10 +343,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                                         return newFilters;
                                       });
                                     }
+                                    form.trigger(`lineItems.${index}.productId`); // Trigger re-validation/re-render
                                   }}
                                 >
                                   <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                  {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}, Price: ${product.price.toFixed(2)}
+                                  {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -378,41 +359,10 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                <FormItem>
-                  <FormLabel>Cost</FormLabel>
-                  <Input type="text" readOnly value={lineCost > 0 ? `$${lineCost.toFixed(2)}` : '-'} className="bg-muted" />
-                </FormItem>
-                
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.appliedMarkupPercentage`}
-                  render={({ field: markupField }) => (
-                    <FormItem>
-                      <FormLabel>Markup (%)</FormLabel>
-                      <FormControl>
-                         <Input
-                          type="number"
-                          step="0.01"
-                          {...markupField}
-                          value={markupField.value === undefined || markupField.value === null || isNaN(Number(markupField.value)) ? '' : String(markupField.value)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const num = parseFloat(val);
-                            markupField.onChange(isNaN(num) ? undefined : num);
-                          }}
-                          min="0"
-                          disabled={!watchedLineItems[index]?.productId} // Disable if no product selected
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
+              <div className="grid grid-cols-3 gap-4 items-end">
                 <FormItem>
                   <FormLabel>Unit Price</FormLabel>
-                  <Input type="text" readOnly value={lineUnitPrice > 0 ? `$${lineUnitPrice.toFixed(2)}` : '-'} className="bg-muted" />
+                  <Input type="text" readOnly value={unitPriceForDisplay > 0 ? `$${unitPriceForDisplay.toFixed(2)}` : '-'} className="bg-muted" />
                 </FormItem>
 
                 <FormField
@@ -424,17 +374,17 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                       <FormControl>
                         <Input
                           type="number"
-                          ref={qtyField.ref}
+                          ref={qtyField.ref} // Important for react-hook-form to register the field
                           name={qtyField.name}
                           onBlur={qtyField.onBlur}
                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === '') {
-                              qtyField.onChange(undefined); 
+                              qtyField.onChange(undefined); // Let Zod handle if it's required
                             } else {
                               const num = parseInt(val, 10);
-                              qtyField.onChange(isNaN(num) ? undefined : num); 
+                              qtyField.onChange(isNaN(num) ? undefined : num); // Pass undefined if not a number
                             }
                           }}
                           min="1"
@@ -445,11 +395,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                     </FormItem>
                   )}
                 />
-              </div>
-               <FormItem className="mt-2">
+                 <FormItem>
                   <FormLabel>Line Total</FormLabel>
                   <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted font-semibold" />
                 </FormItem>
+              </div>
             </div>
           );
         })}
