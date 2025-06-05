@@ -2,6 +2,7 @@
 "use client"; 
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -37,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator, // Added DropdownMenuSeparator
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from '@/components/ui/textarea';
@@ -47,7 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
 import type { Order, Customer, Product, Estimate } from '@/types'; 
 import { OrderDialog } from '@/components/orders/order-dialog';
-import type { OrderFormData } from '@/components/orders/order-form'; // Corrected import path
+import type { OrderFormData } from '@/components/orders/order-form';
 import { MOCK_CUSTOMERS, MOCK_PRODUCTS, MOCK_ORDERS } from '@/lib/mock-data';
 
 
@@ -64,6 +66,7 @@ export default function OrdersPage() {
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
+  const router = useRouter(); // Initialized useRouter
 
   const [isConvertingOrder, setIsConvertingOrder] = useState(false);
   const [conversionOrderData, setConversionOrderData] = useState<OrderFormData | null>(null);
@@ -76,14 +79,14 @@ export default function OrdersPage() {
       try {
         const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
         const newOrderData: OrderFormData = {
-          id: crypto.randomUUID(), // Generate new ID for the order
+          id: crypto.randomUUID(), 
           orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Ordered',
           orderState: 'Open',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            productId: li.productId, // id for lineItem itself will be generated in OrderDialog if not present
+            productId: li.productId, 
             quantity: li.quantity,
           })),
           notes: estimateToConvert.notes || '',
@@ -98,7 +101,7 @@ export default function OrdersPage() {
         toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
       }
     }
-  }, []);
+  }, [toast]);
 
   const handleSaveOrder = (orderToSave: Order) => {
     setOrders(prevOrders => {
@@ -110,7 +113,7 @@ export default function OrdersPage() {
         return updatedOrders;
       } else {
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added.` });
-        return [...prevOrders, orderToSave ]; // Ensure it's the full Order object
+        return [...prevOrders, orderToSave ]; 
       }
     });
     if (isConvertingOrder) {
@@ -180,6 +183,11 @@ export default function OrdersPage() {
     if (!dateString) return '';
     if (!isClient) return new Date(dateString).toISOString().split('T')[0]; 
     return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
+  const handleConvertToInvoice = (order: Order) => {
+    localStorage.setItem('orderToConvert_invoice', JSON.stringify(order));
+    router.push('/invoices');
   };
 
   return (
@@ -276,6 +284,11 @@ export default function OrdersPage() {
                         <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleConvertToInvoice(order)}>
+                          <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           onSelect={() => setOrderToDelete(order)}
