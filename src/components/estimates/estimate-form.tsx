@@ -1,14 +1,13 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Estimate, Product, DocumentStatus, LineItem as LineItemType, Customer } from '@/types';
+import type { Estimate, Product, DocumentStatus, Customer } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -34,7 +33,7 @@ import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
-const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_"; // Special value for "All Categories"
+const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
 const lineItemSchema = z.object({
   id: z.string().optional(),
@@ -103,7 +102,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
   useEffect(() => {
-    // form.reset(defaultFormValues); // This might be causing issues if called too often or resetting filters
     const initialCategories = defaultFormValues.lineItems.map(item => {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
@@ -112,9 +110,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       return undefined;
     });
     setLineItemCategoryFilters(initialCategories);
-  }, [defaultFormValues, products]); // Removed form.reset from here to see if it helps with stale closures or re-renders
+  }, [defaultFormValues, products]);
   
-  // Effect to re-initialize form if estimate prop changes
   useEffect(() => {
     form.reset(defaultFormValues);
   }, [estimate, defaultFormValues, form.reset]);
@@ -123,7 +120,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   useEffect(() => {
     if (watchedLineItems.length !== lineItemCategoryFilters.length) {
         const updatedFilters = watchedLineItems.map((item, index) => {
-            if (lineItemCategoryFilters[index] !== undefined) return lineItemCategoryFilters[index]; // Preserve existing if already set
+            if (lineItemCategoryFilters[index] !== undefined) return lineItemCategoryFilters[index];
             if (item.productId) {
                 const product = products.find(p => p.id === item.productId);
                 return product?.category;
@@ -134,24 +131,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     }
   }, [watchedLineItems, products, lineItemCategoryFilters]);
 
-
-  const calculateSubtotal = useCallback(() => {
-    return watchedLineItems.reduce((acc, item) => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product ? product.price : 0;
-      return acc + (price * (item.quantity || 0));
-    }, 0);
-  }, [watchedLineItems, products]);
-
-  const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0);
-
-  useEffect(() => {
-    const newSubtotal = calculateSubtotal();
-    setSubtotal(newSubtotal);
-    setTotal(newSubtotal);
-  }, [watchedLineItems, calculateSubtotal]);
-
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
     setLineItemCategoryFilters(prevFilters => {
@@ -159,27 +138,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
-    // Clear product selection when category filter changes
-    update(index, { ...watchedLineItems[index], productId: '' });
+    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
-  };
-
-  const handleProductSelect = (index: number, productId: string) => {
-    update(index, { ...watchedLineItems[index], productId });
-    form.trigger(`lineItems.${index}.productId`);
-    const product = products.find(p => p.id === productId);
-    if (product) {
-      setLineItemCategoryFilters(prevFilters => {
-        const newFilters = [...prevFilters];
-        newFilters[index] = product.category;
-        return newFilters;
-      });
-    }
-  };
-
-  const handleQuantityChange = (index: number, quantity: number) => {
-     update(index, { ...watchedLineItems[index], quantity });
-     form.trigger(`lineItems.${index}.quantity`);
   };
 
   const addLineItem = () => {
@@ -199,6 +159,16 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     }
     return products;
   };
+
+  // Calculate subtotal and total directly in render
+  const currentSubtotal = useMemo(() => {
+    return watchedLineItems.reduce((acc, item) => {
+      const product = products.find(p => p.id === item.productId);
+      const price = product ? product.price : 0;
+      return acc + (price * (item.quantity || 0));
+    }, 0);
+  }, [watchedLineItems, products]);
+  const currentTotal = currentSubtotal; // Assuming no tax for now
 
   return (
     <Form {...form}>
@@ -361,7 +331,16 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                                   value={product.id}
                                   key={product.id}
                                   onSelect={() => {
-                                    handleProductSelect(index, product.id);
+                                    controllerField.onChange(product.id);
+                                    form.trigger(`lineItems.${index}.productId`);
+                                    const selectedProd = products.find(p => p.id === product.id);
+                                    if (selectedProd) {
+                                      setLineItemCategoryFilters(prevFilters => {
+                                        const newFilters = [...prevFilters];
+                                        newFilters[index] = selectedProd.category;
+                                        return newFilters;
+                                      });
+                                    }
                                   }}
                                 >
                                   <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
@@ -391,8 +370,19 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                       <FormControl>
                         <Input
                           type="number"
-                          {...qtyField}
-                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
+                          ref={qtyField.ref}
+                          name={qtyField.name}
+                          onBlur={qtyField.onBlur}
+                          value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              qtyField.onChange(undefined); // Pass undefined if input is empty
+                            } else {
+                              const num = parseInt(val, 10);
+                              qtyField.onChange(isNaN(num) ? undefined : num); // Pass number or undefined if not a valid int
+                            }
+                          }}
                           min="1"
                         />
                       </FormControl>
@@ -418,11 +408,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
         <Separator />
         <div className="flex justify-end space-x-4 text-lg font-semibold">
           <span>Subtotal:</span>
-          <span>${subtotal.toFixed(2)}</span>
+          <span>${currentSubtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-end space-x-4 text-xl font-bold">
           <span>Total:</span>
-          <span>${total.toFixed(2)}</span>
+          <span>${currentTotal.toFixed(2)}</span>
         </div>
 
         <FormField control={form.control} name="notes" render={({ field }) => (
