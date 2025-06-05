@@ -31,22 +31,22 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
+import { CustomerDialog } from '@/components/customers/customer-dialog'; // Import CustomerDialog
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
-// Zod schema for a line item, values that are directly edited/validated by form
 const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
+  unitPrice: z.number().optional(), // Not directly edited, but useful for schema context
 });
 
-// Zod schema for the overall form data
 const estimateFormSchema = z.object({
   estimateNumber: z.string().min(1, "Estimate number is required"),
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().optional(), // This will be populated based on customerId
+  customerName: z.string().optional(), 
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
@@ -56,10 +56,8 @@ const estimateFormSchema = z.object({
 
 export type EstimateFormData = z.infer<typeof estimateFormSchema>;
 
-// Interface for line items as they are managed within the form's state,
-// potentially including transient UI fields like unitPrice for display.
 interface FormLineItemUIData extends z.infer<typeof lineItemSchema> {
-  unitPriceForDisplay?: number; // For displaying the unit price based on selected product
+  unitPriceForDisplay?: number; 
 }
 
 interface EstimateFormProps {
@@ -69,9 +67,17 @@ interface EstimateFormProps {
   products: Product[];
   customers: Customer[];
   productCategories: string[];
+  onSaveCustomer: (customerToSave: Customer) => Promise<string | void>; // Prop for saving a new customer
 }
 
-export function EstimateForm({ estimate, onSubmit, onClose, products, customers, productCategories }: EstimateFormProps) {
+export function EstimateForm({ estimate, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
+
+  useEffect(() => {
+    setCustomers(initialCustomers);
+  }, [initialCustomers]);
+  
   const defaultFormValues = useMemo((): EstimateFormData => {
     return estimate ? {
       ...estimate,
@@ -79,10 +85,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
       customerId: estimate.customerId || '',
       customerName: estimate.customerName || '',
-      lineItems: estimate.lineItems.map(li => ({ // Map to the schema, unitPrice is handled by product lookup
+      lineItems: estimate.lineItems.map(li => ({ 
         id: li.id,
         productId: li.productId,
         quantity: li.quantity,
+        unitPrice: li.unitPrice,
       })),
       notes: estimate.notes || '',
     } : {
@@ -91,7 +98,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       customerName: '',
       date: new Date(),
       status: 'Draft',
-      lineItems: [{ productId: '', quantity: 1 }], // Start with one empty line item
+      lineItems: [{ productId: '', quantity: 1, unitPrice: 0 }],
       notes: '',
     };
   }, [estimate]);
@@ -101,7 +108,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -109,7 +116,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
   const watchedLineItems = form.watch('lineItems');
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
-  // Effect to initialize/sync category filters when form data or products change
   useEffect(() => {
     const initialCategories = watchedLineItems.map(item => {
       if (item.productId) {
@@ -123,11 +129,27 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     }
   }, [watchedLineItems, products, lineItemCategoryFilters]);
 
-
-  // Effect to reset form when defaultFormValues change (e.g. estimate prop changes)
   useEffect(() => {
     form.reset(defaultFormValues);
   }, [defaultFormValues, form]);
+
+  const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {
+    const newCustomerId = await onSaveCustomer(newCustomerData);
+    if (newCustomerId && typeof newCustomerId === 'string') {
+      // The `customers` list in `EstimatesPage` will update via onSnapshot.
+      // We might need to manually add to the local `customers` state here for immediate reflection
+      // or rely on the parent re-rendering with the updated list.
+      // For now, let's assume the parent's onSnapshot handles updating the `customers` prop.
+      // We also need to update the local `customers` state if it's not directly tied to the prop for the combobox.
+      const customerToSelect = { ...newCustomerData, id: newCustomerId };
+      setCustomers(prev => [...prev, customerToSelect].sort((a,b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
+      
+      form.setValue("customerId", newCustomerId, { shouldValidate: true });
+      const displayName = newCustomerData.companyName || `${newCustomerData.firstName} ${newCustomerData.lastName}`;
+      form.setValue("customerName", displayName);
+      setIsNewCustomerDialogOpen(false);
+    }
+  };
 
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
@@ -137,14 +159,13 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
-    // Clear the product selection when category filter changes
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
 
   const addLineItem = () => {
-    append({ productId: '', quantity: 1 });
-    setLineItemCategoryFilters(prev => [...prev, undefined]); // Add a filter placeholder for the new item
+    append({ productId: '', quantity: 1, unitPrice: 0 });
+    setLineItemCategoryFilters(prev => [...prev, undefined]); 
   };
 
   const removeLineItem = (index: number) => {
@@ -160,7 +181,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     return products;
   };
 
-  // Calculate subtotal and total directly for display
   const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const product = products.find(p => p.id === item.productId);
@@ -169,7 +189,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
     }, 0);
   }, [watchedLineItems, products]);
 
-  const currentTotal = currentSubtotal; // Assuming no tax for now
+  const currentTotal = currentSubtotal; 
 
   return (
     <Form {...form}>
@@ -177,49 +197,54 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
         <FormField control={form.control} name="estimateNumber" render={({ field }) => (
           <FormItem><FormLabel>Estimate Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
-
+        
         <FormField
           control={form.control}
           name="customerId"
           render={({ field }) => (
             <FormItem className="flex flex-col">
               <FormLabel>Customer</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                      {field.value
-                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
-                        : "Select customer"}
-                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search customer..." />
-                    <CommandList>
-                      <CommandEmpty>No customer found.</CommandEmpty>
-                      <CommandGroup>
-                        {customers.map((customer) => (
-                          <CommandItem
-                            value={customer.id}
-                            key={customer.id}
-                            onSelect={() => {
-                              form.setValue("customerId", customer.id, { shouldValidate: true });
-                              const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
-                              form.setValue("customerName", displayName); // Set denormalized name
-                            }}
-                          >
-                            <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
-                            {customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="flex items-center gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
+                        {field.value
+                          ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
+                          : "Select customer"}
+                        <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search customer..." />
+                      <CommandList>
+                        <CommandEmpty>No customer found.</CommandEmpty>
+                        <CommandGroup>
+                          {customers.map((customer) => (
+                            <CommandItem
+                              value={customer.id}
+                              key={customer.id}
+                              onSelect={() => {
+                                form.setValue("customerId", customer.id, { shouldValidate: true });
+                                const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
+                                form.setValue("customerName", displayName); 
+                              }}
+                            >
+                              <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
+                              {customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <Button type="button" variant="outline" size="icon" onClick={() => setIsNewCustomerDialogOpen(true)} title="Add New Customer">
+                  <Icon name="PlusCircle" className="h-4 w-4" />
+                </Button>
+              </div>
               <FormMessage />
             </FormItem>
           )}
@@ -334,7 +359,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                                   key={product.id}
                                   onSelect={() => {
                                     controllerField.onChange(product.id);
-                                    // Also update category filter to match selected product
                                     const selectedProd = products.find(p => p.id === product.id);
                                     if (selectedProd) {
                                       setLineItemCategoryFilters(prevFilters => {
@@ -342,8 +366,9 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                                         newFilters[index] = selectedProd.category;
                                         return newFilters;
                                       });
+                                      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price);
                                     }
-                                    form.trigger(`lineItems.${index}.productId`); // Trigger re-validation/re-render
+                                    form.trigger(`lineItems.${index}.productId`); 
                                   }}
                                 >
                                   <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
@@ -374,21 +399,21 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
                       <FormControl>
                         <Input
                           type="number"
-                          ref={qtyField.ref} // Important for react-hook-form to register the field
+                          ref={qtyField.ref} 
                           name={qtyField.name}
                           onBlur={qtyField.onBlur}
                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === '') {
-                              qtyField.onChange(undefined); // Let Zod handle if it's required
+                              qtyField.onChange(undefined); 
                             } else {
                               const num = parseInt(val, 10);
-                              qtyField.onChange(isNaN(num) ? undefined : num); // Pass undefined if not a number
+                              qtyField.onChange(isNaN(num) ? undefined : num); 
                             }
                           }}
                           min="1"
-                          disabled={!watchedLineItems[index]?.productId} // Disable if no product selected
+                          disabled={!watchedLineItems[index]?.productId} 
                         />
                       </FormControl>
                       <FormMessage />
@@ -429,6 +454,13 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers,
           <Button type="submit">{estimate ? 'Save Changes' : 'Create Estimate'}</Button>
         </div>
       </form>
+
+      {isNewCustomerDialogOpen && (
+        <CustomerDialog
+          triggerButton={<></>} // Dialog is controlled externally, trigger is not used here
+          onSave={handleSaveNewCustomerFromEstimateForm}
+        />
+      )}
     </Form>
   );
 }

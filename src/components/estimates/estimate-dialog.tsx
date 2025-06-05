@@ -17,18 +17,19 @@ interface EstimateDialogProps {
   estimate?: Estimate;
   triggerButton: React.ReactElement;
   onSave: (estimate: Estimate) => void;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>; // Added this prop
   products: Product[];
   customers: Customer[];
   productCategories: string[];
 }
 
-export function EstimateDialog({ estimate, triggerButton, onSave, products, customers, productCategories }: EstimateDialogProps) {
+export function EstimateDialog({ estimate, triggerButton, onSave, onSaveCustomer, products, customers, productCategories }: EstimateDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (formData: EstimateFormData) => {
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
-      const unitPrice = product ? product.price : 0; // Use product's actual price
+      const unitPrice = product ? product.price : 0;
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
@@ -40,11 +41,12 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products, cust
     });
 
     const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
-    const taxAmount = 0; // Simplified for now
+    const taxAmount = 0; 
     const total = subtotal + taxAmount;
 
     const selectedCustomer = customers.find(c => c.id === formData.customerId);
-    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
+    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : (formData.customerName || 'Unknown Customer');
+
 
     const estimateToSave: Estimate = {
       id: estimate?.id || crypto.randomUUID(),
@@ -83,6 +85,7 @@ export function EstimateDialog({ estimate, triggerButton, onSave, products, cust
           products={products}
           customers={customers}
           productCategories={productCategories}
+          onSaveCustomer={onSaveCustomer} // Pass the function here
         />
       </DialogContent>
     </Dialog>

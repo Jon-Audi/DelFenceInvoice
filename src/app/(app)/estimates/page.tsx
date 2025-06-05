@@ -121,7 +121,7 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedProducts.push({ ...docSnap.data() as Omit<Product, 'id'>, id: docSnap.id });
       });
-      setProducts(fetchedProducts); // Update products state
+      setProducts(fetchedProducts); 
       setIsLoadingProducts(false);
     }, (error) => {
       console.error("Error fetching products:", error);
@@ -135,11 +135,10 @@ export default function EstimatesPage() {
   useEffect(() => {
     if (products && products.length > 0) {
       const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
-      // Only update if the actual categories have changed to prevent unnecessary re-renders
       if (JSON.stringify(newCategories) !== JSON.stringify(stableProductCategories)) {
         setStableProductCategories(newCategories);
       }
-    } else if (stableProductCategories.length > 0) { // Products cleared
+    } else if (stableProductCategories.length > 0) { 
         setStableProductCategories([]);
     }
   }, [products, stableProductCategories]);
@@ -148,12 +147,11 @@ export default function EstimatesPage() {
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
     const { id, ...estimateDataFromDialog } = estimateToSave;
 
-    // Explicitly build the object for Firestore to avoid undefined fields
     const dataForFirestore: Partial<Omit<Estimate, 'id'>> = {
       estimateNumber: estimateDataFromDialog.estimateNumber,
       customerId: estimateDataFromDialog.customerId,
       customerName: estimateDataFromDialog.customerName,
-      date: estimateDataFromDialog.date, // Already stringified by dialog
+      date: estimateDataFromDialog.date,
       status: estimateDataFromDialog.status,
       lineItems: estimateDataFromDialog.lineItems,
       subtotal: estimateDataFromDialog.subtotal,
@@ -171,15 +169,12 @@ export default function EstimatesPage() {
         dataForFirestore.internalNotes = estimateDataFromDialog.internalNotes;
     }
 
-
     try {
       if (id && estimates.some(e => e.id === id)) {
-        // Edit existing estimate
         const estimateRef = doc(db, 'estimates', id);
         await setDoc(estimateRef, dataForFirestore, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
       } else {
-        // Add new estimate - cast if confident all required fields are present
         const finalDataForAddDoc = dataForFirestore as Estimate;
         const docRef = await addDoc(collection(db, 'estimates'), finalDataForAddDoc);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
@@ -187,6 +182,41 @@ export default function EstimatesPage() {
     } catch (error: any) {
         console.error("Error saving estimate:", error);
         toast({ title: "Error", description: `Could not save estimate to database. ${error.message}`, variant: "destructive" });
+    }
+  };
+
+  const handleSaveCustomer = async (customerToSave: Customer): Promise<string | void> => {
+    const { id, ...customerData } = customerToSave;
+    try {
+      if (id && customers.some(c => c.id === id)) {
+        // Edit existing customer
+        const customerRef = doc(db, 'customers', id);
+        await setDoc(customerRef, customerData, { merge: true });
+        toast({
+          title: "Customer Updated",
+          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
+        });
+        return id;
+      } else {
+        // Add new customer
+        // Remove temporary ID if it exists from client-side generation before saving to Firestore
+        const dataToSave = { ...customerData };
+        if (dataToSave.id) delete (dataToSave as any).id;
+
+        const docRef = await addDoc(collection(db, 'customers'), dataToSave);
+        toast({
+          title: "Customer Added",
+          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
+        });
+        return docRef.id; // Return the new ID
+      }
+    } catch (error) {
+      console.error("Error saving customer:", error);
+      toast({
+        title: "Error",
+        description: "Could not save customer to database.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -293,6 +323,7 @@ export default function EstimatesPage() {
             </Button>
           }
           onSave={handleSaveEstimate}
+          onSaveCustomer={handleSaveCustomer}
           products={products}
           customers={customers}
           productCategories={stableProductCategories}
@@ -340,6 +371,7 @@ export default function EstimatesPage() {
                             </DropdownMenuItem>
                           }
                           onSave={handleSaveEstimate}
+                          onSaveCustomer={handleSaveCustomer}
                           products={products}
                           customers={customers}
                           productCategories={stableProductCategories}
@@ -431,4 +463,3 @@ export default function EstimatesPage() {
     </>
   );
 }
-
