@@ -259,7 +259,6 @@ export default function EstimatesPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setEstimateForPrinting(estimate);
-      // window.print() will be called by a useEffect in this component (see below)
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -272,11 +271,12 @@ export default function EstimatesPage() {
   
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const printTimer = setTimeout(() => {
-        window.print();
-        handlePrinted(); 
-      }, 100); 
-      return () => clearTimeout(printTimer);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+          handlePrinted();
+        });
+      });
     }
   }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
@@ -519,7 +519,6 @@ export default function EstimatesPage() {
           <PrintableEstimate 
             estimate={estimateForPrinting} 
             companySettings={companySettingsForPrinting}
-            // onPrinted prop is removed
           />
         )}
       </div>

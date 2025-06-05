@@ -282,7 +282,6 @@ export default function InvoicesPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setInvoiceForPrinting(invoice);
-      // window.print() will be called by useEffect in this component
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -295,11 +294,12 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const printTimer = setTimeout(() => {
-        window.print();
-        handlePrinted(); // Reset state after print dialog is likely closed/actioned
-      }, 100); // Delay to allow content to render
-      return () => clearTimeout(printTimer);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+          handlePrinted();
+        });
+      });
     }
   }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
@@ -457,7 +457,6 @@ export default function InvoicesPage() {
           <PrintableInvoice 
             invoice={invoiceForPrinting} 
             companySettings={companySettingsForPrinting}
-            // onPrinted prop is removed
           />
         )}
       </div>
@@ -470,3 +469,5 @@ export default function InvoicesPage() {
     </>
   );
 }
+
+    

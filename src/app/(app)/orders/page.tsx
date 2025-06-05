@@ -222,7 +222,6 @@ export default function OrdersPage() {
     if (settings) {
       setCompanySettingsForPrinting(settings);
       setOrderForPrinting(order);
-      // window.print() will be called by useEffect below
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -235,11 +234,12 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const printTimer = setTimeout(() => {
-        window.print();
-        handlePrinted(); 
-      }, 100); 
-      return () => clearTimeout(printTimer);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+          handlePrinted();
+        });
+      });
     }
   }, [orderForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
@@ -496,7 +496,6 @@ export default function OrdersPage() {
           <PrintableOrder 
             order={orderForPrinting} 
             companySettings={companySettingsForPrinting}
-            // onPrinted prop removed
           />
         )}
       </div>
