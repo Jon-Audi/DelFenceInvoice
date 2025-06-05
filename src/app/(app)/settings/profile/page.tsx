@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,9 +11,64 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { auth } from '@/lib/firebase'; // Import auth directly
+import { updateProfile } from 'firebase/auth';
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editableDisplayName, setEditableDisplayName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (authUser?.displayName) {
+      setEditableDisplayName(authUser.displayName);
+    } else if (authUser?.email) {
+      // Fallback if displayName is null/empty, perhaps from initial signup without one
+      setEditableDisplayName(''); 
+    }
+  }, [authUser]);
+
+  const handleEditName = () => {
+    setEditableDisplayName(authUser?.displayName || '');
+    setIsEditingName(true);
+  };
+
+  const handleCancelEditName = () => {
+    setIsEditingName(false);
+    // Reset to original name if needed, though useEffect above should handle it
+    setEditableDisplayName(authUser?.displayName || ''); 
+  };
+
+  const handleSaveName = async () => {
+    if (!auth.currentUser) {
+      toast({ title: "Error", description: "Not logged in.", variant: "destructive" });
+      return;
+    }
+    if (editableDisplayName.trim() === (authUser?.displayName || '')) {
+        setIsEditingName(false);
+        toast({ title: "No Changes", description: "Display name is the same.", variant: "default" });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updateProfile(auth.currentUser, {
+        displayName: editableDisplayName.trim() === '' ? null : editableDisplayName.trim(), // Send null if cleared
+      });
+      toast({ title: "Profile Updated", description: "Your display name has been updated." });
+      setIsEditingName(false);
+      // AuthContext will pick up the change via onAuthStateChanged
+    } catch (error: any) {
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+      console.error("Error updating display name:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -40,7 +95,6 @@ export default function ProfilePage() {
   }
 
   if (!authUser) {
-    // This case should ideally be handled by AppLayout redirecting to login
     return (
       <>
         <PageHeader title="Profile" description="Not logged in." />
@@ -66,8 +120,33 @@ export default function ProfilePage() {
               <AvatarFallback className="text-2xl">{userInitial}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-3xl">{authUser.displayName || "User Profile"}</CardTitle>
-              <CardDescription className="text-md">{authUser.email}</CardDescription>
+              {isEditingName ? (
+                <div className="space-y-2">
+                   <Label htmlFor="editableDisplayName" className="text-xs text-muted-foreground">Edit Display Name</Label>
+                  <Input 
+                    id="editableDisplayName"
+                    value={editableDisplayName} 
+                    onChange={(e) => setEditableDisplayName(e.target.value)}
+                    className="text-3xl font-semibold p-1 h-auto"
+                    placeholder="Your Name"
+                  />
+                   <div className="flex gap-2 mt-1">
+                    <Button onClick={handleSaveName} size="sm" disabled={isSaving}>
+                      {isSaving && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                      Save
+                    </Button>
+                    <Button onClick={handleCancelEditName} size="sm" variant="outline" disabled={isSaving}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                    <CardTitle className="text-3xl">{authUser.displayName || <span className="italic text-muted-foreground">No display name</span>}</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleEditName} className="h-8 w-8">
+                        <Icon name="Edit" className="h-4 w-4" />
+                    </Button>
+                </div>
+              )}
+              <CardDescription className="text-md mt-1">{authUser.email}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -76,10 +155,6 @@ export default function ProfilePage() {
             <div>
               <h3 className="text-lg font-medium mb-2">Account Information</h3>
               <div className="space-y-3">
-                <div>
-                  <Label htmlFor="displayName">Display Name</Label>
-                  <Input id="displayName" value={authUser.displayName || ''} readOnly className="bg-muted/50"/>
-                </div>
                 <div>
                   <Label htmlFor="email">Email Address</Label>
                   <Input id="email" type="email" value={authUser.email || ''} readOnly className="bg-muted/50"/>
@@ -103,11 +178,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Placeholder for future profile editing form & password change */}
             <div className="pt-6 border-t">
                 <h3 className="text-lg font-medium mb-3">More Actions</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                Profile editing features (like changing your name or password) will be available here in the future.
+                Profile editing features (like changing your password) will be available here in the future.
                 </p>
                 <Button variant="outline" disabled>Change Password (Soon)</Button>
             </div>
