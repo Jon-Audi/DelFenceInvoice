@@ -109,83 +109,59 @@
 }
 
 @media print {
-  body {
-    -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
+  /* Hide everything in the body by default for printing */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make the print-only-container and all its children visible */
+  .print-only-container, .print-only-container * {
+    visibility: visible !important;
+  }
+
+  /* Position the print-only-container at the top-left for printing */
+  .print-only-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0.5in !important; /* This acts as the page margin */
     background-color: white !important;
     color: black !important;
     font-size: 10pt !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: auto !important;
+    z-index: 9999 !important; /* Ensure it's on top */
   }
 
-  /* Hide App Sidebar and App Header specifically */
-  /* Assuming AppSidebar has a data attribute data-sidebar="sidebar" */
-  /* And AppHeader is a <header> tag */
-  div[data-sidebar="sidebar"],
-  header,
-  div[data-sidebar="sidebar"][data-mobile="true"] {
-    display: none !important;
-  }
-
-  /* Ensure parent containers of <main> and <main> itself are visible and take up space */
-  /* This targets the typical Next.js #__next div and common layout wrappers */
-  body > div, /* #__next */
-  body > div > div, /* SidebarProvider direct child */
-  body > div > div > div, /* Flex container in SidebarProvider */
-  body > div > div > div > div.flex-1, /* Content wrapper */
-  main, /* The <main> element */
-  main > div /* The direct child of main, often a max-width container */ {
-    display: block !important; /* Or flex/grid if specific, but block is safest general override */
-    width: 100% !important;
-    height: auto !important; /* Allow height to grow with content */
-    overflow: visible !important; /* Ensure content isn't clipped */
-    background-color: transparent !important; /* Avoid parent backgrounds obscuring content */
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-
-  /* Ensure the print-only container is clearly visible */
-  .print-only-container {
-    display: block !important;
-    position: static !important; /* Keep it in normal flow */
-    width: 100% !important;
-    height: auto !important;
-    background-color: white !important;
-    color: black !important;
-    padding: 0 !important; /* Let @page margin handle page padding */
-    margin: 0 !important;
-    border: 2px solid red !important; /* TEMPORARY DEBUG: Make border very visible */
-    z-index: 9999 !important; /* Ensure it's on top of any other potential layers */
-  }
-
+  /* Styles for the actual content block inside the container */
   .print-only {
-    display: block !important;
-    font-family: Arial, sans-serif !important; /* Common print-friendly font */
-    color: black !important;
-    background-color: white !important;
+    display: block !important; /* Ensure it's a block element */
+    font-family: Arial, sans-serif !important;
     width: 100% !important;
     height: auto !important;
+    background-color: white !important; /* Redundant but safe */
+    color: black !important; /* Redundant but safe */
   }
 
-  /* Override any potentially conflicting styles from Tailwind or ShadCN for print */
-  .print-only *, .print-only-container *,
-  .print-only *::before, .print-only *::after,
-  .print-only-container *::before, .print-only-container *::after {
-    background-color: transparent !important;
+  /* Reset potentially harmful Tailwind classes if they are used inside .print-only */
+  .print-only .flex { display: flex !important; }
+  .print-only .grid { display: grid !important; }
+  .print-only .hidden, .print-only .invisible { display: revert !important; } /* Try to revert to default display */
+  .print-only .opacity-0 { opacity: 1 !important; }
+  
+  /* General styling for elements within the print-only section */
+  .print-only *, .print-only *::before, .print-only *::after {
+    background-color: transparent !important; /* Most elements should have transparent backgrounds */
     color: black !important;
     text-shadow: none !important;
     box-shadow: none !important;
-    border-color: #ccc !important; /* Lighten borders for print */
-    -webkit-print-color-adjust: exact !important; /* Ensure colors print */
+    border-color: #ccc !important; /* Lighten borders for print if needed */
+    -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* Ensure table styles are print-friendly */
+  /* Table specific styles for printing */
   .print-only table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -196,25 +172,16 @@
     border: 1px solid #ccc !important;
     padding: 6px !important;
     color: black !important;
-    page-break-inside: avoid !important; /* Try to keep table rows from breaking */
+    page-break-inside: avoid !important;
   }
   .print-only th {
-    background-color: #f0f0f0 !important;
+    background-color: #f0f0f0 !important; /* Table headers can have a light background */
     font-weight: bold !important;
   }
-
-  /* Ensure specific elements within .print-only are displayed if they use Tailwind utilities */
-  .print-only .flex { display: flex !important; }
-  .print-only .grid { display: grid !important; }
-  .print-only .hidden, .print-only .invisible {
-      display: revert !important; /* Attempt to revert to their default display based on element type */
-  }
-  .print-only .opacity-0 { opacity: 1 !important; }
-
-  /* Page setup */
+  
+  /* Page setup: margins are now handled by .print-only-container padding */
   @page {
-    margin: 0.5in; /* Standard margin */
-    size: auto; /* Or 'letter', 'A4' */
+    size: auto; /* Or 'letter', 'A4' etc. */
+    margin: 0; 
   }
 }
-
