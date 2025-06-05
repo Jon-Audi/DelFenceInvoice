@@ -146,21 +146,47 @@ export default function EstimatesPage() {
 
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
-    const { id, ...estimateData } = estimateToSave;
+    const { id, ...estimateDataFromDialog } = estimateToSave;
+
+    // Explicitly build the object for Firestore to avoid undefined fields
+    const dataForFirestore: Partial<Omit<Estimate, 'id'>> = {
+      estimateNumber: estimateDataFromDialog.estimateNumber,
+      customerId: estimateDataFromDialog.customerId,
+      customerName: estimateDataFromDialog.customerName,
+      date: estimateDataFromDialog.date, // Already stringified by dialog
+      status: estimateDataFromDialog.status,
+      lineItems: estimateDataFromDialog.lineItems,
+      subtotal: estimateDataFromDialog.subtotal,
+      taxAmount: estimateDataFromDialog.taxAmount || 0,
+      total: estimateDataFromDialog.total,
+    };
+
+    if (estimateDataFromDialog.validUntil) {
+      dataForFirestore.validUntil = estimateDataFromDialog.validUntil;
+    }
+    if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') {
+      dataForFirestore.notes = estimateDataFromDialog.notes;
+    }
+    if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') {
+        dataForFirestore.internalNotes = estimateDataFromDialog.internalNotes;
+    }
+
+
     try {
       if (id && estimates.some(e => e.id === id)) {
         // Edit existing estimate
         const estimateRef = doc(db, 'estimates', id);
-        await setDoc(estimateRef, estimateData, { merge: true });
+        await setDoc(estimateRef, dataForFirestore, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
       } else {
-        // Add new estimate
-        const docRef = await addDoc(collection(db, 'estimates'), estimateData);
+        // Add new estimate - cast if confident all required fields are present
+        const finalDataForAddDoc = dataForFirestore as Estimate;
+        const docRef = await addDoc(collection(db, 'estimates'), finalDataForAddDoc);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving estimate:", error);
-        toast({ title: "Error", description: "Could not save estimate to database.", variant: "destructive" });
+        toast({ title: "Error", description: `Could not save estimate to database. ${error.message}`, variant: "destructive" });
     }
   };
 
@@ -405,3 +431,4 @@ export default function EstimatesPage() {
     </>
   );
 }
+
