@@ -64,4 +64,3 @@ env:
   #   secret: yourRecaptchaSecretKeyNameInSecretManager # Replace with the name of your secret in Secret Manager
   #   availability:
   #     - RUNTIME # Typically only needed at runtime for backend verification
-
