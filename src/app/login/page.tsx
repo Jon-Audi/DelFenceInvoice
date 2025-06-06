@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, FormEvent, useRef } from 'react';
+import React, { useState, FormEvent, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -31,12 +31,29 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     await login(email, password, recaptchaToken);
-    // On failure, reCAPTCHA might need to be reset if it's a one-time token
     if (recaptchaRef.current) {
         recaptchaRef.current.reset();
         setRecaptchaToken(null);
     }
   };
+
+  const handleRecaptchaChange = useCallback((token: string | null) => {
+    setRecaptchaToken(token);
+  }, []);
+
+  const handleRecaptchaExpired = useCallback(() => {
+    setRecaptchaToken(null);
+    if (recaptchaRef.current) {
+      recaptchaRef.current.reset();
+    }
+  }, []);
+
+  const handleRecaptchaErrored = useCallback(() => {
+    setRecaptchaToken(null);
+    if (recaptchaRef.current) {
+      recaptchaRef.current.reset();
+    }
+  }, []);
 
   if (!siteKey) {
     return (
@@ -103,15 +120,9 @@ export default function LoginPage() {
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={siteKey}
-                onChange={(token) => setRecaptchaToken(token)}
-                onExpired={() => {
-                    setRecaptchaToken(null);
-                    if(recaptchaRef.current) recaptchaRef.current.reset();
-                }}
-                onErrored={() => {
-                    setRecaptchaToken(null);
-                     if(recaptchaRef.current) recaptchaRef.current.reset();
-                }}
+                onChange={handleRecaptchaChange}
+                onExpired={handleRecaptchaExpired}
+                onErrored={handleRecaptchaErrored}
               />
             </div>
             {error && <p className="text-xs text-destructive">{error}</p>}

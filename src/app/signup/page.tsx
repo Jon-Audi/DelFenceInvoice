@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, FormEvent, useRef } from 'react';
+import React, { useState, FormEvent, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,24 @@ export default function SignupPage() {
     }
   };
   
+  const handleRecaptchaChange = useCallback((token: string | null) => {
+    setRecaptchaToken(token);
+  }, []);
+
+  const handleRecaptchaExpired = useCallback(() => {
+    setRecaptchaToken(null);
+    if (recaptchaRef.current) {
+      recaptchaRef.current.reset();
+    }
+  }, []);
+
+  const handleRecaptchaErrored = useCallback(() => {
+    setRecaptchaToken(null);
+    if (recaptchaRef.current) {
+      recaptchaRef.current.reset();
+    }
+  }, []);
+
   if (!siteKey) {
     return (
          <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-muted/40">
@@ -136,15 +154,9 @@ export default function SignupPage() {
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={siteKey}
-                onChange={(token) => setRecaptchaToken(token)}
-                onExpired={() => {
-                    setRecaptchaToken(null);
-                    if(recaptchaRef.current) recaptchaRef.current.reset();
-                }}
-                onErrored={() => {
-                    setRecaptchaToken(null);
-                    if(recaptchaRef.current) recaptchaRef.current.reset();
-                }}
+                onChange={handleRecaptchaChange}
+                onExpired={handleRecaptchaExpired}
+                onErrored={handleRecaptchaErrored}
               />
             </div>
             {error && <p className="text-xs text-destructive">{error}</p>}
