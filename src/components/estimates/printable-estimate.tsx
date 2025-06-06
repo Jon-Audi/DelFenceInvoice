@@ -10,6 +10,24 @@ interface PrintableEstimateProps {
   companySettings: CompanySettings | null;
 }
 
+const transformGsUrlToHttps = (gsUrl: string | undefined): string | undefined => {
+  if (!gsUrl || !gsUrl.startsWith('gs://')) {
+    return gsUrl; // Assume it's already a valid HTTP/HTTPS URL or not a gs:// URL
+  }
+  try {
+    const noPrefix = gsUrl.substring(5); // Remove "gs://"
+    const parts = noPrefix.split('/');
+    const bucket = parts[0];
+    const objectPath = parts.slice(1).join('/');
+    if (!bucket || !objectPath) return undefined; // Invalid gs:// URL structure
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+  } catch (error) {
+    console.error("Error transforming gs:// URL:", error);
+    return undefined; // Return undefined or original on error
+  }
+};
+
+
 export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, companySettings }) => {
   if (!estimate || !companySettings) {
     return null;
@@ -20,15 +38,17 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     return new Date(dateString).toLocaleDateString();
   };
 
+  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
       {/* Estimate Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
-          {companySettings.logoUrl && (
+          {logoHttpUrl && (
             <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
               <Image 
-                src={companySettings.logoUrl} 
+                src={logoHttpUrl} 
                 alt={`${companySettings.companyName} Logo`} 
                 width={128} // Provide explicit width
                 height={64} // Provide explicit height, adjust aspect ratio as needed

@@ -10,6 +10,23 @@ interface PrintableInvoiceProps {
   companySettings: CompanySettings | null;
 }
 
+const transformGsUrlToHttps = (gsUrl: string | undefined): string | undefined => {
+  if (!gsUrl || !gsUrl.startsWith('gs://')) {
+    return gsUrl;
+  }
+  try {
+    const noPrefix = gsUrl.substring(5);
+    const parts = noPrefix.split('/');
+    const bucket = parts[0];
+    const objectPath = parts.slice(1).join('/');
+    if (!bucket || !objectPath) return undefined;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+  } catch (error) {
+    console.error("Error transforming gs:// URL:", error);
+    return undefined;
+  }
+};
+
 export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
   if (!invoice || !companySettings) {
     return null;
@@ -20,15 +37,17 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
     return new Date(dateString).toLocaleDateString();
   };
 
+  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
       {/* Invoice Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
-          {companySettings.logoUrl && (
+          {logoHttpUrl && (
             <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
               <Image 
-                src={companySettings.logoUrl} 
+                src={logoHttpUrl} 
                 alt={`${companySettings.companyName} Logo`} 
                 width={128} 
                 height={64} 
