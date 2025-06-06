@@ -10,21 +10,33 @@ interface PrintableInvoiceProps {
   companySettings: CompanySettings | null;
 }
 
-const transformGsUrlToHttps = (gsUrl: string | undefined): string | undefined => {
-  if (!gsUrl || !gsUrl.startsWith('gs://')) {
-    return gsUrl;
+const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    return url;
   }
-  try {
-    const noPrefix = gsUrl.substring(5);
-    const parts = noPrefix.split('/');
-    const bucket = parts[0];
-    const objectPath = parts.slice(1).join('/');
-    if (!bucket || !objectPath) return undefined;
-    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-  } catch (error) {
-    console.error("Error transforming gs:// URL:", error);
-    return undefined;
+  if (url.startsWith('gs://')) {
+    try {
+      const noPrefix = url.substring(5); // Remove "gs://"
+      const parts = noPrefix.split('/');
+      const bucket = parts.shift(); // Get the first part as bucket
+      if (!bucket) {
+          console.error("Invalid gs:// URL structure, missing bucket:", url);
+          return undefined;
+      }
+      const objectPath = parts.join('/');
+      if (!objectPath) {
+          console.error("Invalid gs:// URL structure, missing object path:", url);
+          return undefined;
+      }
+      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+    } catch (error) {
+      console.error("Error transforming gs:// URL:", url, error);
+      return undefined;
+    }
   }
+  console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
+  return url; // Fallback for unrecognized formats
 };
 
 export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
@@ -48,11 +60,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
             <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
               <Image 
                 src={logoHttpUrl} 
-                alt={`${companySettings.companyName} Logo`} 
+                alt={`${companySettings.companyName || 'Company'} Logo`}
                 width={128} 
                 height={64} 
                 style={{ objectFit: 'contain' }}
-                priority
               />
             </div>
           )}
