@@ -49,7 +49,7 @@ const orderFormSchema = z.object({
   date: z.date({ required_error: "Order date is required." }),
   status: z.enum(ORDER_STATUSES as [typeof ORDER_STATUSES[0], ...typeof ORDER_STATUSES]),
   orderState: z.enum(ORDER_STATES as [typeof ORDER_STATES[0], ...typeof ORDER_STATES]),
-  poNumber: z.string().optional(), // Added P.O. Number
+  poNumber: z.string().optional(),
   expectedDeliveryDate: z.date().optional(),
   readyForPickUpDate: z.date().optional(),
   pickedUpDate: z.date().optional(),
@@ -70,8 +70,8 @@ interface OrderFormProps {
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products }: OrderFormProps) {
   const defaultFormValues = useMemo((): OrderFormData => {
-    return order
-    ? { 
+    if (order) {
+      return {
         id: order.id,
         orderNumber: order.orderNumber,
         customerId: order.customerId,
@@ -88,30 +88,33 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           quantity: li.quantity,
         })),
         notes: order.notes || '',
-      }
-    : initialData
-    ? { 
+      };
+    } else if (initialData) {
+      return {
         ...initialData,
-        poNumber: initialData.poNumber || (order?.poNumber || ''), // Carry over from estimate if converted
+        id: initialData.id, // id is optional in OrderFormData, so this is fine
+        poNumber: initialData.poNumber ?? '', // Use initialData's poNumber, default to '' if undefined/null
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
-      }
-    : { 
+      };
+    } else {
+      return {
         id: undefined,
-        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
+        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
         customerId: '',
         date: new Date(),
         status: 'Draft',
         orderState: 'Open',
         poNumber: '',
-        lineItems: [],
+        lineItems: [{ productId: '', quantity: 1 }],
         notes: '',
         expectedDeliveryDate: undefined,
         readyForPickUpDate: undefined,
         pickedUpDate: undefined,
       };
+    }
   }, [order, initialData]);
 
   const form = useForm<OrderFormData>({
@@ -413,3 +416,5 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+
+    
