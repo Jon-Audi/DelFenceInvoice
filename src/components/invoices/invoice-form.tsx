@@ -49,7 +49,7 @@ const invoiceFormSchema = z.object({
   date: z.date({ required_error: "Invoice date is required." }),
   dueDate: z.date().optional(),
   status: z.enum(INVOICE_STATUSES as [typeof INVOICE_STATUSES[0], ...typeof INVOICE_STATUSES]),
-  poNumber: z.string().optional(), // Added P.O. Number
+  poNumber: z.string().optional(),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
@@ -80,49 +80,50 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products }: InvoiceFormProps) {
   const defaultFormValues = useMemo((): InvoiceFormData => {
-    const base = invoice
-    ? {
+    let baseValues: Omit<InvoiceFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
+
+    if (invoice) {
+      baseValues = {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         customerId: invoice.customerId,
         date: new Date(invoice.date),
         dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
         status: invoice.status,
-        poNumber: invoice.poNumber || '',
-        lineItems: invoice.lineItems.map(li => ({
-          id: li.id,
-          productId: li.productId,
-          quantity: li.quantity,
-        })),
+        poNumber: invoice.poNumber ?? '', 
+        lineItems: invoice.lineItems.map(li => ({ id: li.id, productId: li.productId, quantity: li.quantity })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
-      }
-    : initialData
-    ? {
-        ...initialData,
-        poNumber: initialData.poNumber || (invoice?.poNumber || ''), // Carry over PO from estimate/order
+      };
+    } else if (initialData) {
+      baseValues = {
+        ...initialData, 
+        poNumber: initialData.poNumber ?? '', 
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
-      }
-    : {
+      };
+    } else {
+      baseValues = {
         id: undefined,
         invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
         customerId: '',
         date: new Date(),
         status: 'Draft',
         poNumber: '',
-        lineItems: [],
+        lineItems: [{ productId: '', quantity: 1 }],
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
       };
-      return {
-        ...base,
-        newPaymentAmount: undefined,
-        newPaymentDate: undefined,
-        newPaymentMethod: undefined,
-        newPaymentNotes: undefined,
-      };
+    }
+
+    return {
+      ...baseValues,
+      newPaymentAmount: undefined,
+      newPaymentDate: undefined,
+      newPaymentMethod: undefined,
+      newPaymentNotes: undefined,
+    };
   }, [invoice, initialData]);
 
   const form = useForm<InvoiceFormData>({
