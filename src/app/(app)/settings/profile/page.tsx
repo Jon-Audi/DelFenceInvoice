@@ -76,7 +76,7 @@ export default function ProfilePage() {
   const handlePhotoSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      console.log("Selected photo:", file.name, file.type);
+      // console.log("Selected photo:", file.name, file.type);
       toast({
         title: "Photo Selected (Simulation)",
         description: `File: ${file.name}. Next step would be to upload and update profile.`,

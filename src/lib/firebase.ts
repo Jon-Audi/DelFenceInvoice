@@ -17,11 +17,6 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Log the Project ID to the browser console for verification
-console.log("[Firebase Init] Using Project ID from env: ", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-console.log("[Firebase Init] Effective Firebase Config: ", firebaseConfig);
-
-
 // Prevent re-initialization on hot reload
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 

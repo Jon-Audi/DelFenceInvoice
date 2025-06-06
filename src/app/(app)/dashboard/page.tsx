@@ -86,23 +86,14 @@ export default function DashboardPage() {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
-      console.log("Dashboard: fetchData called.");
-      console.log("Dashboard: AuthUser from context in useEffect:", authUser?.uid);
-      console.log("Dashboard: firebaseAuthInstance.currentUser in useEffect:", firebaseAuthInstance.currentUser?.uid);
-
-
+      
       try {
-        console.log("Dashboard: Attempting to fetch Product Count...");
         const productsSnap = await getCountFromServer(collection(db, 'products'));
         setTotalProducts(productsSnap.data().count);
-        console.log("Dashboard: Product Count fetched:", productsSnap.data().count);
 
-        console.log("Dashboard: Attempting to fetch Active Customer Count...");
         const customersSnap = await getCountFromServer(collection(db, 'customers'));
         setActiveCustomers(customersSnap.data().count);
-        console.log("Dashboard: Active Customer Count fetched:", customersSnap.data().count);
 
-        console.log("Dashboard: Attempting to fetch Open Estimates...");
         const openEstimatesQuery = query(
           collection(db, 'estimates'),
           where('status', 'in', ['Draft', 'Sent'])
@@ -114,26 +105,19 @@ export default function DashboardPage() {
           tempOpenEstimatesTotalValue += (doc.data() as Estimate).total;
         });
         setOpenEstimatesTotalValue(tempOpenEstimatesTotalValue);
-        console.log("Dashboard: Open Estimates fetched:", openEstimatesSnapshot.size);
 
-        console.log("Dashboard: Attempting to fetch Pending Orders...");
         const pendingOrdersQuery = query(
           collection(db, 'orders'),
           where('status', 'in', ['Ordered', 'Ready for pick up'])
         );
         const pendingOrdersSnapshot = await getDocs(pendingOrdersQuery);
         setPendingOrdersCount(pendingOrdersSnapshot.size);
-        console.log("Dashboard: Pending Orders fetched:", pendingOrdersSnapshot.size);
 
-        console.log("Dashboard: Attempting to fetch Recent Estimates (limit 3)...");
         const recentEstimatesQuery = query(collection(db, 'estimates'), orderBy('date', 'desc'), limit(3));
         const recentEstimatesSnapshot = await getDocs(recentEstimatesQuery);
-        console.log("Dashboard: Recent Estimates fetched:", recentEstimatesSnapshot.size);
         
-        console.log("Dashboard: Attempting to fetch Recent Orders (limit 3)...");
         const recentOrdersQuery = query(collection(db, 'orders'), orderBy('date', 'desc'), limit(3));
         const recentOrdersSnapshot = await getDocs(recentOrdersQuery);
-        console.log("Dashboard: Recent Orders fetched:", recentOrdersSnapshot.size);
 
         const fetchedActivities: ActivityItem[] = [];
         recentEstimatesSnapshot.forEach(doc => {
@@ -166,13 +150,9 @@ export default function DashboardPage() {
             .sort((a, b) => b.date.getTime() - a.date.getTime())
             .slice(0, 5)
         );
-        console.log("Dashboard: Recent activity processed. Data fetch complete.");
 
       } catch (err: any) {
         console.error("Dashboard: Detailed error fetching data:", err);
-        console.error("Dashboard: Error name:", err.name);
-        console.error("Dashboard: Error code:", err.code);
-        console.error("Dashboard: Error message:", err.message);
         const description = err.code === 'permission-denied' || err.message?.includes('PERMISSION_DENIED') || err.message?.includes('Missing or insufficient permissions')
           ? "Permission denied. Please ensure you are logged in, have the necessary permissions, and that Firestore rules are correctly deployed."
           : `Failed to load dashboard data. ${err.message || 'Unknown error'}. Check console for details.`;
@@ -189,17 +169,13 @@ export default function DashboardPage() {
     };
 
     if (authLoading) {
-      console.log("Dashboard: Auth state still loading, deferring data fetch.");
       setIsLoading(true); // Keep dashboard in loading state while auth is resolving
       return;
     }
 
     if (authUser) {
-      console.log("Dashboard: AuthUser context is (UID:", authUser.uid, "), authLoading is false. Attempting data fetch.");
-      console.log("Dashboard: firebaseAuthInstance.currentUser right before fetch:", firebaseAuthInstance.currentUser?.uid);
       fetchData();
     } else {
-      console.log("Dashboard: No authenticated user after auth check. Data fetch aborted. AppLayout should handle redirection.");
       setError("You must be logged in to view the dashboard. If you are logged in, there might be an issue with your session or permissions.");
       setIsLoading(false);
     }

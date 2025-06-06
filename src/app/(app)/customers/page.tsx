@@ -128,7 +128,7 @@ export default function CustomersPage() {
       const lastName = customerDataFromCsv.lastname;
 
       if (!firstName || !lastName) {
-        console.warn(`Skipping row ${i+1}: missing firstName or lastName.`);
+        // console.warn(`Skipping row ${i+1}: missing firstName or lastName.`);
         continue; 
       }
       

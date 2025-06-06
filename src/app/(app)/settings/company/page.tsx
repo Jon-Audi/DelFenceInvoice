@@ -83,7 +83,7 @@ export default function CompanySettingsPage() {
           form.reset(normalizedData);
         } else {
           // No existing settings, form will use defaultValues which are already ''
-          console.log("No company settings document found, using defaults.");
+          // console.log("No company settings document found, using defaults.");
         }
       } catch (error) {
         console.error("Error fetching company settings:", error);

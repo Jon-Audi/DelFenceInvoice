@@ -62,8 +62,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     // In a real scenario, you would send this recaptchaToken to your backend
     // to verify it using your RECAPTCHA_SECRET_KEY.
-    console.log("reCAPTCHA token received (login):", recaptchaToken);
-    toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
+    // console.log("reCAPTCHA token received (login):", recaptchaToken);
+    // toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
 
 
     if (!firebaseAuthInstance) {
@@ -122,8 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     // In a real scenario, you would send this recaptchaToken to your backend
     // to verify it using your RECAPTCHA_SECRET_KEY.
-    console.log("reCAPTCHA token received (signup):", recaptchaToken);
-    toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
+    // console.log("reCAPTCHA token received (signup):", recaptchaToken);
+    // toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
 
 
     if (!firebaseAuthInstance) {

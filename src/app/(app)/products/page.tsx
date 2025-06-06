@@ -79,9 +79,7 @@ export default function ProductsPage() {
       });
       return;
     }
-    console.log(`Attempting to save product. User UID: ${currentUser.uid}. Please ensure this user has 'Admin' role in Firestore /users/${currentUser.uid} for write access.`);
-
-
+    
     try {
       setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
@@ -256,7 +254,7 @@ export default function ProductsPage() {
       if (markupPercentageStr === undefined) { missingFieldsForRow.push('markuppercentage'); rowIsValid = false; }
 
       if (!rowIsValid) {
-        console.warn(`Skipping CSV row ${i+1}: missing required field(s): ${missingFieldsForRow.join(', ')}. Row data: ${lines[i]}`);
+        // console.warn(`Skipping CSV row ${i+1}: missing required field(s): ${missingFieldsForRow.join(', ')}. Row data: ${lines[i]}`);
         skippedRowCount++;
         continue; 
       }
@@ -265,9 +263,9 @@ export default function ProductsPage() {
       const cost = parseFloat(costStr);
       const markupPercentage = parseFloat(markupPercentageStr || "0");
 
-      if (isNaN(price)) { console.warn(`Skipping CSV row ${i+1}: 'price' ("${priceStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
-      if (isNaN(cost)) { console.warn(`Skipping CSV row ${i+1}: 'cost' ("${costStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
-      if (isNaN(markupPercentage)) { console.warn(`Skipping CSV row ${i+1}: 'markupPercentage' ("${productDataFromCsv.markuppercentage}" -> "${markupPercentageStr}") is not a valid number. Row data: ${lines[i]}`); skippedRowCount++; continue; }
+      if (isNaN(price)) { /* console.warn(`Skipping CSV row ${i+1}: 'price' ("${priceStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
+      if (isNaN(cost)) { /* console.warn(`Skipping CSV row ${i+1}: 'cost' ("${costStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
+      if (isNaN(markupPercentage)) { /* console.warn(`Skipping CSV row ${i+1}: 'markupPercentage' ("${productDataFromCsv.markuppercentage}" -> "${markupPercentageStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
       
       const trimmedCategory = category.trim();
       
@@ -504,4 +502,3 @@ export default function ProductsPage() {
     </>
   );
 }
-

@@ -291,8 +291,8 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      console.log("[EstimatesPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
-      console.log("[EstimatesPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
+      // console.log("[EstimatesPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
+      // console.log("[EstimatesPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
