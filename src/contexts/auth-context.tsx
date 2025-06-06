@@ -21,9 +21,9 @@ interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, pass: string, recaptchaToken: string | null) => Promise<void>;
+  login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (email: string, pass: string, firstName: string, lastName: string, recaptchaToken: string | null) => Promise<void>;
+  signup: (email: string, pass: string, firstName: string, lastName: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,22 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, pass: string, recaptchaToken: string | null) => {
+  const login = async (email: string, pass: string) => {
     setLoading(true);
     setError(null);
-
-    if (!recaptchaToken) {
-      const errMsg = "Please complete the reCAPTCHA.";
-      setError(errMsg);
-      toast({ title: "Login Failed", description: errMsg, variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-    // In a real scenario, you would send this recaptchaToken to your backend
-    // to verify it using your RECAPTCHA_SECRET_KEY.
-    // console.log("reCAPTCHA token received (login):", recaptchaToken);
-    // toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
-
 
     if (!firebaseAuthInstance) {
       const errMsg = "Firebase Auth service is not available for login. Check configuration.";
@@ -109,22 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, pass: string, firstName: string, lastName: string, recaptchaToken: string | null) => {
+  const signup = async (email: string, pass: string, firstName: string, lastName: string) => {
     setLoading(true);
     setError(null);
-
-    if (!recaptchaToken) {
-      const errMsg = "Please complete the reCAPTCHA.";
-      setError(errMsg);
-      toast({ title: "Signup Failed", description: errMsg, variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-    // In a real scenario, you would send this recaptchaToken to your backend
-    // to verify it using your RECAPTCHA_SECRET_KEY.
-    // console.log("reCAPTCHA token received (signup):", recaptchaToken);
-    // toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
-
 
     if (!firebaseAuthInstance) {
       const errMsg = "Firebase Auth service is not available for signup. Check configuration.";
