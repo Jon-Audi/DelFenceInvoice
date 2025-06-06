@@ -15,15 +15,15 @@ import { auth as firebaseAuthInstance, db } from '@/lib/firebase'; // Renamed im
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 import { ROLE_PERMISSIONS } from '@/lib/constants';
-import type { User } from '@/types';
+// import type { User } from '@/types'; // This type seems unused here directly
 
 interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string, recaptchaToken: string | null) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (email: string, pass: string, firstName: string, lastName: string) => Promise<void>;
+  signup: (email: string, pass: string, firstName: string, lastName: string, recaptchaToken: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,9 +49,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string, recaptchaToken: string | null) => {
     setLoading(true);
     setError(null);
+
+    if (!recaptchaToken) {
+      const errMsg = "Please complete the reCAPTCHA.";
+      setError(errMsg);
+      toast({ title: "Login Failed", description: errMsg, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+    // In a real scenario, you would send this recaptchaToken to your backend
+    // to verify it using your RECAPTCHA_SECRET_KEY.
+    console.log("reCAPTCHA token received (login):", recaptchaToken);
+    toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
+
+
     if (!firebaseAuthInstance) {
       const errMsg = "Firebase Auth service is not available for login. Check configuration.";
       setError(errMsg);
@@ -95,9 +109,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, pass: string, firstName: string, lastName: string) => {
+  const signup = async (email: string, pass: string, firstName: string, lastName: string, recaptchaToken: string | null) => {
     setLoading(true);
     setError(null);
+
+    if (!recaptchaToken) {
+      const errMsg = "Please complete the reCAPTCHA.";
+      setError(errMsg);
+      toast({ title: "Signup Failed", description: errMsg, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+    // In a real scenario, you would send this recaptchaToken to your backend
+    // to verify it using your RECAPTCHA_SECRET_KEY.
+    console.log("reCAPTCHA token received (signup):", recaptchaToken);
+    toast({ title: "reCAPTCHA Check (Simulation)", description: "Token received. Backend verification needed.", variant: "default" });
+
+
     if (!firebaseAuthInstance) {
       const errMsg = "Firebase Auth service is not available for signup. Check configuration.";
       setError(errMsg);
@@ -119,9 +147,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!db) {
             const firestoreErrMsg = "Firestore service is not available. Cannot save user profile.";
             console.error("[AuthContext] " + firestoreErrMsg);
-            // Depending on desired behavior, you might want to sign out the newly created auth user
-            // or just inform them that their profile couldn't be saved.
-            // For now, we'll set an error and stop, but the auth user still exists.
             setError(firestoreErrMsg);
             toast({ title: "Signup Incomplete", description: firestoreErrMsg, variant: "destructive" });
             setLoading(false);
