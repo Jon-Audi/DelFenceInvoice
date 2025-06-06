@@ -26,7 +26,7 @@ export default function DashboardPage() {
           <ul className="list-disc list-inside mb-4">
             <li>VERY IMPORTANT: Check your Firebase project linking for App Hosting. The build logs show a `FIREBASE_CONFIG` for project `dfs-invoicing` while your `NEXT_PUBLIC_` variables are for `delfenceinvoice`. This mismatch is the most likely cause of runtime failures.</li>
             <li>Ensure `firebase use` is set to `delfenceinvoice` when deploying.</li>
-            <li>Verify in Firebase Console > App Hosting that `delfenceinvbackend` is linked to `delfenceinvoice`.</li>
+            <li>Verify in Firebase Console &gt; App Hosting that `delfenceinvbackend` is linked to `delfenceinvoice`.</li>
             <li>Check runtime logs for `delfenceinvbackend` in Google Cloud Console (Cloud Run) for any errors.</li>
           </ul>
           <Link href="/products" passHref>
