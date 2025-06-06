@@ -101,7 +101,7 @@ export default function EstimatesPage() {
       setEstimates(fetchedEstimates.sort((a, b) => a.estimateNumber.localeCompare(b.estimateNumber)));
       setIsLoadingEstimates(false);
     }, (error) => {
-      console.error("Error fetching estimates:", error);
+      
       toast({ title: "Error", description: "Could not fetch estimates.", variant: "destructive" });
       setIsLoadingEstimates(false);
     });
@@ -118,7 +118,7 @@ export default function EstimatesPage() {
       setCustomers(fetchedCustomers);
       setIsLoadingCustomers(false);
     }, (error) => {
-      console.error("Error fetching customers:", error);
+      
       toast({ title: "Error", description: "Could not fetch customers for estimates.", variant: "destructive" });
       setIsLoadingCustomers(false);
     });
@@ -135,7 +135,7 @@ export default function EstimatesPage() {
       setProducts(fetchedProducts);
       setIsLoadingProducts(false);
     }, (error) => {
-      console.error("Error fetching products:", error);
+      
       toast({ title: "Error", description: "Could not fetch products for estimates.", variant: "destructive" });
       setIsLoadingProducts(false);
     });
@@ -207,7 +207,7 @@ export default function EstimatesPage() {
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
-        console.error("Error saving estimate:", error);
+        
         toast({ title: "Error", description: `Could not save estimate to database. ${error.message}`, variant: "destructive" });
     }
   };
@@ -225,7 +225,9 @@ export default function EstimatesPage() {
         return id;
       } else {
         const dataToSave = { ...customerData };
-        if (dataToSave.id) delete (dataToSave as any).id;
+        // The problematic line `if (dataToSave.id) delete (dataToSave as any).id;` was here and is now removed.
+        // dataToSave (which is a spread of customerData) does not have an 'id' property
+        // because 'id' was destructured from 'customerToSave' at the beginning of the function.
 
         const docRef = await addDoc(collection(db, 'customers'), dataToSave);
         toast({
@@ -235,7 +237,7 @@ export default function EstimatesPage() {
         return docRef.id;
       }
     } catch (error) {
-      console.error("Error saving customer:", error);
+      
       toast({
         title: "Error",
         description: "Could not save customer to database.",
@@ -249,7 +251,7 @@ export default function EstimatesPage() {
       await deleteDoc(doc(db, 'estimates', estimateId));
       toast({ title: "Estimate Deleted", description: "The estimate has been removed." });
     } catch (error) {
-      console.error("Error deleting estimate:", error);
+      
       toast({ title: "Error", description: "Could not delete estimate.", variant: "destructive" });
     }
     setEstimateToDelete(null);
@@ -266,7 +268,7 @@ export default function EstimatesPage() {
       toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
       return null;
     } catch (error) {
-      console.error("Error fetching company settings:", error);
+      
       toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
       return null;
     } finally {
@@ -291,8 +293,8 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      // console.log("[EstimatesPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
-      // console.log("[EstimatesPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
+      
+      
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
@@ -346,7 +348,7 @@ export default function EstimatesPage() {
       setEditableBody(result.emailDraft);
 
     } catch (error) {
-      console.error("Error generating email draft:", error);
+      
       toast({ title: "Error", description: "Failed to generate email draft.", variant: "destructive" });
       setEmailDraft({ subject: "Error", body: "Could not generate email content."});
       setEditableSubject("Error generating subject");
@@ -618,3 +620,4 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
