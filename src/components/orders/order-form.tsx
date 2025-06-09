@@ -191,18 +191,32 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                     <CommandList>
                       <CommandEmpty>No customer found.</CommandEmpty>
                       <CommandGroup>
-                        {customers.map((customer) => (
-                          <CommandItem
-                            value={customer.id}
-                            key={customer.id}
-                            onSelect={() => {
-                              form.setValue("customerId", customer.id, { shouldValidate: true });
-                            }}
-                          >
-                            <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
-                            {customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`}
-                          </CommandItem>
-                        ))}
+                        {customers.map((customer) => {
+                           const displayName = customer.companyName ? 
+                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` : 
+                               `${customer.firstName} ${customer.lastName}`;
+                           const allEmails = customer.emailContacts?.map(ec => ec.email).join(' ') || '';
+                           const searchableValue = [
+                             customer.firstName,
+                             customer.lastName,
+                             customer.companyName,
+                             customer.phone,
+                             allEmails
+                           ].filter(Boolean).join(' ').toLowerCase();
+
+                          return (
+                            <CommandItem
+                              value={searchableValue}
+                              key={customer.id}
+                              onSelect={() => {
+                                form.setValue("customerId", customer.id, { shouldValidate: true });
+                              }}
+                            >
+                              <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
+                              {displayName}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
