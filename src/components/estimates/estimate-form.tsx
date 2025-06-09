@@ -414,28 +414,34 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                           <CommandList>
                             <CommandEmpty>No product found.</CommandEmpty>
                             <CommandGroup>
-                              {filteredProductsForLine.map((product) => (
-                                <CommandItem
-                                  value={product.id}
-                                  key={product.id}
-                                  onSelect={() => {
-                                    controllerField.onChange(product.id);
-                                    const selectedProd = products.find(p => p.id === product.id);
-                                    if (selectedProd) {
-                                      setLineItemCategoryFilters(prevFilters => {
-                                        const newFilters = [...prevFilters];
-                                        newFilters[index] = selectedProd.category;
-                                        return newFilters;
-                                      });
-                                      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price);
-                                    }
-                                    form.trigger(`lineItems.${index}.productId`);
-                                  }}
-                                >
-                                  <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                  {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
-                                </CommandItem>
-                              ))}
+                              {filteredProductsForLine.map((product) => {
+                                const searchableValue = [product.name, product.category, product.unit]
+                                  .filter(Boolean)
+                                  .join(' ')
+                                  .toLowerCase();
+                                return (
+                                  <CommandItem
+                                    value={searchableValue}
+                                    key={product.id}
+                                    onSelect={() => {
+                                      controllerField.onChange(product.id);
+                                      const selectedProd = products.find(p => p.id === product.id);
+                                      if (selectedProd) {
+                                        setLineItemCategoryFilters(prevFilters => {
+                                          const newFilters = [...prevFilters];
+                                          newFilters[index] = selectedProd.category;
+                                          return newFilters;
+                                        });
+                                        form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price);
+                                      }
+                                      form.trigger(`lineItems.${index}.productId`);
+                                    }}
+                                  >
+                                    <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
+                                    {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
+                                  </CommandItem>
+                                );
+                              })}
                             </CommandGroup>
                           </CommandList>
                         </Command>

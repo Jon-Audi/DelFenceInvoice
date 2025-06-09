@@ -350,18 +350,24 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                           <CommandList>
                             <CommandEmpty>No product found.</CommandEmpty>
                             <CommandGroup>
-                              {products.map((product) => (
-                                <CommandItem
-                                  value={product.id}
-                                  key={product.id}
-                                  onSelect={() => {
-                                    handleProductSelect(index, product.id);
-                                  }}
-                                >
-                                  <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                  {product.name}
-                                </CommandItem>
-                              ))}
+                              {products.map((product) => {
+                                const searchableValue = [product.name, product.category, product.unit]
+                                  .filter(Boolean)
+                                  .join(' ')
+                                  .toLowerCase();
+                                return (
+                                  <CommandItem
+                                    value={searchableValue}
+                                    key={product.id}
+                                    onSelect={() => {
+                                      handleProductSelect(index, product.id);
+                                    }}
+                                  >
+                                    <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
+                                    {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
+                                  </CommandItem>
+                                );
+                              })}
                             </CommandGroup>
                           </CommandList>
                         </Command>
