@@ -21,7 +21,6 @@ export default function CustomersPage() {
 
   useEffect(() => {
     setIsLoading(true);
-    console.log("[CustomersPage] Firestore client initialized. Project ID:", db.app.options.projectId);
     const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
       const fetchedCustomers: Customer[] = [];
       snapshot.forEach((docSnap) => {
@@ -30,7 +29,6 @@ export default function CustomersPage() {
       });
       setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
       setIsLoading(false);
-      console.log(`[CustomersPage] Customers snapshot received. Document count: ${snapshot.size}`);
     }, (error) => {
       console.error("[CustomersPage] Error fetching customers:", error);
       toast({
@@ -95,7 +93,7 @@ export default function CustomersPage() {
 
   const parseCsvToCustomers = (csvData: string): Omit<Customer, 'id'>[] => {
     const newCustomersData: Omit<Customer, 'id'>[] = [];
-    const lines = csvData.trim().split(/\r\n|\n/); // Handle both Windows and Unix line endings
+    const lines = csvData.trim().split(/\r\n|\n/);
     const lineCount = lines.length;
 
     if (lineCount < 2) {
@@ -103,17 +101,17 @@ export default function CustomersPage() {
       return [];
     }
 
-    // Normalize headers: lowercase and remove spaces
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
-    const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
+    // Expected headers based on user request: Name, Company name, Cell, Phone, Email
+    const expectedHeaders = ['name', 'companyname', 'cell', 'phone', 'email'];
     
-    const requiredHeaders = ['firstname', 'lastname'];
+    const requiredHeaders = ['name']; // "Name" is crucial for firstName and lastName
     const missingRequiredHeaders = requiredHeaders.filter(eh => !headers.includes(eh));
 
     if (missingRequiredHeaders.length > 0) {
         toast({ 
             title: "CSV Header Error", 
-            description: `CSV file is missing required headers: ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive, no spaces): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
+            description: `CSV file is missing required header(s): ${missingRequiredHeaders.join(', ')}. Expected headers (case-insensitive, no spaces): ${expectedHeaders.join(', ')}. Please ensure your CSV matches this format.`, 
             variant: "destructive",
             duration: 10000,
         });
@@ -127,43 +125,50 @@ export default function CustomersPage() {
       const values = lines[i].split(',').map(v => v.trim());
       const customerDataFromCsv: Record<string, string> = {};
       headers.forEach((header, index) => { 
-        customerDataFromCsv[header] = values[index] || ''; // Ensure value is at least an empty string
+        customerDataFromCsv[header] = values[index] || '';
       });
 
-      const firstName = customerDataFromCsv.firstname;
-      const lastName = customerDataFromCsv.lastname;
-
-      if (!firstName || !lastName) {
+      const fullName = customerDataFromCsv.name;
+      if (!fullName) {
         skippedRowCount++;
-        console.warn(`Skipping CSV row ${i+1}: missing firstName or lastName. Data: ${lines[i]}`);
+        console.warn(`Skipping CSV row ${i+1}: missing 'Name'. Data: ${lines[i]}`);
         continue; 
       }
-      
-      const emailTypeStr = (customerDataFromCsv.primaryemailtype || '').toLowerCase();
-      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === emailTypeStr) || EMAIL_CONTACT_TYPES[0];
-      
-      const custTypeStr = (customerDataFromCsv.customertype || '').toLowerCase();
-      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === custTypeStr) || CUSTOMER_TYPES[0];
 
+      let firstName = '';
+      let lastName = '';
+      const nameParts = fullName.split(' ');
+      if (nameParts.length > 0) {
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+      } else {
+        firstName = fullName; // Fallback if no space
+      }
+
+      if (!firstName) { // Double check after split, though covered by !fullName
+        skippedRowCount++;
+        console.warn(`Skipping CSV row ${i+1}: could not parse firstName from 'Name'. Data: ${lines[i]}`);
+        continue;
+      }
+      
+      const primaryPhone = customerDataFromCsv.cell || customerDataFromCsv.phone || '';
+      const primaryEmail = customerDataFromCsv.email || '';
+      
       const newCustomer: Omit<Customer, 'id'> = {
         firstName: firstName,
         lastName: lastName,
         companyName: customerDataFromCsv.companyname || undefined,
-        phone: customerDataFromCsv.phone || '',
-        emailContacts: customerDataFromCsv.primaryemail ? [{
+        phone: primaryPhone,
+        emailContacts: primaryEmail ? [{
           id: crypto.randomUUID(), 
-          type: emailType as EmailContactType,
-          email: customerDataFromCsv.primaryemail,
-          name: `${firstName} ${lastName}`
+          type: EMAIL_CONTACT_TYPES[0], // Default type
+          email: primaryEmail,
+          name: `${firstName} ${lastName}` // Default name
         }] : [],
-        customerType: custType as CustomerType,
-        address: (customerDataFromCsv.addressstreet || customerDataFromCsv.addresscity || customerDataFromCsv.addressstate || customerDataFromCsv.addresszip) ? {
-          street: customerDataFromCsv.addressstreet || '',
-          city: customerDataFromCsv.addresscity || '',
-          state: customerDataFromCsv.addressstate || '',
-          zip: customerDataFromCsv.addresszip || '',
-        } : undefined,
-        notes: customerDataFromCsv.notes || undefined,
+        customerType: CUSTOMER_TYPES[0], // Default type
+        // Address and notes are not populated from these headers
+        address: undefined, 
+        notes: undefined,
       };
       newCustomersData.push(newCustomer);
       parsedCustomerCount++;
@@ -172,14 +177,14 @@ export default function CustomersPage() {
     if (parsedCustomerCount > 0) {
         toast({
             title: "CSV Parsed",
-            description: `${parsedCustomerCount} customers parsed from CSV. ${skippedRowCount > 0 ? `${skippedRowCount} rows skipped due to missing required fields (firstName, lastName).` : ''}`,
-            variant: skippedRowCount > 0 ? "default" : "default", // 'default' is info, not warning
+            description: `${parsedCustomerCount} customers parsed from CSV. ${skippedRowCount > 0 ? `${skippedRowCount} rows skipped due to missing or unparsable 'Name' field.` : ''}`,
+            variant: skippedRowCount > 0 ? "default" : "default",
             duration: 8000,
         });
     } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
         toast({
             title: "CSV Info",
-            description: `CSV headers matched, but no valid customer data rows could be parsed. ${skippedRowCount} rows were skipped. Please check row content for firstName and lastName.`,
+            description: `CSV headers matched, but no valid customer data rows could be parsed. ${skippedRowCount} rows were skipped. Ensure the 'Name' column is present and populated.`,
             variant: "default",
             duration: 10000,
         });
@@ -223,7 +228,6 @@ export default function CustomersPage() {
           }
         }
       }
-      // Reset file input to allow selecting the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -237,7 +241,7 @@ export default function CustomersPage() {
     reader.readAsText(file);
   };
 
-  if (isLoading && customers.length === 0) { // Show loader if actively loading AND no customers yet
+  if (isLoading && customers.length === 0) {
     return (
       <PageHeader title="Customers" description="Loading customer database...">
         <div className="flex items-center justify-center h-32">
@@ -257,7 +261,7 @@ export default function CustomersPage() {
             style={{ display: 'none' }}
             accept=".csv"
             onChange={handleFileChange}
-            disabled={isLoading} // Disable while other operations are in progress
+            disabled={isLoading}
           />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
@@ -275,7 +279,7 @@ export default function CustomersPage() {
         </div>
       </PageHeader>
       <CustomerTable customers={customers} onSave={handleSaveCustomer} onDelete={handleDeleteCustomer} />
-       {customers.length === 0 && !isLoading && ( // Message if no customers and not loading
+       {customers.length === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
           No customers found. Try adding one or importing a CSV.
         </p>
