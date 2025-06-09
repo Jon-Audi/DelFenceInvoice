@@ -36,7 +36,8 @@ import {
   Check,
   CalendarDays,
   TrendingUp,
-  Printer, // Added Printer icon
+  Printer,
+  Layers, // Added Layers icon
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -79,7 +80,8 @@ const iconComponents = {
   Check,
   Calendar: CalendarDays,
   TrendingUp,
-  Printer, // Added Printer icon
+  Printer,
+  Layers, // Added Layers icon
 };
 
 interface IconProps extends LucideProps {
@@ -94,3 +96,5 @@ export const Icon = ({ name, ...props }: IconProps) => {
   }
   return <LucideIcon {...props} />;
 };
+
+    

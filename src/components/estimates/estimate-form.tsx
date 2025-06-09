@@ -32,6 +32,7 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
+import { BulkAddProductsDialog } from './bulk-add-products-dialog'; // Import the new dialog
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
@@ -50,7 +51,7 @@ const estimateFormSchema = z.object({
   date: z.date({ required_error: "Estimate date is required." }),
   validUntil: z.date().optional(),
   status: z.enum(ESTIMATE_STATUSES as [typeof ESTIMATE_STATUSES[0], ...typeof ESTIMATE_STATUSES]),
-  poNumber: z.string().optional(), // Added P.O. Number
+  poNumber: z.string().optional(),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
 });
@@ -70,6 +71,7 @@ interface EstimateFormProps {
 export function EstimateForm({ estimate, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
+  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false); // State for bulk add dialog
 
   useEffect(() => {
     setCustomers(initialCustomers);
@@ -107,7 +109,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -123,9 +125,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     })
   );
 
-
   useEffect(() => {
-    // Initialize or synchronize category filters based on currently selected products in line items
     const newCalculatedFilters = watchedLineItems.map(item => {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
@@ -149,7 +149,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     if (needsUpdate) {
       setLineItemCategoryFilters(newCalculatedFilters);
     }
-  }, [watchedLineItems, products]);
+  }, [watchedLineItems, products, lineItemCategoryFilters.length]);
 
 
   useEffect(() => {
@@ -186,7 +186,9 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
-    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    // Reset product selection for this line item when category filter changes
+    const currentItem = form.getValues(`lineItems.${index}`);
+    update(index, { ...currentItem, productId: '', unitPrice: 0 });
     form.trigger(`lineItems.${index}.productId`);
   };
 
@@ -200,9 +202,24 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
+    const newFilterEntries: (string | undefined)[] = [];
+    itemsToAdd.forEach(item => {
+      const productDetails = products.find(p => p.id === item.productId);
+      append({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: productDetails?.price || 0,
+      });
+      newFilterEntries.push(productDetails?.category);
+    });
+    setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
+    setIsBulkAddDialogOpen(false);
+  };
+
   const getFilteredProducts = (index: number) => {
     const selectedCategory = lineItemCategoryFilters[index];
-    if (selectedCategory) {
+    if (selectedCategory && selectedCategory !== ALL_CATEGORIES_VALUE) {
       return products.filter(p => p.category === selectedCategory);
     }
     return products;
@@ -216,7 +233,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     }, 0);
   }, [watchedLineItems, products]);
 
-  const currentTotal = currentSubtotal;
+  const currentTotal = currentSubtotal; // Assuming no tax for now
 
   return (
     <Form {...form}>
@@ -459,9 +476,14 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={addLineItem}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
-        </Button>
+        <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={addLineItem}>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setIsBulkAddDialogOpen(true)}>
+                <Icon name="Layers" className="mr-2 h-4 w-4" /> Bulk Add Items
+            </Button>
+        </div>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
         )}
@@ -493,6 +515,17 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
           onSave={handleSaveNewCustomerFromEstimateForm}
         />
       )}
+      {isBulkAddDialogOpen && (
+        <BulkAddProductsDialog
+          isOpen={isBulkAddDialogOpen}
+          onOpenChange={setIsBulkAddDialogOpen}
+          products={products}
+          productCategories={productCategories}
+          onAddItems={handleBulkAddItems}
+        />
+      )}
     </Form>
   );
 }
+
+    
