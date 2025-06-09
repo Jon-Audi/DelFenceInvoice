@@ -20,8 +20,22 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (db) {
+      console.log("[CustomersPage] Firestore client initialized. Project ID:", db.app.options.projectId);
+    } else {
+      console.error("[CustomersPage] Firestore client (db) is not initialized!");
+      setIsLoading(false);
+      toast({
+        title: "Configuration Error",
+        description: "Firestore database connection is not available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      console.log("[CustomersPage] Customers snapshot received. Document count:", snapshot.size);
       const fetchedCustomers: Customer[] = [];
       snapshot.forEach((docSnap) => {
         const customerData = docSnap.data() as Omit<Customer, 'id'>;
@@ -30,11 +44,13 @@ export default function CustomersPage() {
       setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
       setIsLoading(false);
     }, (error) => {
-      console.error("Error fetching customers:", error);
+      console.error("[CustomersPage] Error fetching customers:", error);
+      console.error("[CustomersPage] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
       toast({
-        title: "Error",
-        description: "Could not fetch customers from database.",
+        title: "Error Fetching Data",
+        description: `Could not fetch customers. Code: ${error.code}. Message: ${error.message}. Check console for more details.`,
         variant: "destructive",
+        duration: 10000,
       });
       setIsLoading(false);
     });
@@ -254,6 +270,13 @@ export default function CustomersPage() {
         </div>
       </PageHeader>
       <CustomerTable customers={customers} onSave={handleSaveCustomer} onDelete={handleDeleteCustomer} />
+       {customers.length === 0 && !isLoading && (
+        <p className="p-4 text-center text-muted-foreground">
+          No customers found. Try adding one or importing a CSV.
+          Ensure Firestore rules are deployed and your app is connected to the correct project.
+          Check the browser console for errors.
+        </p>
+      )}
     </>
   );
 }
