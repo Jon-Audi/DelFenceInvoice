@@ -154,10 +154,10 @@ export default function CustomersPage() {
       const primaryPhone = customerDataFromCsv.cell || customerDataFromCsv.phone || '';
       const primaryEmail = customerDataFromCsv.email || '';
       
-      const newCustomer: Omit<Customer, 'id'> = {
+      // Build the customer object for Firestore, only including fields that have actual values.
+      const customerDataForFirestore: Partial<Omit<Customer, 'id'>> = {
         firstName: firstName,
         lastName: lastName,
-        companyName: customerDataFromCsv.companyname || undefined,
         phone: primaryPhone,
         emailContacts: primaryEmail ? [{
           id: crypto.randomUUID(), 
@@ -166,11 +166,25 @@ export default function CustomersPage() {
           name: `${firstName} ${lastName}` // Default name
         }] : [],
         customerType: CUSTOMER_TYPES[0], // Default type
-        // Address and notes are not populated from these headers
-        address: undefined, 
-        notes: undefined,
       };
-      newCustomersData.push(newCustomer);
+
+      if (customerDataFromCsv.companyname) {
+        customerDataForFirestore.companyName = customerDataFromCsv.companyname;
+      }
+      // `address` and `notes` are intentionally omitted here. If they were part of CSV,
+      // they would be conditionally added here if they had values.
+      // Example: if (customerDataFromCsv.notes) customerDataForFirestore.notes = customerDataFromCsv.notes;
+      // Example: if (customerDataFromCsv.street) {
+      //   customerDataForFirestore.address = {
+      //     street: customerDataFromCsv.street,
+      //     city: customerDataFromCsv.city || '', // handle other address parts
+      //     state: customerDataFromCsv.state || '',
+      //     zip: customerDataFromCsv.zip || ''
+      //   };
+      // }
+
+
+      newCustomersData.push(customerDataForFirestore as Omit<Customer, 'id'>);
       parsedCustomerCount++;
     }
 
@@ -208,7 +222,7 @@ export default function CustomersPage() {
             const batch = writeBatch(db);
             parsedCustomersData.forEach(customerData => {
               const newDocRef = doc(collection(db, 'customers')); 
-              batch.set(newDocRef, customerData);
+              batch.set(newDocRef, customerData); // customerData now only contains defined fields
             });
             await batch.commit();
             toast({
@@ -287,3 +301,5 @@ export default function CustomersPage() {
     </>
   );
 }
+
+    
