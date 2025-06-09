@@ -3,88 +3,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isUser(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-    }
-
-    // Users collection
-    // - Users can read their own data.
-    // - Admins can read any user data.
-    // - Users can create their own user document (on signup).
-    // - Users can update their own data (e.g., displayName, potentially other fields but be specific).
-    // - Admins can update any user data.
-    // - Deletion is typically restricted (e.g., only by Admins or via a Callable Function).
-    match /users/{userId} {
-      allow read: if isUser(userId) || isAdmin();
-      allow create: if isUser(userId); // User creates their own doc on signup
-      allow update: if isUser(userId) || isAdmin(); // User can update their own, Admin can update any
-      allow delete: if isAdmin(); // Only Admins can delete user documents directly
-    }
-
-    // Products collection
-    // - All authenticated users can read products (e.g., for selection in estimates/orders).
-    // - Only Admins can create, update, or delete products.
-    match /products/{productId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // create, update, delete
-    }
-
-    // Customers collection
-    // - All authenticated users can read customer data (e.g., for selection).
-    // - Only Admins can create, update, or delete customers.
-    match /customers/{customerId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // create, update, delete
-    }
-
-    // Estimates collection
-    // - All authenticated users can read estimates.
-    // - Only Admins can create, update, or delete estimates.
-    match /estimates/{estimateId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // create, update, delete
-    }
-
-    // Orders collection
-    // - All authenticated users can read orders.
-    // - Only Admins can create, update, or delete orders.
-    match /orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // create, update, delete
-    }
-
-    // Invoices collection
-    // - All authenticated users can read invoices.
-    // - Only Admins can create, update, or delete invoices.
-    match /invoices/{invoiceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // create, update, delete
-    }
-
-    // Company Settings collection
-    // - Company settings are identified by a specific document ID (e.g., "main").
-    // - All authenticated users can read company settings (e.g., for printing documents).
-    // - Only Admins can update company settings.
-    match /companySettings/{settingsId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAdmin(); // Admins can create/update
-      allow delete: if false; // Generally, company settings are not deleted, only updated.
-    }
-
-    // pdfPlumDemoDocs (if you keep this for testing PDF generation)
-    // - Adjust as needed, perhaps only Admins or for development.
-    match /pdfPlumDemoDocs/{docId} {
-      allow read, write: if isAdmin(); // Example: Only Admins
+    // Allow read and write access to any document if the user is authenticated
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
