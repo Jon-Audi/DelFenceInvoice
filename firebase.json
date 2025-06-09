@@ -45,7 +45,11 @@
     "rewrites": [
       {
         "source": "**",
-        "apphosting": "delfencebackend"
+        "run": {
+          "serviceId": "delfencebackend",
+          "region": "us-central1",
+          "pinTag": true
+        }
       }
     ]
   }
