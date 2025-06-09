@@ -34,14 +34,6 @@ export default function DashboardPage() {
           <p className="mb-4">
             If you can see your email above, Firebase Authentication is working.
           </p>
-          <p className="mb-2">
-            The "Next Steps" previously listed on this page were for diagnosing build/initialization issues.
-            Since this page is loading, the main concern was the Firebase project ID mismatch. Please ensure
-            your App Hosting backend is definitively linked to the `delfenceinvoice` project.
-          </p>
-          <p className="mb-4">
-            Next, you can test data functionality by navigating to other pages like Products.
-          </p>
           <div className="flex gap-4">
             <Link href="/products" passHref>
               <Button variant="outline">
