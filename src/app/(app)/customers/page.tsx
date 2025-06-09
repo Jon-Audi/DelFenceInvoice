@@ -91,6 +91,18 @@ export default function CustomersPage() {
     }
   };
 
+  const cleanCsvValue = (value: string | undefined): string => {
+    if (typeof value !== 'string') return '';
+    let cleaned = value.trim();
+    // Remove surrounding quotes if they exist
+    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+      cleaned = cleaned.substring(1, cleaned.length - 1);
+    }
+    // Replace escaped double quotes "" with a single " (common in CSV)
+    cleaned = cleaned.replace(/""/g, '"');
+    return cleaned;
+  };
+
   const parseCsvToCustomers = (csvData: string): Omit<Customer, 'id'>[] => {
     const newCustomersData: Omit<Customer, 'id'>[] = [];
     const lines = csvData.trim().split(/\r\n|\n/);
@@ -102,10 +114,9 @@ export default function CustomersPage() {
     }
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
-    // Expected headers based on user request: Name, Company name, Cell, Phone, Email
     const expectedHeaders = ['name', 'companyname', 'cell', 'phone', 'email'];
     
-    const requiredHeaders = ['name']; // "Name" is crucial for firstName and lastName
+    const requiredHeaders = ['name'];
     const missingRequiredHeaders = requiredHeaders.filter(eh => !headers.includes(eh));
 
     if (missingRequiredHeaders.length > 0) {
@@ -122,10 +133,12 @@ export default function CustomersPage() {
     let skippedRowCount = 0;
 
     for (let i = 1; i < lineCount; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
+      // Use regex to split by comma, but ignore commas inside double quotes
+      const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
       const customerDataFromCsv: Record<string, string> = {};
+      
       headers.forEach((header, index) => { 
-        customerDataFromCsv[header] = values[index] || '';
+        customerDataFromCsv[header] = cleanCsvValue(values[index]);
       });
 
       const fullName = customerDataFromCsv.name;
@@ -142,10 +155,10 @@ export default function CustomersPage() {
         firstName = nameParts[0];
         lastName = nameParts.slice(1).join(' ');
       } else {
-        firstName = fullName; // Fallback if no space
+        firstName = fullName; 
       }
 
-      if (!firstName) { // Double check after split, though covered by !fullName
+      if (!firstName) { 
         skippedRowCount++;
         console.warn(`Skipping CSV row ${i+1}: could not parse firstName from 'Name'. Data: ${lines[i]}`);
         continue;
@@ -154,51 +167,50 @@ export default function CustomersPage() {
       const primaryPhone = customerDataFromCsv.cell || customerDataFromCsv.phone || '';
       const primaryEmail = customerDataFromCsv.email || '';
       
-      // Build the customer object for Firestore, only including fields that have actual values.
       const customerDataForFirestore: Partial<Omit<Customer, 'id'>> = {
         firstName: firstName,
         lastName: lastName,
         phone: primaryPhone,
         emailContacts: primaryEmail ? [{
           id: crypto.randomUUID(), 
-          type: EMAIL_CONTACT_TYPES[0], // Default type
+          type: EMAIL_CONTACT_TYPES[0], 
           email: primaryEmail,
-          name: `${firstName} ${lastName}` // Default name
+          name: `${firstName} ${lastName}` 
         }] : [],
-        customerType: CUSTOMER_TYPES[0], // Default type
+        customerType: CUSTOMER_TYPES[0], 
       };
 
       if (customerDataFromCsv.companyname) {
         customerDataForFirestore.companyName = customerDataFromCsv.companyname;
       }
-      // `address` and `notes` are intentionally omitted here. If they were part of CSV,
-      // they would be conditionally added here if they had values.
-      // Example: if (customerDataFromCsv.notes) customerDataForFirestore.notes = customerDataFromCsv.notes;
-      // Example: if (customerDataFromCsv.street) {
-      //   customerDataForFirestore.address = {
-      //     street: customerDataFromCsv.street,
-      //     city: customerDataFromCsv.city || '', // handle other address parts
-      //     state: customerDataFromCsv.state || '',
-      //     zip: customerDataFromCsv.zip || ''
-      //   };
-      // }
-
-
+      
       newCustomersData.push(customerDataForFirestore as Omit<Customer, 'id'>);
       parsedCustomerCount++;
     }
 
+    let toastDescription = `${parsedCustomerCount} customers parsed from CSV.`;
+    if (skippedRowCount > 0) {
+        toastDescription += ` ${skippedRowCount} rows were skipped due to missing or unparsable 'Name' field.`;
+    }
+    if (parsedCustomerCount > 0 && skippedRowCount === 0 && lineCount -1 !== parsedCustomerCount && missingRequiredHeaders.length === 0) {
+        const unprocessedRows = (lineCount -1) - parsedCustomerCount;
+        if (unprocessedRows > 0) {
+            toastDescription += ` ${unprocessedRows} additional rows may not have been processed correctly, check CSV format if numbers are unexpected.`;
+        }
+    }
+
+
     if (parsedCustomerCount > 0) {
         toast({
             title: "CSV Parsed",
-            description: `${parsedCustomerCount} customers parsed from CSV. ${skippedRowCount > 0 ? `${skippedRowCount} rows skipped due to missing or unparsable 'Name' field.` : ''}`,
-            variant: skippedRowCount > 0 ? "default" : "default",
+            description: toastDescription,
+            variant: skippedRowCount > 0 || (lineCount -1 !== parsedCustomerCount && missingRequiredHeaders.length === 0) ? "default" : "default", // Could be 'warning' if needed
             duration: 8000,
         });
     } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
         toast({
             title: "CSV Info",
-            description: `CSV headers matched, but no valid customer data rows could be parsed. ${skippedRowCount} rows were skipped. Ensure the 'Name' column is present and populated.`,
+            description: `CSV headers matched, but no valid customer data rows could be parsed. ${skippedRowCount} rows were skipped. Ensure the 'Name' column is present and populated. Also, check for commas within unquoted fields as this might affect parsing.`,
             variant: "default",
             duration: 10000,
         });
@@ -222,7 +234,7 @@ export default function CustomersPage() {
             const batch = writeBatch(db);
             parsedCustomersData.forEach(customerData => {
               const newDocRef = doc(collection(db, 'customers')); 
-              batch.set(newDocRef, customerData); // customerData now only contains defined fields
+              batch.set(newDocRef, customerData);
             });
             await batch.commit();
             toast({
