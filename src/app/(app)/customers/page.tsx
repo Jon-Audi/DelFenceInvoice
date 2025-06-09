@@ -20,22 +20,8 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (db) {
-      console.log("[CustomersPage] Firestore client initialized. Project ID:", db.app.options.projectId);
-    } else {
-      console.error("[CustomersPage] Firestore client (db) is not initialized!");
-      setIsLoading(false);
-      toast({
-        title: "Configuration Error",
-        description: "Firestore database connection is not available.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
-      console.log("[CustomersPage] Customers snapshot received. Document count:", snapshot.size);
       const fetchedCustomers: Customer[] = [];
       snapshot.forEach((docSnap) => {
         const customerData = docSnap.data() as Omit<Customer, 'id'>;
@@ -44,13 +30,11 @@ export default function CustomersPage() {
       setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
       setIsLoading(false);
     }, (error) => {
-      console.error("[CustomersPage] Error fetching customers:", error);
-      console.error("[CustomersPage] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      console.error("Error fetching customers:", error);
       toast({
         title: "Error Fetching Data",
-        description: `Could not fetch customers. Code: ${error.code}. Message: ${error.message}. Check console for more details.`,
+        description: "Could not fetch customers. Please check your Firestore rules and connectivity.",
         variant: "destructive",
-        duration: 10000,
       });
       setIsLoading(false);
     });
@@ -65,7 +49,7 @@ export default function CustomersPage() {
       if (id && customers.some(c => c.id === id)) {
         // Edit existing customer
         const customerRef = doc(db, 'customers', id);
-        await setDoc(customerRef, customerData, { merge: true }); // Use merge to avoid overwriting fields not in form
+        await setDoc(customerRef, customerData, { merge: true }); 
         toast({
           title: "Customer Updated",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
@@ -116,7 +100,7 @@ export default function CustomersPage() {
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '')); // Normalize headers
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '')); 
     const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
     
     const receivedHeadersSet = new Set(headers);
@@ -136,7 +120,7 @@ export default function CustomersPage() {
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const customerDataFromCsv: any = {};
-      headers.forEach((header, index) => { // Use normalized headers from CSV
+      headers.forEach((header, index) => { 
         customerDataFromCsv[header] = values[index];
       });
 
@@ -144,7 +128,6 @@ export default function CustomersPage() {
       const lastName = customerDataFromCsv.lastname;
 
       if (!firstName || !lastName) {
-        // console.warn(`Skipping row ${i+1}: missing firstName or lastName.`);
         continue; 
       }
       
@@ -157,7 +140,7 @@ export default function CustomersPage() {
         companyName: customerDataFromCsv.companyname || undefined,
         phone: customerDataFromCsv.phone || '',
         emailContacts: customerDataFromCsv.primaryemail ? [{
-          id: crypto.randomUUID(), // This ID is for the email contact object itself, not the customer
+          id: crypto.randomUUID(), 
           type: emailType as EmailContactType,
           email: customerDataFromCsv.primaryemail,
           name: `${firstName} ${lastName}`
@@ -216,8 +199,6 @@ export default function CustomersPage() {
               duration: 10000,
             });
           }
-        } else {
-          // parseCsvToCustomers should have shown a more specific toast if headers were wrong or no valid data
         }
       }
       if (fileInputRef.current) {
@@ -273,8 +254,6 @@ export default function CustomersPage() {
        {customers.length === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
           No customers found. Try adding one or importing a CSV.
-          Ensure Firestore rules are deployed and your app is connected to the correct project.
-          Check the browser console for errors.
         </p>
       )}
     </>
