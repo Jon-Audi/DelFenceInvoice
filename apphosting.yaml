@@ -21,7 +21,6 @@ env:
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: delfencebackend
-    value: delfenceinvoice
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
@@ -41,6 +40,11 @@ env:
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: G-T9HNW4B36L
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_CONFIG
+    value: '{"projectId":"delfenceinvoice"}'
     availability:
       - BUILD
       - RUNTIME
