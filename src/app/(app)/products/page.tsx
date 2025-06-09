@@ -68,7 +68,23 @@ export default function ProductsPage() {
         }
     }
 
-    const { id, ...productData } = productToSave;
+    const { id, ...restOfProductData } = productToSave;
+
+    // Prepare data for Firestore, explicitly excluding 'description' if it's undefined
+    const dataForFirestore: Omit<Product, 'id'> = {
+      name: restOfProductData.name,
+      category: restOfProductData.category,
+      unit: restOfProductData.unit,
+      cost: restOfProductData.cost,
+      price: restOfProductData.price,
+      markupPercentage: restOfProductData.markupPercentage,
+    };
+
+    if (restOfProductData.description !== undefined) {
+      dataForFirestore.description = restOfProductData.description;
+    }
+    // If restOfProductData.description is undefined, it won't be added to dataForFirestore,
+    // so Firestore won't see an undefined field.
 
     const currentUser = firebaseAuthInstance.currentUser;
     if (!currentUser) {
@@ -84,13 +100,13 @@ export default function ProductsPage() {
       setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
         const productRef = doc(db, 'products', id);
-        await setDoc(productRef, productData);
+        await setDoc(productRef, dataForFirestore); // Use dataForFirestore
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
         });
       } else {
-        const docRef = await addDoc(collection(db, 'products'), productData);
+        const docRef = await addDoc(collection(db, 'products'), dataForFirestore); // Use dataForFirestore
         toast({
           title: "Product Added",
           description: `Product ${productToSave.name} has been added with ID: ${docRef.id}.`,
@@ -328,10 +344,11 @@ export default function ProductsPage() {
           setIsLoading(true);
           try {
             const batch = writeBatch(db);
-            parsedProducts.forEach(productData => { 
+            parsedProducts.forEach(productDataFromCsv => { 
               const newDocRef = doc(collection(db, 'products'));
-              const productToWrite: any = {...productData};
-              if (productData.description === undefined) {
+              // Ensure description is not undefined when writing to Firestore
+              const productToWrite: Partial<Product> = { ...productDataFromCsv };
+              if (productToWrite.description === undefined) {
                 delete productToWrite.description;
               }
               batch.set(newDocRef, productToWrite);
@@ -502,3 +519,4 @@ export default function ProductsPage() {
     </>
   );
 }
+
