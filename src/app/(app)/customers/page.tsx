@@ -21,6 +21,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     setIsLoading(true);
+    console.log("[CustomersPage] Firestore client initialized. Project ID:", db.app.options.projectId);
     const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
       const fetchedCustomers: Customer[] = [];
       snapshot.forEach((docSnap) => {
@@ -29,12 +30,14 @@ export default function CustomersPage() {
       });
       setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
       setIsLoading(false);
+      console.log(`[CustomersPage] Customers snapshot received. Document count: ${snapshot.size}`);
     }, (error) => {
-      console.error("Error fetching customers:", error);
+      console.error("[CustomersPage] Error fetching customers:", error);
       toast({
         title: "Error Fetching Data",
-        description: "Could not fetch customers. Please check your Firestore rules and connectivity.",
+        description: `Could not fetch customers. Error: ${error.message}. Code: ${error.code}. Ensure Firestore rules allow reads and you are authenticated.`,
         variant: "destructive",
+        duration: 10000,
       });
       setIsLoading(false);
     });
@@ -49,7 +52,7 @@ export default function CustomersPage() {
       if (id && customers.some(c => c.id === id)) {
         // Edit existing customer
         const customerRef = doc(db, 'customers', id);
-        await setDoc(customerRef, customerData, { merge: true }); 
+        await setDoc(customerRef, customerData, { merge: true });
         toast({
           title: "Customer Updated",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
@@ -92,7 +95,7 @@ export default function CustomersPage() {
 
   const parseCsvToCustomers = (csvData: string): Omit<Customer, 'id'>[] => {
     const newCustomersData: Omit<Customer, 'id'>[] = [];
-    const lines = csvData.trim().split('\n');
+    const lines = csvData.trim().split(/\r\n|\n/); // Handle both Windows and Unix line endings
     const lineCount = lines.length;
 
     if (lineCount < 2) {
@@ -100,11 +103,12 @@ export default function CustomersPage() {
       return [];
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '')); 
+    // Normalize headers: lowercase and remove spaces
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
     const expectedHeaders = ['firstname', 'lastname', 'companyname', 'phone', 'primaryemail', 'primaryemailtype', 'customertype', 'addressstreet', 'addresscity', 'addressstate', 'addresszip', 'notes'];
     
-    const receivedHeadersSet = new Set(headers);
-    const missingRequiredHeaders = ['firstname', 'lastname'].filter(eh => !receivedHeadersSet.has(eh));
+    const requiredHeaders = ['firstname', 'lastname'];
+    const missingRequiredHeaders = requiredHeaders.filter(eh => !headers.includes(eh));
 
     if (missingRequiredHeaders.length > 0) {
         toast({ 
@@ -117,22 +121,29 @@ export default function CustomersPage() {
     }
 
     let parsedCustomerCount = 0;
+    let skippedRowCount = 0;
+
     for (let i = 1; i < lineCount; i++) {
       const values = lines[i].split(',').map(v => v.trim());
-      const customerDataFromCsv: any = {};
+      const customerDataFromCsv: Record<string, string> = {};
       headers.forEach((header, index) => { 
-        customerDataFromCsv[header] = values[index];
+        customerDataFromCsv[header] = values[index] || ''; // Ensure value is at least an empty string
       });
 
       const firstName = customerDataFromCsv.firstname;
       const lastName = customerDataFromCsv.lastname;
 
       if (!firstName || !lastName) {
+        skippedRowCount++;
+        console.warn(`Skipping CSV row ${i+1}: missing firstName or lastName. Data: ${lines[i]}`);
         continue; 
       }
       
-      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === (customerDataFromCsv.primaryemailtype || '').toLowerCase()) || EMAIL_CONTACT_TYPES[0];
-      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === (customerDataFromCsv.customertype || '').toLowerCase()) || CUSTOMER_TYPES[0];
+      const emailTypeStr = (customerDataFromCsv.primaryemailtype || '').toLowerCase();
+      const emailType = EMAIL_CONTACT_TYPES.find(et => et.toLowerCase() === emailTypeStr) || EMAIL_CONTACT_TYPES[0];
+      
+      const custTypeStr = (customerDataFromCsv.customertype || '').toLowerCase();
+      const custType = CUSTOMER_TYPES.find(ct => ct.toLowerCase() === custTypeStr) || CUSTOMER_TYPES[0];
 
       const newCustomer: Omit<Customer, 'id'> = {
         firstName: firstName,
@@ -157,12 +168,20 @@ export default function CustomersPage() {
       newCustomersData.push(newCustomer);
       parsedCustomerCount++;
     }
-    if (lineCount > 1 && parsedCustomerCount === 0 && missingRequiredHeaders.length === 0) {
+
+    if (parsedCustomerCount > 0) {
+        toast({
+            title: "CSV Parsed",
+            description: `${parsedCustomerCount} customers parsed from CSV. ${skippedRowCount > 0 ? `${skippedRowCount} rows skipped due to missing required fields (firstName, lastName).` : ''}`,
+            variant: skippedRowCount > 0 ? "default" : "default", // 'default' is info, not warning
+            duration: 8000,
+        });
+    } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
         toast({
             title: "CSV Info",
-            description: "CSV headers found, but no valid customer data rows could be parsed. Please check row content for all required fields (firstName, lastName).",
+            description: `CSV headers matched, but no valid customer data rows could be parsed. ${skippedRowCount} rows were skipped. Please check row content for firstName and lastName.`,
             variant: "default",
-            duration: 8000,
+            duration: 10000,
         });
     }
     return newCustomersData;
@@ -180,6 +199,7 @@ export default function CustomersPage() {
         
         if (parsedCustomersData.length > 0) {
           try {
+            setIsLoading(true);
             const batch = writeBatch(db);
             parsedCustomersData.forEach(customerData => {
               const newDocRef = doc(collection(db, 'customers')); 
@@ -190,17 +210,20 @@ export default function CustomersPage() {
               title: "Success",
               description: `${parsedCustomersData.length} customers imported successfully to Firestore.`,
             });
-          } catch (error) {
+          } catch (error: any) {
             console.error("Error importing customers to Firestore:", error);
             toast({
               title: "Firestore Error",
-              description: "Failed to save customers to database. Check console for details.",
+              description: `Failed to save customers to database. ${error.message || 'Check console for details.'}`,
               variant: "destructive",
               duration: 10000,
             });
+          } finally {
+            setIsLoading(false);
           }
         }
       }
+      // Reset file input to allow selecting the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -214,7 +237,7 @@ export default function CustomersPage() {
     reader.readAsText(file);
   };
 
-  if (isLoading) {
+  if (isLoading && customers.length === 0) { // Show loader if actively loading AND no customers yet
     return (
       <PageHeader title="Customers" description="Loading customer database...">
         <div className="flex items-center justify-center h-32">
@@ -234,14 +257,15 @@ export default function CustomersPage() {
             style={{ display: 'none' }}
             accept=".csv"
             onChange={handleFileChange}
+            disabled={isLoading} // Disable while other operations are in progress
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
           <CustomerDialog
             triggerButton={
-              <Button>
+              <Button disabled={isLoading}>
                 <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
                 Add Customer
               </Button>
@@ -251,7 +275,7 @@ export default function CustomersPage() {
         </div>
       </PageHeader>
       <CustomerTable customers={customers} onSave={handleSaveCustomer} onDelete={handleDeleteCustomer} />
-       {customers.length === 0 && !isLoading && (
+       {customers.length === 0 && !isLoading && ( // Message if no customers and not loading
         <p className="p-4 text-center text-muted-foreground">
           No customers found. Try adding one or importing a CSV.
         </p>
