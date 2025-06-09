@@ -144,14 +144,22 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (products && products.length > 0) {
-      const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
-      if (JSON.stringify(newCategories) !== JSON.stringify(stableProductCategories)) {
-        setStableProductCategories(newCategories);
-      }
-    } else if (stableProductCategories.length > 0) {
-        setStableProductCategories([]);
+        const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
+        setStableProductCategories(currentStableCategories => {
+            if (JSON.stringify(newCategories) !== JSON.stringify(currentStableCategories)) {
+                return newCategories;
+            }
+            return currentStableCategories;
+        });
+    } else {
+        setStableProductCategories(currentStableCategories => {
+            if (currentStableCategories.length > 0) {
+                return [];
+            }
+            return currentStableCategories;
+        });
     }
-  }, [products, stableProductCategories]);
+  }, [products]);
 
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {

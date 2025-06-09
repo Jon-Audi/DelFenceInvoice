@@ -20,7 +20,8 @@ env:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: delfencebackend
+    value: delfenceinvoice # Corrected from delfencebackend
+    availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
