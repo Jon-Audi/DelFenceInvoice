@@ -135,12 +135,13 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
         lineItems: initialData.lineItems.map(li => ({
+            id: li.id,
             productId: li.productId,
-            productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
+            productName: li.productName, // Directly use the pre-populated value
             quantity: li.quantity,
-            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
+            unitPrice: li.unitPrice,   // Directly use the pre-populated value
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || !li.productId,
+            isNonStock: li.isNonStock || false,
         })),
       };
     } else {
@@ -151,7 +152,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         date: new Date(),
         status: 'Draft',
         poNumber: '',
-        lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
@@ -165,7 +166,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       newPaymentMethod: undefined,
       newPaymentNotes: '',
     };
-  }, [invoice, initialData, products]);
+  }, [invoice, initialData]);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
@@ -289,7 +290,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.productName`, selectedProd.name);
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true }); 
-      // form.setValue(`lineItems.${index}.isNonStock`, false);
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -301,7 +301,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
   
   const addLineItem = () => {
-    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
+    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -701,3 +701,4 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     </Form>
   );
 }
+
