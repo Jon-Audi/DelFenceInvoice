@@ -147,11 +147,12 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     } else if (initialData) {
       currentDefaultValues = {
         ...initialData,
+        id: initialData.id,
         poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
-        lineItems: initialData.lineItems.map(li => ({
-            id: li.id,
+        lineItems: (initialData.lineItems || []).map(li => ({ // Guard against undefined initialData.lineItems
+            id: li.id || crypto.randomUUID(),
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -159,7 +160,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
         })),
-        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: '',
       };
     } else {
       currentDefaultValues = {
@@ -177,14 +181,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       };
     }
     form.reset(currentDefaultValues);
-  }, [invoice, initialData, form.reset]);
+  }, [invoice, initialData, form.reset]); // form.reset is stable
 
   // Effect to update unit prices based on customer-specific markups
   useEffect(() => {
     if (!watchedCustomerId || !products || products.length === 0) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
-    const currentLineItems = form.getValues('lineItems') || []; // Use getValues for latest form state
+    const currentLineItems = form.getValues('lineItems') || [];
     const updatedLineItems = currentLineItems.map((item) => {
       if (item.isNonStock || !item.productId) return item;
 
@@ -204,7 +208,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, form, update]); // form and update are dependencies for getValues and update
+  }, [watchedCustomerId, customers, products, form, update]);
 
 
   // Effect to update category filters when lineItems or products change
@@ -364,7 +368,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
                           return (
                             <CommandItem
-                              value={searchableValue} // Use a combined searchable string
+                              value={searchableValue} 
                               key={customer.id}
                               onSelect={() => {
                                 form.setValue("customerId", customer.id, { shouldValidate: true });
