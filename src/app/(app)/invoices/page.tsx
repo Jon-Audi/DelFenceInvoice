@@ -92,9 +92,13 @@ export default function InvoicesPage() {
           status: 'Draft',
           poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
+            id: li.id, // Preserve ID if available
             productId: li.productId,
+            productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
+            isReturn: li.isReturn || false,
+            isNonStock: li.isNonStock || false, // Carry over isNonStock status
           })),
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
@@ -119,9 +123,13 @@ export default function InvoicesPage() {
           status: 'Draft',
           poNumber: orderToConvert.poNumber || '', 
           lineItems: orderToConvert.lineItems.map(li => ({
+            id: li.id, // Preserve ID if available
             productId: li.productId,
+            productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
+            isReturn: li.isReturn || false,
+            isNonStock: li.isNonStock || false, // Carry over isNonStock status
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
@@ -656,3 +664,4 @@ const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) =
   <div className="space-y-1">{children}</div>
 );
 
+    
