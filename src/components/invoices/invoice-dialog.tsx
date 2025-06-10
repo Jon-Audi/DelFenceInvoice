@@ -61,16 +61,23 @@ export function InvoiceDialog({
       const itemName = item.isNonStock 
                        ? (item.productName || 'Non-Stock Item') 
                        : (product?.name || 'Unknown Product');
-      return {
-        id: item.id || crypto.randomUUID(),
-        productId: item.isNonStock ? undefined : item.productId,
-        productName: itemName,
-        quantity: quantity,
-        unitPrice: finalUnitPrice,
-        isReturn: isReturn,
-        total: isReturn ? -itemBaseTotal : itemBaseTotal,
-        isNonStock: item.isNonStock || false,
+      
+      const lineItemForDb: Partial<LineItem> & Pick<LineItem, 'id'|'productName'|'quantity'|'unitPrice'|'total'|'isReturn'|'isNonStock'> = {
+          id: item.id || crypto.randomUUID(),
+          productName: itemName,
+          quantity: quantity,
+          unitPrice: finalUnitPrice,
+          isReturn: isReturn,
+          total: isReturn ? -itemBaseTotal : itemBaseTotal,
+          isNonStock: item.isNonStock || false,
       };
+
+      if (!item.isNonStock && item.productId) {
+          lineItemForDb.productId = item.productId;
+      }
+      // For non-stock items, productId field is omitted
+
+      return lineItemForDb as LineItem;
     });
 
     const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0); 
