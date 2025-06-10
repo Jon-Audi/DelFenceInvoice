@@ -31,6 +31,7 @@ import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
+import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip'; // New import
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -64,6 +65,10 @@ export default function InvoicesPage() {
   const [invoiceForPrinting, setInvoiceForPrinting] = useState<Invoice | null>(null);
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+
+  const [invoiceForPackingSlipPrinting, setInvoiceForPackingSlipPrinting] = useState<Invoice | null>(null);
+  const [companySettingsForPackingSlip, setCompanySettingsForPackingSlip] = useState<CompanySettings | null>(null);
+  const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -305,7 +310,7 @@ export default function InvoicesPage() {
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
-    setIsLoadingCompanySettings(true);
+    // Reusable function, specific loading states handled by callers
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
@@ -318,12 +323,11 @@ export default function InvoicesPage() {
       console.error("Error fetching company settings:", error);
       toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
       return null;
-    } finally {
-      setIsLoadingCompanySettings(false);
     }
   };
 
   const handlePrintInvoice = async (invoice: Invoice) => {
+    setIsLoadingCompanySettings(true);
     const settings = await fetchCompanySettings();
     if (settings) {
       setCompanySettingsForPrinting(settings);
@@ -331,6 +335,7 @@ export default function InvoicesPage() {
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
+    setIsLoadingCompanySettings(false);
   };
 
   const handlePrinted = () => {
@@ -348,6 +353,35 @@ export default function InvoicesPage() {
       });
     }
   }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
+
+
+  const handlePrintInvoicePackingSlip = async (invoice: Invoice) => {
+    setIsLoadingPackingSlipCompanySettings(true);
+    const settings = await fetchCompanySettings();
+    if (settings) {
+        setCompanySettingsForPackingSlip(settings);
+        setInvoiceForPackingSlipPrinting(invoice);
+    } else {
+        toast({ title: "Cannot Print Packing Slip", description: "Company settings are required.", variant: "destructive" });
+    }
+    setIsLoadingPackingSlipCompanySettings(false);
+  };
+
+  const handlePrintedPackingSlip = () => {
+    setInvoiceForPackingSlipPrinting(null);
+    setCompanySettingsForPackingSlip(null);
+  };
+
+  useEffect(() => {
+    if (invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                window.print();
+                handlePrintedPackingSlip();
+            });
+        });
+    }
+  }, [invoiceForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings]);
 
 
   const handleGenerateEmail = async (invoice: Invoice) => {
@@ -502,6 +536,7 @@ export default function InvoicesPage() {
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
             onPrint={handlePrintInvoice}
+            onPrintPackingSlip={handlePrintInvoicePackingSlip} // Pass the new handler
             formatDate={formatDate}
             customers={customers}
             products={products}
@@ -594,11 +629,23 @@ export default function InvoicesPage() {
             companySettings={companySettingsForPrinting}
           />
         )}
+        {(invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) && (
+            <PrintableInvoicePackingSlip
+                invoice={invoiceForPackingSlipPrinting}
+                companySettings={companySettingsForPackingSlip}
+            />
+        )}
       </div>
        {(isLoadingCompanySettings && invoiceForPrinting) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable invoice...</p>
+        </div>
+      )}
+      {(isLoadingPackingSlipCompanySettings && invoiceForPackingSlipPrinting) && ( 
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
+            <p className="ml-2 text-white">Preparing printable packing slip...</p>
         </div>
       )}
     </>

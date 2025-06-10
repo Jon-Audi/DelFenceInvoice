@@ -37,7 +37,8 @@ import {
   CalendarDays,
   TrendingUp,
   Printer,
-  Layers, // Added Layers icon
+  Layers,
+  PackageCheck, // Added PackageCheck icon
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -81,7 +82,8 @@ const iconComponents = {
   Calendar: CalendarDays,
   TrendingUp,
   Printer,
-  Layers, // Added Layers icon
+  Layers,
+  PackageCheck, // Added PackageCheck icon
 };
 
 interface IconProps extends LucideProps {

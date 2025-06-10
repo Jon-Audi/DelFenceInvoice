@@ -40,13 +40,14 @@ interface InvoiceTableProps {
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
+  onPrintPackingSlip: (invoice: Invoice) => void; // New prop
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
   products: Product[];
-  productCategories: string[]; // Added this prop
+  productCategories: string[];
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, formatDate, customers, products, productCategories }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, onPrintPackingSlip, formatDate, customers, products, productCategories }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
@@ -123,13 +124,16 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
                       onSave={onSave}
                       customers={customers}
                       products={products}
-                      productCategories={productCategories} // Pass productCategories here
+                      productCategories={productCategories}
                     />
                     <DropdownMenuItem onClick={() => onGenerateEmail(invoice)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Invoice
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onPrint(invoice)}>
                       <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Invoice
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onPrintPackingSlip(invoice)}>
+                      <Icon name="PackageCheck" className="mr-2 h-4 w-4" /> Print Packing Slip
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

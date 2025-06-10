@@ -56,6 +56,7 @@ import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
+import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip'; // New import
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -90,6 +91,11 @@ export default function OrdersPage() {
   const [orderForPrinting, setOrderForPrinting] = useState<Order | null>(null);
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+  
+  const [orderForPackingSlipPrinting, setOrderForPackingSlipPrinting] = useState<Order | null>(null);
+  const [companySettingsForPackingSlip, setCompanySettingsForPackingSlip] = useState<CompanySettings | null>(null);
+  const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
+
 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -274,7 +280,8 @@ export default function OrdersPage() {
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
-    setIsLoadingCompanySettings(true);
+    // This function can be reused for different printing types
+    // setIsLoadingCompanySettings(true); // Moved specific loading states
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
@@ -288,11 +295,12 @@ export default function OrdersPage() {
       toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
       return null;
     } finally {
-      setIsLoadingCompanySettings(false);
+      // setIsLoadingCompanySettings(false); // Specific loading states handle this
     }
   };
 
   const handlePrintOrder = async (order: Order) => {
+    setIsLoadingCompanySettings(true);
     const settings = await fetchCompanySettings();
     if (settings) {
       setCompanySettingsForPrinting(settings);
@@ -300,6 +308,7 @@ export default function OrdersPage() {
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
+    setIsLoadingCompanySettings(false);
   };
 
   const handlePrinted = () => {
@@ -317,6 +326,36 @@ export default function OrdersPage() {
       });
     }
   }, [orderForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
+
+
+  const handlePrintOrderPackingSlip = async (order: Order) => {
+    setIsLoadingPackingSlipCompanySettings(true);
+    const settings = await fetchCompanySettings();
+    if (settings) {
+        setCompanySettingsForPackingSlip(settings);
+        setOrderForPackingSlipPrinting(order);
+    } else {
+        toast({ title: "Cannot Print Packing Slip", description: "Company settings are required.", variant: "destructive" });
+    }
+    setIsLoadingPackingSlipCompanySettings(false);
+  };
+
+  const handlePrintedPackingSlip = () => {
+    setOrderForPackingSlipPrinting(null);
+    setCompanySettingsForPackingSlip(null);
+  };
+
+  useEffect(() => {
+    if (orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                window.print();
+                handlePrintedPackingSlip();
+            });
+        });
+    }
+  }, [orderForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings]);
+
 
   const handleGenerateEmail = async (order: Order) => {
     setSelectedOrderForEmail(order);
@@ -537,6 +576,9 @@ export default function OrdersPage() {
                         <DropdownMenuItem onClick={() => handlePrintOrder(order)}>
                            <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Order
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintOrderPackingSlip(order)}>
+                           <Icon name="PackageCheck" className="mr-2 h-4 w-4" /> Print Packing Slip
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleConvertToInvoice(order)}>
                           <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
@@ -661,11 +703,23 @@ export default function OrdersPage() {
             companySettings={companySettingsForPrinting}
           />
         )}
+        {(orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) && (
+            <PrintableOrderPackingSlip
+                order={orderForPackingSlipPrinting}
+                companySettings={companySettingsForPackingSlip}
+            />
+        )}
       </div>
        {(isLoadingCompanySettings && orderForPrinting) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable order...</p>
+        </div>
+      )}
+      {(isLoadingPackingSlipCompanySettings && orderForPackingSlipPrinting) && ( 
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
+            <p className="ml-2 text-white">Preparing printable packing slip...</p>
         </div>
       )}
     </>
