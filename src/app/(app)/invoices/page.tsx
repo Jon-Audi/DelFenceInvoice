@@ -31,7 +31,8 @@ import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
-import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip'; // New import
+import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
+import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -72,6 +73,9 @@ export default function InvoicesPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [invoiceForViewingItems, setInvoiceForViewingItems] = useState<Invoice | null>(null);
+  const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
+
   useEffect(() => {
     setIsClient(true); 
   }, []);
@@ -92,13 +96,13 @@ export default function InvoicesPage() {
           status: 'Draft',
           poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id, // Preserve ID if available
+            id: li.id, 
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false, // Carry over isNonStock status
+            isNonStock: li.isNonStock || false,
           })),
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
@@ -123,13 +127,13 @@ export default function InvoicesPage() {
           status: 'Draft',
           poNumber: orderToConvert.poNumber || '', 
           lineItems: orderToConvert.lineItems.map(li => ({
-            id: li.id, // Preserve ID if available
+            id: li.id, 
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false, // Carry over isNonStock status
+            isNonStock: li.isNonStock || false,
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
@@ -318,7 +322,6 @@ export default function InvoicesPage() {
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
-    // Reusable function, specific loading states handled by callers
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
@@ -465,6 +468,11 @@ export default function InvoicesPage() {
     setIsEmailModalOpen(false);
   };
 
+  const handleViewItems = (invoiceToView: Invoice) => {
+    setInvoiceForViewingItems(invoiceToView);
+    setIsLineItemsViewerOpen(true);
+  };
+
   const filteredInvoices = useMemo(() => {
     if (!searchTerm.trim()) {
       return invoices;
@@ -544,11 +552,12 @@ export default function InvoicesPage() {
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
             onPrint={handlePrintInvoice}
-            onPrintPackingSlip={handlePrintInvoicePackingSlip} // Pass the new handler
+            onPrintPackingSlip={handlePrintInvoicePackingSlip}
             formatDate={formatDate}
             customers={customers}
             products={products}
-            productCategories={stableProductCategories} 
+            productCategories={stableProductCategories}
+            onViewItems={handleViewItems} 
           />
            {filteredInvoices.length === 0 && (
             <p className="p-4 text-center text-muted-foreground">
@@ -655,6 +664,15 @@ export default function InvoicesPage() {
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable packing slip...</p>
         </div>
+      )}
+      {invoiceForViewingItems && (
+        <LineItemsViewerDialog
+          isOpen={isLineItemsViewerOpen}
+          onOpenChange={setIsLineItemsViewerOpen}
+          lineItems={invoiceForViewingItems.lineItems}
+          documentType="Invoice"
+          documentNumber={invoiceForViewingItems.invoiceNumber}
+        />
       )}
     </>
   );

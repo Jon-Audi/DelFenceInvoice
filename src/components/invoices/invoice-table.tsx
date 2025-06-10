@@ -40,14 +40,15 @@ interface InvoiceTableProps {
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
-  onPrintPackingSlip: (invoice: Invoice) => void; // New prop
+  onPrintPackingSlip: (invoice: Invoice) => void;
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  onViewItems: (invoice: Invoice) => void; // New prop
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, onPrintPackingSlip, formatDate, customers, products, productCategories }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, onPrintPackingSlip, formatDate, customers, products, productCategories, onViewItems }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
@@ -114,6 +115,9 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onViewItems(invoice)}>
+                      <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
+                    </DropdownMenuItem>
                     <InvoiceDialog
                       invoice={invoice}
                       triggerButton={

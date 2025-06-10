@@ -56,8 +56,9 @@ import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
-import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip'; // New import
+import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
 import { cn } from '@/lib/utils';
+import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -100,6 +101,9 @@ export default function OrdersPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [orderForViewingItems, setOrderForViewingItems] = useState<Order | null>(null);
+  const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
+
   useEffect(() => {
     setIsClient(true);
     const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
@@ -140,7 +144,7 @@ export default function OrdersPage() {
         toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
       }
     }
-  }, [toast, products]); // Added products to dependency array as it's used in productName fallback
+  }, [toast, products]);
 
   useEffect(() => {
     setIsLoadingOrders(true);
@@ -224,20 +228,9 @@ export default function OrdersPage() {
   const handleSaveOrder = async (orderToSave: Order) => {
     const { id, ...orderDataFromDialog } = orderToSave;
     
-    // All calculations (subtotal, total, amountPaid, balanceDue, payments array) are done in OrderDialog
-    // So, orderDataFromDialog is the complete, calculated Order object (minus id)
-    
     try {
       if (id && orders.some(o => o.id === id)) { 
         const orderRef = doc(db, 'orders', id);
-        // For updates, we pass the entire orderDataFromDialog object.
-        // Firestore's setDoc with { merge: true } (if used) or a direct setDoc
-        // will update all fields. Fields that might be removed (like an optional date cleared)
-        // should be handled by passing `deleteField()` for those specific fields if desired.
-        // Here, we assume orderDataFromDialog contains the final state.
-        // Optional fields that are undefined in orderDataFromDialog will be removed if the previous doc had them.
-        
-        // Create a payload that explicitly uses deleteField for potentially empty optional fields
         const updatePayload: any = { ...orderDataFromDialog }; 
         
         updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') 
@@ -249,12 +242,10 @@ export default function OrdersPage() {
         updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') 
                                ? orderDataFromDialog.notes.trim() 
                                : deleteField();
-        // payments, amountPaid, balanceDue are always set by the dialog, so they don't need deleteField()
                                
-        await setDoc(orderRef, updatePayload, { merge: true }); // Using merge: true to be safe
+        await setDoc(orderRef, updatePayload, { merge: true }); 
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
       } else { 
-         // For new documents, ensure optional fields are only included if they have values.
         const addPayload: any = { ...orderDataFromDialog };
 
         if (!addPayload.poNumber || addPayload.poNumber.trim() === '') delete addPayload.poNumber;
@@ -262,7 +253,6 @@ export default function OrdersPage() {
         if (!addPayload.readyForPickUpDate) delete addPayload.readyForPickUpDate;
         if (!addPayload.pickedUpDate) delete addPayload.pickedUpDate;
         if (!addPayload.notes || addPayload.notes.trim() === '') delete addPayload.notes;
-        // payments, amountPaid, balanceDue should always exist from the dialog calculation
         
         const docRef = await addDoc(collection(db, 'orders'), addPayload);
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
@@ -444,6 +434,11 @@ export default function OrdersPage() {
     router.push('/invoices');
   };
 
+  const handleViewItems = (orderToView: Order) => {
+    setOrderForViewingItems(orderToView);
+    setIsLineItemsViewerOpen(true);
+  };
+
   const filteredOrders = useMemo(() => {
     if (!searchTerm.trim()) {
       return orders;
@@ -569,6 +564,9 @@ export default function OrdersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleViewItems(order)}>
+                          <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
+                        </DropdownMenuItem>
                         <OrderDialog
                           order={order}
                           triggerButton={
@@ -733,6 +731,15 @@ export default function OrdersPage() {
             <p className="ml-2 text-white">Preparing printable packing slip...</p>
         </div>
       )}
+      {orderForViewingItems && (
+        <LineItemsViewerDialog
+          isOpen={isLineItemsViewerOpen}
+          onOpenChange={setIsLineItemsViewerOpen}
+          lineItems={orderForViewingItems.lineItems}
+          documentType="Order"
+          documentNumber={orderForViewingItems.orderNumber}
+        />
+      )}
     </>
   );
 }
@@ -740,3 +747,4 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+

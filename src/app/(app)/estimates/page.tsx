@@ -55,6 +55,7 @@ import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableEstimate } from '@/components/estimates/printable-estimate';
+import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -88,6 +89,9 @@ export default function EstimatesPage() {
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
+  const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -403,6 +407,11 @@ export default function EstimatesPage() {
     router.push('/invoices');
   };
 
+  const handleViewItems = (estimateToView: Estimate) => {
+    setEstimateForViewingItems(estimateToView);
+    setIsLineItemsViewerOpen(true);
+  };
+
   const filteredEstimates = useMemo(() => {
     if (!searchTerm.trim()) {
       return estimates;
@@ -491,6 +500,9 @@ export default function EstimatesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleViewItems(estimate)}>
+                          <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
+                        </DropdownMenuItem>
                         <EstimateDialog
                           estimate={estimate}
                           triggerButton={
@@ -643,6 +655,15 @@ export default function EstimatesPage() {
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable estimate...</p>
         </div>
+      )}
+      {estimateForViewingItems && (
+        <LineItemsViewerDialog
+          isOpen={isLineItemsViewerOpen}
+          onOpenChange={setIsLineItemsViewerOpen}
+          lineItems={estimateForViewingItems.lineItems}
+          documentType="Estimate"
+          documentNumber={estimateForViewingItems.estimateNumber}
+        />
       )}
     </>
   );
