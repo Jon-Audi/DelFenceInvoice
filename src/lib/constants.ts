@@ -9,6 +9,8 @@ export const USER_ROLES: UserRole[] = ['Admin', 'User'];
 
 export const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'Check', 'Credit Card', 'Bank Transfer', 'Other'];
 
+export const ALL_CATEGORIES_MARKUP_KEY = "__ALL_CATEGORIES__";
+
 export const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { href: '/products', label: 'Products', icon: 'Package' },
@@ -52,3 +54,4 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_invoices',
   ],
 };
+

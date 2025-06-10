@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
+import { ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
@@ -161,27 +162,34 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
      );
   }, [defaultFormValues, form, products]);
 
+  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
+    let finalPrice = product.price; // Default product price
+
+    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
+      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
+      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
+
+      if (specificRule) {
+        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
+      } else if (allCategoriesRule) {
+        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
+      }
+    }
+    return parseFloat(finalPrice.toFixed(2));
+  };
+
   useEffect(() => {
     if (!watchedCustomerId) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-    if (!currentCustomer) return;
 
-    const updatedLineItems = watchedLineItems.map((item, index) => {
+    const updatedLineItems = watchedLineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
       if (!product) return item;
 
-      let finalPrice = product.price;
-      if (currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
-        const customerMarkupRule = currentCustomer.specificMarkups.find(
-          (markup) => markup.categoryName === product.category
-        );
-        if (customerMarkupRule) {
-          finalPrice = product.cost * (1 + customerMarkupRule.markupPercentage / 100);
-        }
-      }
-      finalPrice = parseFloat(finalPrice.toFixed(2));
-      if (item.unitPrice !== finalPrice) {
-        return { ...item, unitPrice: finalPrice };
+      const newUnitPrice = calculateUnitPrice(product, currentCustomer);
+      
+      if (item.unitPrice !== newUnitPrice) {
+        return { ...item, unitPrice: newUnitPrice };
       }
       return item;
     });
@@ -191,7 +199,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, watchedLineItems, form, update]);
+  }, [watchedCustomerId, customers, products, watchedLineItems, update]);
 
 
   const currentSubtotal = useMemo(() => {
@@ -229,16 +237,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     const currentCustomer = customers.find(c => c.id === currentCustomerId);
 
     if (selectedProd) {
-      let finalPrice = selectedProd.price;
-      if (currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
-        const customerMarkupRule = currentCustomer.specificMarkups.find(
-          (markup) => markup.categoryName === selectedProd.category
-        );
-        if (customerMarkupRule) {
-          finalPrice = selectedProd.cost * (1 + customerMarkupRule.markupPercentage / 100);
-        }
-      }
-      finalPrice = parseFloat(finalPrice.toFixed(2));
+      const finalPrice = calculateUnitPrice(selectedProd, currentCustomer);
 
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
@@ -578,3 +577,4 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+

@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Invoice, DocumentStatus, Customer, Product, PaymentMethod } from '@/types';
-import { PAYMENT_METHODS } from '@/lib/constants';
+import { PAYMENT_METHODS, ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -175,27 +175,34 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
      );
   }, [defaultFormValues, form, products]);
 
+  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
+    let finalPrice = product.price; // Default product price
+
+    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
+      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
+      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
+
+      if (specificRule) {
+        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
+      } else if (allCategoriesRule) {
+        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
+      }
+    }
+    return parseFloat(finalPrice.toFixed(2));
+  };
+
   useEffect(() => {
     if (!watchedCustomerId) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-    if (!currentCustomer) return;
 
-    const updatedLineItems = watchedLineItems.map((item, index) => {
+    const updatedLineItems = watchedLineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
       if (!product) return item;
 
-      let finalPrice = product.price;
-      if (currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
-        const customerMarkupRule = currentCustomer.specificMarkups.find(
-          (markup) => markup.categoryName === product.category
-        );
-        if (customerMarkupRule) {
-          finalPrice = product.cost * (1 + customerMarkupRule.markupPercentage / 100);
-        }
-      }
-      finalPrice = parseFloat(finalPrice.toFixed(2));
-      if (item.unitPrice !== finalPrice) {
-        return { ...item, unitPrice: finalPrice };
+      const newUnitPrice = calculateUnitPrice(product, currentCustomer);
+
+      if (item.unitPrice !== newUnitPrice) {
+        return { ...item, unitPrice: newUnitPrice };
       }
       return item;
     });
@@ -205,7 +212,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, watchedLineItems, form, update]);
+  }, [watchedCustomerId, customers, products, watchedLineItems, update]);
 
 
   const currentInvoiceTotal = useMemo(() => {
@@ -246,16 +253,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     const currentCustomer = customers.find(c => c.id === currentCustomerId);
 
     if (selectedProd) {
-      let finalPrice = selectedProd.price; 
-      if (currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
-        const customerMarkupRule = currentCustomer.specificMarkups.find(
-          (markup) => markup.categoryName === selectedProd.category
-        );
-        if (customerMarkupRule) {
-          finalPrice = selectedProd.cost * (1 + customerMarkupRule.markupPercentage / 100);
-        }
-      }
-      finalPrice = parseFloat(finalPrice.toFixed(2));
+      const finalPrice = calculateUnitPrice(selectedProd, currentCustomer); 
 
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true }); 
@@ -281,7 +279,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
-    if (!invoice && !initialData) { // For new invoices, reset payment fields for next entry
+    if (!invoice && !initialData) { 
         form.reset({ 
             ...data, 
             newPaymentAmount: undefined,
@@ -289,7 +287,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             newPaymentMethod: undefined,
             newPaymentNotes: '',
         });
-    } else { // For existing invoices or conversions, just clear new payment fields after submission
+    } else { 
         form.setValue('newPaymentAmount', undefined);
         form.setValue('newPaymentDate', undefined);
         form.setValue('newPaymentMethod', undefined);
@@ -624,3 +622,4 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     </Form>
   );
 }
+

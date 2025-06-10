@@ -6,7 +6,7 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Customer, CustomerType, EmailContactType, CustomerSpecificMarkup, ProductCategory } from '@/types';
-import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES } from '@/lib/constants';
+import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES, ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -191,6 +191,7 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
+                      <SelectItem value={ALL_CATEGORIES_MARKUP_KEY}>All Categories</SelectItem>
                       {(productCategories || []).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -227,3 +228,4 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
     </Form>
   );
 }
+
