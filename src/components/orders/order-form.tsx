@@ -2,13 +2,12 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Order, DocumentStatus, Customer, Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -35,15 +34,16 @@ import { Separator } from '@/components/ui/separator';
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
+const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
 const lineItemSchema = z.object({
-  id: z.string().optional(), // For existing items when editing
+  id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
 });
 
 const orderFormSchema = z.object({
-  id: z.string().optional(), // For initialData from conversion
+  id: z.string().optional(),
   orderNumber: z.string().min(1, "Order number is required"),
   customerId: z.string().min(1, "Customer is required"),
   date: z.date({ required_error: "Order date is required." }),
@@ -66,9 +66,10 @@ interface OrderFormProps {
   onClose?: () => void;
   customers: Customer[];
   products: Product[];
+  productCategories: string[];
 }
 
-export function OrderForm({ order, initialData, onSubmit, onClose, customers, products }: OrderFormProps) {
+export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
   const defaultFormValues = useMemo((): OrderFormData => {
     if (order) {
       return {
@@ -92,8 +93,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else if (initialData) {
       return {
         ...initialData,
-        id: initialData.id, // id is optional in OrderFormData, so this is fine
-        poNumber: initialData.poNumber ?? '', // Use initialData's poNumber, default to '' if undefined/null
+        id: initialData.id,
+        poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
@@ -122,17 +123,34 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     defaultValues: defaultFormValues,
   });
 
-  useEffect(() => {
-    form.reset(defaultFormValues);
-  }, [defaultFormValues, form.reset]);
-
-
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
   const watchedLineItems = form.watch('lineItems');
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
+    defaultFormValues.lineItems.map(item => {
+        if (item.productId) {
+            const product = products.find(p => p.id === item.productId);
+            return product?.category;
+        }
+        return undefined;
+    })
+  );
+
+  useEffect(() => {
+    form.reset(defaultFormValues);
+    setLineItemCategoryFilters(
+        defaultFormValues.lineItems.map(item => {
+            if (item.productId) {
+                const product = products.find(p => p.id === item.productId);
+                return product?.category;
+            }
+            return undefined;
+        })
+     );
+  }, [defaultFormValues, form, products]);
 
   const calculateSubtotal = React.useCallback(() => {
     return watchedLineItems.reduce((acc, item) => {
@@ -151,13 +169,51 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     setTotal(newSubtotal); 
   }, [watchedLineItems, calculateSubtotal]);
 
-  const handleProductSelect = (index: number, productId: string) => {
-    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
+  const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
+    const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
+    setLineItemCategoryFilters(prevFilters => {
+      const newFilters = [...prevFilters];
+      newFilters[index] = newCategoryFilter;
+      return newFilters;
+    });
+    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
 
-  const handleQuantityChange = (index: number, quantity: number) => {
-     form.setValue(`lineItems.${index}.quantity`, quantity, { shouldValidate: true });
+  const getFilteredProducts = (index: number) => {
+    const selectedCategory = lineItemCategoryFilters[index];
+    if (selectedCategory && selectedCategory !== ALL_CATEGORIES_VALUE) {
+      return products.filter(p => p.category === selectedCategory);
+    }
+    return products;
+  };
+
+  const handleProductSelect = (index: number, productId: string) => {
+    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
+    const selectedProd = products.find(p => p.id === productId);
+    if (selectedProd) {
+      setLineItemCategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = selectedProd.category;
+        return newFilters;
+      });
+    }
+    form.trigger(`lineItems.${index}.productId`);
+  };
+
+  const addLineItem = () => {
+    append({ productId: '', quantity: 1 });
+    setLineItemCategoryFilters(prev => [...prev, undefined]);
+  };
+
+  const removeLineItem = (index: number) => {
+    remove(index);
+    setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleQuantityChange = (index: number, quantityStr: string) => {
+     const quantity = parseInt(quantityStr, 10);
+     form.setValue(`lineItems.${index}.quantity`, isNaN(quantity) || quantity < 1 ? 1 : quantity, { shouldValidate: true });
      form.trigger(`lineItems.${index}.quantity`);
   };
 
@@ -317,17 +373,33 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
         <Separator />
         <h3 className="text-lg font-medium">Line Items</h3>
-        {fields.map((field, index) => {
-          const selectedProduct = products.find(p => p.id === watchedLineItems[index]?.productId);
-          const unitPrice = selectedProduct ? selectedProduct.price : 0;
-          const quantity = watchedLineItems[index]?.quantity || 0;
-          const lineTotal = unitPrice * quantity;
+        {fields.map((fieldItem, index) => {
+          const currentLineItem = watchedLineItems[index];
+          const selectedProductDetails = currentLineItem ? products.find(p => p.id === currentLineItem.productId) : undefined;
+          const unitPriceForDisplay = selectedProductDetails ? selectedProductDetails.price : 0;
+          const quantity = currentLineItem?.quantity || 0;
+          const lineTotal = unitPriceForDisplay * quantity;
+          const filteredProductsForLine = getFilteredProducts(index);
 
           return (
-            <div key={field.id} className="space-y-3 p-4 border rounded-md relative">
-              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
+            <div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
+              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
+
+              <FormItem>
+                <FormLabel>Category Filter</FormLabel>
+                <Select
+                  value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                  onValueChange={(value) => handleCategoryFilterChange(index, value)}
+                >
+                  <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                    {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormItem>
 
               <FormField
                 control={form.control}
@@ -350,7 +422,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                           <CommandList>
                             <CommandEmpty>No product found.</CommandEmpty>
                             <CommandGroup>
-                              {products.map((product) => {
+                              {filteredProductsForLine.map((product) => {
                                 const searchableValue = [product.name, product.category, product.unit]
                                   .filter(Boolean)
                                   .join(' ')
@@ -380,7 +452,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
               <div className="grid grid-cols-3 gap-4 items-end">
                 <FormItem>
                   <FormLabel>Unit Price</FormLabel>
-                  <Input type="text" readOnly value={unitPrice > 0 ? `$${unitPrice.toFixed(2)}` : '-'} className="bg-muted" />
+                  <Input type="text" readOnly value={unitPriceForDisplay > 0 ? `$${unitPriceForDisplay.toFixed(2)}` : '-'} className="bg-muted" />
                 </FormItem>
                 <FormField
                   control={form.control}
@@ -391,9 +463,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                       <FormControl>
                         <Input
                           type="number"
-                          {...qtyField}
-                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value, 10) || 0)}
+                          ref={qtyField.ref}
+                          name={qtyField.name}
+                          onBlur={qtyField.onBlur}
+                          value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
+                          onChange={(e) => handleQuantityChange(index, e.target.value)}
                           min="1"
+                          disabled={!watchedLineItems[index]?.productId}
                         />
                       </FormControl>
                       <FormMessage />
@@ -402,13 +478,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 />
                 <FormItem>
                   <FormLabel>Line Total</FormLabel>
-                  <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted" />
+                  <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted font-semibold" />
                 </FormItem>
               </div>
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={() => append({ productId: '', quantity: 1 })}>
+        <Button type="button" variant="outline" onClick={addLineItem}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
         </Button>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
@@ -436,5 +512,4 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-
     

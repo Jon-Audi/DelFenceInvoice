@@ -19,6 +19,7 @@ interface InvoiceDialogProps {
   onSave: (invoice: Invoice) => void;
   customers: Customer[];
   products: Product[];
+  productCategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: InvoiceFormData | null;
@@ -30,6 +31,7 @@ export function InvoiceDialog({
   onSave,
   customers,
   products,
+  productCategories,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
   initialData
@@ -107,7 +109,7 @@ export function InvoiceDialog({
       date: formData.date.toISOString(),
       dueDate: formData.dueDate?.toISOString(),
       status: newStatus,
-      poNumber: formData.poNumber, // Added P.O. Number
+      poNumber: formData.poNumber,
       lineItems: lineItems,
       subtotal: currentSubtotal,
       taxAmount: currentTaxAmount,
@@ -140,6 +142,7 @@ export function InvoiceDialog({
           onClose={() => setOpen(false)}
           customers={customers}
           products={products}
+          productCategories={productCategories}
         />
       </DialogContent>
     </Dialog>

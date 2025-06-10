@@ -38,6 +38,7 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
 
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -197,6 +198,25 @@ export default function InvoicesPage() {
     return () => unsubscribe();
   }, [toast]);
 
+  useEffect(() => {
+    if (products && products.length > 0) {
+        const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
+        setStableProductCategories(currentStableCategories => {
+            if (JSON.stringify(newCategories) !== JSON.stringify(currentStableCategories)) {
+                return newCategories;
+            }
+            return currentStableCategories;
+        });
+    } else {
+        setStableProductCategories(currentStableCategories => {
+            if (currentStableCategories.length > 0) {
+                return [];
+            }
+            return currentStableCategories;
+        });
+    }
+  }, [products]);
+
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     const { id, ...invoiceDataFromDialog } = invoiceToSave;
 
@@ -316,8 +336,6 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      // console.log("[InvoicesPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
-      // console.log("[InvoicesPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
@@ -424,6 +442,7 @@ export default function InvoicesPage() {
             onSave={handleSaveInvoice}
             customers={customers}
             products={products}
+            productCategories={stableProductCategories}
           />
       </PageHeader>
 
@@ -438,6 +457,7 @@ export default function InvoicesPage() {
             onSave={handleSaveInvoice}
             customers={customers}
             products={products}
+            productCategories={stableProductCategories}
         />
       )}
 

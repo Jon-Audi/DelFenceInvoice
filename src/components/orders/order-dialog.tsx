@@ -19,6 +19,7 @@ interface OrderDialogProps {
   onSave: (order: Order) => void;
   customers: Customer[];
   products: Product[]; 
+  productCategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: OrderFormData | null; 
@@ -30,6 +31,7 @@ export function OrderDialog({
   onSave, 
   customers, 
   products,
+  productCategories,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
   initialData
@@ -75,7 +77,7 @@ export function OrderDialog({
       date: formData.date.toISOString(),
       status: formData.status,
       orderState: formData.orderState,
-      poNumber: formData.poNumber, // Added P.O. Number
+      poNumber: formData.poNumber,
       expectedDeliveryDate: formData.expectedDeliveryDate?.toISOString(),
       readyForPickUpDate: formData.readyForPickUpDate?.toISOString(),
       pickedUpDate: formData.pickedUpDate?.toISOString(),
@@ -108,6 +110,7 @@ export function OrderDialog({
           onClose={() => setOpen(false)}
           customers={customers}
           products={products}
+          productCategories={productCategories}
         />
       </DialogContent>
     </Dialog>

@@ -63,6 +63,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
 
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -172,6 +173,25 @@ export default function OrdersPage() {
     });
     return () => unsubscribe();
   }, [toast]);
+
+  useEffect(() => {
+    if (products && products.length > 0) {
+        const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
+        setStableProductCategories(currentStableCategories => {
+            if (JSON.stringify(newCategories) !== JSON.stringify(currentStableCategories)) {
+                return newCategories;
+            }
+            return currentStableCategories;
+        });
+    } else {
+        setStableProductCategories(currentStableCategories => {
+            if (currentStableCategories.length > 0) {
+                return [];
+            }
+            return currentStableCategories;
+        });
+    }
+  }, [products]);
 
 
   const handleSaveOrder = async (orderToSave: Order) => {
@@ -286,8 +306,6 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      // console.log("[OrdersPage] Before print - Container found:", !!document.querySelector('.print-only-container'));
-      // console.log("[OrdersPage] Before print - Container innerHTML (first 200 chars):", document.querySelector('.print-only-container')?.innerHTML.substring(0,200) || "Print container not found");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.print();
@@ -321,7 +339,7 @@ export default function OrdersPage() {
 
       const result = await generateOrderEmailDraft({
         customerName: customerDisplayName,
-        customerEmail: customerEmail, // This is just for the AI context, actual recipients chosen in UI
+        customerEmail: customerEmail, 
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
@@ -402,6 +420,7 @@ export default function OrdersPage() {
           onSave={handleSaveOrder}
           customers={customers}
           products={products}
+          productCategories={stableProductCategories}
         />
       </PageHeader>
 
@@ -416,6 +435,7 @@ export default function OrdersPage() {
             onSave={handleSaveOrder}
             customers={customers}
             products={products}
+            productCategories={stableProductCategories}
         />
       )}
 
@@ -481,6 +501,7 @@ export default function OrdersPage() {
                           onSave={handleSaveOrder}
                           customers={customers}
                           products={products}
+                          productCategories={stableProductCategories}
                         />
                         <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
                           <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
