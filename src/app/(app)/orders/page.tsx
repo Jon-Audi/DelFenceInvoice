@@ -107,6 +107,7 @@ export default function OrdersPage() {
       try {
         const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
         const newOrderData: OrderFormData = {
+          id: undefined, // New order, so no existing ID
           orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
@@ -114,9 +115,13 @@ export default function OrdersPage() {
           orderState: 'Open',
           poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
+            id: li.id, // Carry over ID if available
             productId: li.productId,
+            productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
+            isReturn: li.isReturn || false,
+            isNonStock: li.isNonStock || false, // Ensure isNonStock is carried over
           })),
           notes: estimateToConvert.notes || '',
           expectedDeliveryDate: undefined,
@@ -730,3 +735,5 @@ const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) =
   <div className="space-y-1">{children}</div>
 );
 
+
+    
