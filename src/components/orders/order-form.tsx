@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Order, DocumentStatus, Customer, Product } from '@/types';
+import type { Order, DocumentStatus, Customer, Product, PaymentMethod } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
-import { ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
+import { ALL_CATEGORIES_MARKUP_KEY, PAYMENT_METHODS } from '@/lib/constants';
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
@@ -79,6 +79,18 @@ const orderFormSchema = z.object({
   pickedUpDate: z.date().optional(),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
+  newPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
+  newPaymentDate: z.date().optional(),
+  newPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
+  newPaymentNotes: z.string().optional(),
+}).refine(data => {
+    if (data.newPaymentAmount && data.newPaymentAmount > 0) {
+        return !!data.newPaymentDate && !!data.newPaymentMethod;
+    }
+    return true;
+}, {
+    message: "Payment date and method are required if payment amount is entered.",
+    path: ["newPaymentMethod"],
 });
 
 export type OrderFormData = z.infer<typeof orderFormSchema>;
@@ -95,8 +107,9 @@ interface OrderFormProps {
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
   const defaultFormValues = useMemo((): OrderFormData => {
+    let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
     if (order) {
-      return {
+      baseValues = {
         id: order.id,
         orderNumber: order.orderNumber,
         customerId: order.customerId,
@@ -119,7 +132,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         notes: order.notes || '',
       };
     } else if (initialData) {
-      return {
+      baseValues = {
         ...initialData,
         id: initialData.id,
         poNumber: initialData.poNumber ?? '',
@@ -128,6 +141,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
         lineItems: initialData.lineItems.map(li => ({
+            id: li.id || crypto.randomUUID(),
             productId: li.productId,
             productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
             quantity: li.quantity,
@@ -137,7 +151,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         })),
       };
     } else {
-      return {
+      baseValues = {
         id: undefined,
         orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
         customerId: '',
@@ -145,13 +159,20 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         status: 'Draft',
         orderState: 'Open',
         poNumber: '',
-        lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
         notes: '',
         expectedDeliveryDate: undefined,
         readyForPickUpDate: undefined,
         pickedUpDate: undefined,
       };
     }
+     return {
+      ...baseValues,
+      newPaymentAmount: undefined,
+      newPaymentDate: undefined,
+      newPaymentMethod: undefined,
+      newPaymentNotes: undefined,
+    };
   }, [order, initialData, products]);
 
   const form = useForm<OrderFormData>({
@@ -159,36 +180,34 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     defaultValues: defaultFormValues,
   });
 
+   useEffect(() => {
+    form.reset(defaultFormValues);
+  }, [defaultFormValues, form.reset]);
+
+
   const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
-  const watchedLineItems = form.watch('lineItems');
+  const watchedLineItems = form.watch('lineItems') || [];
   const watchedCustomerId = form.watch('customerId');
 
-  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
-    defaultFormValues.lineItems.map(item => {
-        if (!item.isNonStock && item.productId) {
-            const product = products.find(p => p.id === item.productId);
-            return product?.category;
-        }
-        return undefined;
-    })
-  );
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
 
   useEffect(() => {
-    form.reset(defaultFormValues);
+     const currentFormLineItems = form.getValues('lineItems') || [];
     setLineItemCategoryFilters(
-        defaultFormValues.lineItems.map(item => {
-            if (!item.isNonStock && item.productId) {
+        currentFormLineItems.map(item => {
+            if (!item.isNonStock && item.productId && products.length > 0) {
                 const product = products.find(p => p.id === item.productId);
                 return product?.category;
             }
             return undefined;
         })
-     );
-  }, [defaultFormValues, form, products]);
+    );
+  }, [watchedLineItems, products, form]);
+
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
     let finalPrice = product.price; 
@@ -206,10 +225,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
-    if (!watchedCustomerId) return;
+    if (!watchedCustomerId || !products || products.length === 0) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
-    const updatedLineItems = watchedLineItems.map((item) => {
+    const currentLineItems = form.getValues('lineItems') || [];
+    const updatedLineItems = currentLineItems.map((item) => {
       if (item.isNonStock || !item.productId) return item;
 
       const product = products.find(p => p.id === item.productId);
@@ -223,12 +243,12 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       return item;
     });
     
-    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
+    if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
         updatedLineItems.forEach((item, index) => {
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, watchedLineItems, update]);
+  }, [watchedCustomerId, customers, products, form, update]);
 
 
   const currentSubtotal = useMemo(() => {
@@ -240,7 +260,12 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }, 0);
   }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal;
+  const currentOrderTotal = currentSubtotal; // Assuming no tax for orders for now
+
+  const amountAlreadyPaid = order?.amountPaid || 0;
+  const newPaymentAmountValue = form.watch("newPaymentAmount") || 0;
+  const totalPaidDisplay = amountAlreadyPaid + newPaymentAmountValue;
+  const balanceDueDisplay = currentOrderTotal - totalPaidDisplay;
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -273,7 +298,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.productName`, selectedProd.name);
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
-      // form.setValue(`lineItems.${index}.isNonStock`, false);
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -285,7 +309,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const addLineItem = () => {
-    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
+    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -306,9 +330,21 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }
   };
 
+  const handleFormSubmit = (data: OrderFormData) => {
+    onSubmit(data);
+    // Optionally reset payment fields if the dialog stays open for more edits
+    // form.reset({ 
+    //     ...data, // keep other form data
+    //     newPaymentAmount: undefined,
+    //     newPaymentDate: undefined,
+    //     newPaymentMethod: undefined,
+    //     newPaymentNotes: '',
+    // });
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
         <FormField control={form.control} name="orderNumber" render={({ field }) => (
           <FormItem><FormLabel>Order Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -647,17 +683,84 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         )}
 
         <Separator />
-        <div className="flex justify-end space-x-4 text-lg font-semibold">
-          <span>Subtotal:</span>
-          <span>${currentSubtotal.toFixed(2)}</span>
+        <div className="space-y-2 text-right font-medium">
+            <div>Order Total: <span className="font-semibold">${currentOrderTotal.toFixed(2)}</span></div>
+            {order && amountAlreadyPaid > 0 && (
+                 <div>Previously Paid: <span className="text-green-600">(${amountAlreadyPaid.toFixed(2)})</span></div>
+            )}
+            {newPaymentAmountValue > 0 && (
+                 <div>New Payment: <span className="text-green-600">(${newPaymentAmountValue.toFixed(2)})</span></div>
+            )}
+            <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-        <div className="flex justify-end space-x-4 text-xl font-bold">
-          <span>Total:</span>
-          <span>${currentTotal.toFixed(2)}</span>
+        
+        <Separator />
+        <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={form.control} name="newPaymentAmount" render={({ field }) => (
+                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl>
+                    <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                        onChange={e => {
+                            const val = e.target.value;
+                            if (val === '') {
+                                field.onChange(undefined);
+                            } else {
+                                const num = parseFloat(val);
+                                field.onChange(isNaN(num) ? undefined : num);
+                            }
+                        }}
+                    />
+                </FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="newPaymentDate" render={({ field }) => (
+                <FormItem className="flex flex-col">
+                <FormLabel>Payment Date</FormLabel>
+                <Popover><PopoverTrigger asChild><FormControl>
+                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                        <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                </FormControl></PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                </Popover><FormMessage />
+                </FormItem>
+            )} />
         </div>
+        <FormField control={form.control} name="newPaymentMethod" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Payment Method</FormLabel>
+                <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ""}
+                >
+                <FormControl><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger></FormControl>
+                <SelectContent>{PAYMENT_METHODS.map(method => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+            </FormItem>
+        )} />
+        <FormField control={form.control} name="newPaymentNotes" render={({ field }) => (
+          <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl>
+            <Textarea
+                placeholder="e.g., Check #123, Deposit"
+                {...field}
+                value={field.value === undefined || field.value === null ? '' : field.value}
+                rows={2}
+            />
+            </FormControl><FormMessage /></FormItem>
+        )} />
+        {(form.formState.errors.newPaymentMethod || (form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount"))) && (
+             <p className="text-sm font-medium text-destructive">{form.formState.errors.newPaymentMethod?.message || form.formState.errors.newPaymentDate?.message}</p>
+        )}
 
+        <Separator />
         <FormField control={form.control} name="notes" render={({ field }) => (
-          <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the order..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>Order Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the order..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}

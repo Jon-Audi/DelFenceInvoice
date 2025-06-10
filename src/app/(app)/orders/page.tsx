@@ -57,6 +57,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip'; // New import
+import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -107,7 +108,7 @@ export default function OrdersPage() {
       try {
         const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
         const newOrderData: OrderFormData = {
-          id: undefined, // New order, so no existing ID
+          id: undefined, 
           orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
@@ -115,18 +116,23 @@ export default function OrdersPage() {
           orderState: 'Open',
           poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id, // Carry over ID if available
+            id: li.id, 
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false, // Ensure isNonStock is carried over
+            isNonStock: li.isNonStock || false, 
           })),
           notes: estimateToConvert.notes || '',
           expectedDeliveryDate: undefined,
           readyForPickUpDate: undefined,
           pickedUpDate: undefined,
+          // Payment fields will be undefined initially
+          newPaymentAmount: undefined,
+          newPaymentDate: undefined,
+          newPaymentMethod: undefined,
+          newPaymentNotes: '',
         };
         setConversionOrderData(newOrderData);
         setIsConvertingOrder(true);
@@ -142,7 +148,15 @@ export default function OrdersPage() {
     const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
       const fetchedOrders: Order[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedOrders.push({ ...docSnap.data() as Omit<Order, 'id'>, id: docSnap.id });
+         const data = docSnap.data();
+        fetchedOrders.push({ 
+          ...data as Omit<Order, 'id' | 'total' | 'amountPaid' | 'balanceDue'>, 
+          id: docSnap.id,
+          total: data.total || 0,
+          amountPaid: data.amountPaid || 0,
+          balanceDue: data.balanceDue !== undefined ? data.balanceDue : (data.total || 0) - (data.amountPaid || 0),
+          payments: data.payments || [],
+        });
       });
       setOrders(fetchedOrders.sort((a, b) => a.orderNumber.localeCompare(b.orderNumber)));
       setIsLoadingOrders(false);
@@ -222,7 +236,10 @@ export default function OrdersPage() {
       subtotal: orderDataFromDialog.subtotal,
       taxAmount: orderDataFromDialog.taxAmount || 0,
       total: orderDataFromDialog.total,
+      payments: orderDataFromDialog.payments || [],
+      amountPaid: orderDataFromDialog.amountPaid || 0,
     };
+    basePayload.balanceDue = (basePayload.total || 0) - (basePayload.amountPaid || 0);
     
     try {
       if (id && orders.some(o => o.id === id)) { 
@@ -285,8 +302,6 @@ export default function OrdersPage() {
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
-    // This function can be reused for different printing types
-    // setIsLoadingCompanySettings(true); // Moved specific loading states
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
@@ -299,8 +314,6 @@ export default function OrdersPage() {
       console.error("Error fetching company settings:", error);
       toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
       return null;
-    } finally {
-      // setIsLoadingCompanySettings(false); // Specific loading states handle this
     }
   };
 
@@ -525,10 +538,12 @@ export default function OrdersPage() {
                 <TableHead>Customer</TableHead>
                 <TableHead>P.O. #</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Total</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Paid</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Order State</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
+                <TableHead className="w-[80px] text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -538,10 +553,14 @@ export default function OrdersPage() {
                   <TableCell>{order.customerName}</TableCell>
                   <TableCell>{order.poNumber || 'N/A'}</TableCell>
                   <TableCell>{formatDateForDisplay(order.date)}</TableCell>
-                  <TableCell>${order.total.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
+                  <TableCell className="text-right text-green-600">${(order.amountPaid || 0).toFixed(2)}</TableCell>
+                  <TableCell className={cn("text-right", (order.balanceDue !== undefined && order.balanceDue > 0) ? "text-destructive" : "text-green-600")}>
+                     ${(order.balanceDue || 0).toFixed(2)}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={
-                      order.status === 'Picked up' ? 'default' :
+                      order.status === 'Picked up' || order.status === 'Invoiced' ? 'default' :
                       order.status === 'Ready for pick up' ? 'secondary' :
                       'outline'
                     }>
@@ -555,7 +574,7 @@ export default function OrdersPage() {
                       {order.orderState}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                      <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -734,6 +753,3 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-
-    

@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Order, Customer, Product, LineItem } from '@/types';
+import type { Order, Customer, Product, LineItem, Payment } from '@/types';
 import { OrderForm, type OrderFormData } from './order-form';
 import {
   Dialog,
@@ -76,14 +76,28 @@ export function OrderDialog({
       if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }
-      // For non-stock items, productId field is omitted
-
       return lineItemForDb as LineItem;
     });
 
     const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
     const taxAmount = 0; 
     const total = subtotal + taxAmount;
+
+    let existingPayments: Payment[] = order?.payments ? [...order.payments] : [];
+    if (formData.newPaymentAmount && formData.newPaymentAmount > 0 && formData.newPaymentDate && formData.newPaymentMethod) {
+      const newPayment: Payment = {
+        id: crypto.randomUUID(),
+        date: formData.newPaymentDate.toISOString(),
+        amount: formData.newPaymentAmount,
+        method: formData.newPaymentMethod,
+        notes: formData.newPaymentNotes || '',
+      };
+      existingPayments.push(newPayment);
+    }
+
+    const totalAmountPaid = existingPayments.reduce((acc, p) => acc + p.amount, 0);
+    const balanceDue = total - totalAmountPaid;
+
 
     const orderToSave: Order = {
       id: order?.id || initialData?.id || crypto.randomUUID(),
@@ -102,6 +116,9 @@ export function OrderDialog({
       taxAmount: taxAmount,
       total: total,
       notes: formData.notes,
+      payments: existingPayments,
+      amountPaid: totalAmountPaid,
+      balanceDue: balanceDue,
     };
     onSave(orderToSave);
     setOpen(false);

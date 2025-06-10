@@ -135,8 +135,48 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
             <span className="text-gray-800">Total:</span>
             <span className="text-gray-800">${order.total.toFixed(2)}</span>
           </div>
+          {order.amountPaid && order.amountPaid > 0 && (
+            <div className="flex justify-between text-md">
+              <span className="font-semibold text-green-600">Amount Paid:</span>
+              <span className="text-green-600">(${order.amountPaid.toFixed(2)})</span>
+            </div>
+          )}
+          {order.balanceDue !== undefined && (
+            <div className="flex justify-between text-lg font-semibold">
+              <span className="text-gray-800">Balance Due:</span>
+              <span className="text-gray-800">${order.balanceDue.toFixed(2)}</span>
+            </div>
+          )}
         </div>
       </div>
+      
+      {/* Payments Section */}
+      {order.payments && order.payments.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">Payments Received:</h3>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Date</th>
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Method</th>
+                <th className="text-right p-2 border border-gray-300 font-semibold text-gray-700">Amount</th>
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td className="p-2 border border-gray-300">{formatDate(payment.date)}</td>
+                  <td className="p-2 border border-gray-300">{payment.method}</td>
+                  <td className="text-right p-2 border border-gray-300">${payment.amount.toFixed(2)}</td>
+                  <td className="p-2 border border-gray-300">{payment.notes || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
 
       {/* Notes Section */}
       {order.notes && (
