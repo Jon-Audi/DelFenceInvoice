@@ -43,9 +43,10 @@ interface InvoiceTableProps {
   formatDate: (dateString: string | undefined) => string;
   customers: Customer[];
   products: Product[];
+  productCategories: string[]; // Added this prop
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, formatDate, customers, products }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, formatDate, customers, products, productCategories }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
@@ -122,6 +123,7 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
                       onSave={onSave}
                       customers={customers}
                       products={products}
+                      productCategories={productCategories} // Pass productCategories here
                     />
                     <DropdownMenuItem onClick={() => onGenerateEmail(invoice)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Invoice

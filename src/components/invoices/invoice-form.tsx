@@ -81,7 +81,7 @@ interface InvoiceFormProps {
   productCategories: string[];
 }
 
-export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products, productCategories }: InvoiceFormProps) {
+export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products, productCategories = [] }: InvoiceFormProps) {
   const defaultFormValues = useMemo((): InvoiceFormData => {
     let baseValues: Omit<InvoiceFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
 
@@ -98,7 +98,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             id: li.id, 
             productId: li.productId, 
             quantity: li.quantity,
-            unitPrice: li.unitPrice, // Keep existing unit price
+            unitPrice: li.unitPrice, 
         })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
@@ -112,7 +112,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         lineItems: initialData.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
-            unitPrice: products.find(p => p.id === li.productId)?.price || 0, // Default from product
+            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
         })),
       };
     } else {
@@ -210,7 +210,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     const selectedProd = products.find(p => p.id === productId);
     if (selectedProd) {
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
+      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); 
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -233,11 +233,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
-    // Do not reset payment fields here if it's an edit,
-    // or if you want them to persist for another quick payment.
-    // Only reset if it's a NEW invoice or explicitly cleared by user.
-    // For simplicity, if it's a save of an existing invoice, let's not clear them.
-    // If it was a new invoice (initialData was null and invoice was null), then clear.
     if (!invoice && !initialData) {
         form.reset({ 
             ...data, 
@@ -247,9 +242,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             newPaymentNotes: undefined,
         });
     } else {
-        // For edits, just update the form state without clearing payment fields,
-        // as they might be part of the 'current' save operation.
-        // The main `onSave` in dialog will handle final state.
         form.setValue('newPaymentAmount', undefined);
         form.setValue('newPaymentDate', undefined);
         form.setValue('newPaymentMethod', undefined);
@@ -398,7 +390,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                   <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
-                    {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                    {(productCategories || []).map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormItem>

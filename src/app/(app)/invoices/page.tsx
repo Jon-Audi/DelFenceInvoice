@@ -87,6 +87,7 @@ export default function InvoicesPage() {
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
+            unitPrice: li.unitPrice,
           })),
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
@@ -113,6 +114,7 @@ export default function InvoicesPage() {
           lineItems: orderToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
+            unitPrice: li.unitPrice,
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
@@ -476,6 +478,7 @@ export default function InvoicesPage() {
             formatDate={formatDate}
             customers={customers}
             products={products}
+            productCategories={stableProductCategories} // Pass productCategories to InvoiceTable
           />
            {invoices.length === 0 && !isLoadingInvoices && (
             <p className="p-4 text-center text-muted-foreground">No invoices found.</p>
