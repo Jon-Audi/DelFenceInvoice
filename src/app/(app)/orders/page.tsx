@@ -91,6 +91,8 @@ export default function OrdersPage() {
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     setIsClient(true);
     const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
@@ -108,6 +110,7 @@ export default function OrdersPage() {
           lineItems: estimateToConvert.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
+            unitPrice: li.unitPrice,
           })),
           notes: estimateToConvert.notes || '',
           expectedDeliveryDate: undefined,
@@ -397,6 +400,25 @@ export default function OrdersPage() {
     router.push('/invoices');
   };
 
+  const filteredOrders = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return orders;
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return orders.filter(order => {
+      const searchFields = [
+        order.orderNumber,
+        order.customerName,
+        order.poNumber,
+        order.status,
+        order.orderState,
+      ];
+      return searchFields.some(field =>
+        field && field.toLowerCase().includes(lowercasedFilter)
+      );
+    });
+  }, [orders, searchTerm]);
+
   if (isLoadingOrders || isLoadingCustomers || isLoadingProducts) {
     return (
       <PageHeader title="Orders" description="Loading orders database...">
@@ -446,6 +468,12 @@ export default function OrdersPage() {
           <CardDescription>A list of all orders in the system.</CardDescription>
         </CardHeader>
         <CardContent>
+          <Input
+            placeholder="Search by #, customer, PO, status, or state..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm mb-4"
+          />
           <Table>
             <TableHeader>
               <TableRow>
@@ -460,7 +488,7 @@ export default function OrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.customerName}</TableCell>
@@ -527,8 +555,10 @@ export default function OrdersPage() {
               ))}
             </TableBody>
           </Table>
-           {orders.length === 0 && !isLoadingOrders && (
-            <p className="p-4 text-center text-muted-foreground">No orders found.</p>
+           {filteredOrders.length === 0 && (
+             <p className="p-4 text-center text-muted-foreground">
+               {orders.length === 0 ? "No orders found." : "No orders match your search."}
+            </p>
           )}
         </CardContent>
       </Card>
@@ -645,3 +675,4 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+

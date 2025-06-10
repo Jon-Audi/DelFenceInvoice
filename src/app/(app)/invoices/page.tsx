@@ -65,6 +65,8 @@ export default function InvoicesPage() {
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     setIsClient(true); 
   }, []);
@@ -421,6 +423,25 @@ export default function InvoicesPage() {
     setIsEmailModalOpen(false);
   };
 
+  const filteredInvoices = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return invoices;
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return invoices.filter(invoice => {
+      const searchFields = [
+        invoice.invoiceNumber,
+        invoice.customerName,
+        invoice.poNumber,
+        invoice.status,
+      ];
+      return searchFields.some(field =>
+        field && field.toLowerCase().includes(lowercasedFilter)
+      );
+    });
+  }, [invoices, searchTerm]);
+
+
   if (isLoadingInvoices || isLoadingCustomers || isLoadingProducts) {
     return (
       <PageHeader title="Invoices" description="Loading invoices database...">
@@ -469,8 +490,14 @@ export default function InvoicesPage() {
           <CardDescription>A list of all invoices in the system.</CardDescription>
         </CardHeader>
         <CardContent>
+          <Input
+            placeholder="Search by #, customer, PO, or status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm mb-4"
+          />
           <InvoiceTable
-            invoices={invoices}
+            invoices={filteredInvoices}
             onSave={handleSaveInvoice}
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
@@ -478,10 +505,12 @@ export default function InvoicesPage() {
             formatDate={formatDate}
             customers={customers}
             products={products}
-            productCategories={stableProductCategories} // Pass productCategories to InvoiceTable
+            productCategories={stableProductCategories} 
           />
-           {invoices.length === 0 && !isLoadingInvoices && (
-            <p className="p-4 text-center text-muted-foreground">No invoices found.</p>
+           {filteredInvoices.length === 0 && (
+            <p className="p-4 text-center text-muted-foreground">
+              {invoices.length === 0 ? "No invoices found." : "No invoices match your search."}
+            </p>
           )}
         </CardContent>
       </Card>
@@ -579,3 +608,4 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+

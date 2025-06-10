@@ -87,6 +87,8 @@ export default function EstimatesPage() {
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -178,7 +180,7 @@ export default function EstimatesPage() {
     };
 
     try {
-      if (id && estimates.some(e => e.id === id)) { // Editing existing estimate
+      if (id && estimates.some(e => e.id === id)) { 
         const estimateRef = doc(db, 'estimates', id);
         const updatePayload = { ...basePayload };
 
@@ -195,7 +197,7 @@ export default function EstimatesPage() {
         
         await setDoc(estimateRef, updatePayload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
-      } else { // Adding new estimate
+      } else { 
         const addPayload = { ...basePayload };
 
         if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') {
@@ -233,10 +235,6 @@ export default function EstimatesPage() {
         return id;
       } else {
         const dataToSave = { ...customerData };
-        // The problematic line `if (dataToSave.id) delete (dataToSave as any).id;` was here and is now removed.
-        // dataToSave (which is a spread of customerData) does not have an 'id' property
-        // because 'id' was destructured from 'customerToSave' at the beginning of the function.
-
         const docRef = await addDoc(collection(db, 'customers'), dataToSave);
         toast({
           title: "Customer Added",
@@ -369,7 +367,6 @@ export default function EstimatesPage() {
   const handleSendEmail = () => {
     const allRecipients: string[] = [...selectedRecipientEmails];
     if (additionalRecipientEmail.trim() !== "") {
-      // Basic email validation, can be improved
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
         allRecipients.push(additionalRecipientEmail.trim());
       } else {
@@ -406,6 +403,25 @@ export default function EstimatesPage() {
     router.push('/invoices');
   };
 
+  const filteredEstimates = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return estimates;
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return estimates.filter(estimate => {
+      const searchFields = [
+        estimate.estimateNumber,
+        estimate.customerName,
+        estimate.poNumber,
+        estimate.status,
+      ];
+      return searchFields.some(field =>
+        field && field.toLowerCase().includes(lowercasedFilter)
+      );
+    });
+  }, [estimates, searchTerm]);
+
+
   if (isLoadingEstimates || isLoadingCustomers || isLoadingProducts) {
     return (
       <PageHeader title="Estimates" description="Loading estimates database...">
@@ -440,6 +456,12 @@ export default function EstimatesPage() {
           <CardDescription>A list of all estimates in the system.</CardDescription>
         </CardHeader>
         <CardContent>
+          <Input
+            placeholder="Search by #, customer, PO, or status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm mb-4"
+          />
           <Table>
             <TableHeader>
               <TableRow>
@@ -453,7 +475,7 @@ export default function EstimatesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {estimates.map((estimate) => (
+              {filteredEstimates.map((estimate) => (
                 <TableRow key={estimate.id}>
                   <TableCell>{estimate.estimateNumber}</TableCell>
                   <TableCell>{estimate.customerName}</TableCell>
@@ -509,8 +531,10 @@ export default function EstimatesPage() {
               ))}
             </TableBody>
           </Table>
-           {estimates.length === 0 && !isLoadingEstimates && (
-            <p className="p-4 text-center text-muted-foreground">No estimates found.</p>
+           {filteredEstimates.length === 0 && (
+            <p className="p-4 text-center text-muted-foreground">
+              {estimates.length === 0 ? "No estimates found." : "No estimates match your search."}
+            </p>
           )}
         </CardContent>
       </Card>
