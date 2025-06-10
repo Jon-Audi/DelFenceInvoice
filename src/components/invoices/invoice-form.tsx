@@ -177,24 +177,15 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       };
     }
     form.reset(currentDefaultValues);
-    // Initialize category filters based on the newly reset line items
-    setLineItemCategoryFilters(
-      currentDefaultValues.lineItems.map(item => {
-        if (!item.isNonStock && item.productId && products.length > 0) {
-          const product = products.find(p => p.id === item.productId);
-          return product?.category;
-        }
-        return undefined;
-      })
-    );
-  }, [invoice, initialData, form.reset, products]); // products is needed here for initial category filter setup
+  }, [invoice, initialData, form.reset]);
 
   // Effect to update unit prices based on customer-specific markups
   useEffect(() => {
     if (!watchedCustomerId || !products || products.length === 0) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
-    const updatedLineItems = watchedLineItems.map((item) => {
+    const currentLineItems = form.getValues('lineItems') || []; // Use getValues for latest form state
+    const updatedLineItems = currentLineItems.map((item) => {
       if (item.isNonStock || !item.productId) return item;
 
       const product = products.find(p => p.id === item.productId);
@@ -202,22 +193,21 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
       const newUnitPrice = calculateUnitPrice(product, currentCustomer);
 
-      if (item.unitPrice !== newUnitPrice) { // Only update if price logic dictates a change
+      if (item.unitPrice !== newUnitPrice) {
         return { ...item, unitPrice: newUnitPrice };
       }
       return item;
     });
 
-    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
+    if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
         updatedLineItems.forEach((item, index) => {
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, watchedLineItems, update]);
+  }, [watchedCustomerId, customers, products, form, update]); // form and update are dependencies for getValues and update
 
 
   // Effect to update category filters when lineItems or products change
-  // This is separate to ensure filters are correct after dynamic additions/removals or product data loading.
   useEffect(() => {
     const currentFormLineItems = form.getValues('lineItems') || [];
     setLineItemCategoryFilters(
@@ -229,7 +219,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             return undefined;
         })
     );
-  }, [watchedLineItems, products, form]); // watchedLineItems ensures it runs after line items state is updated
+  }, [watchedLineItems, products, form]);
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
     let finalPrice = product.price;
@@ -247,7 +237,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
 
   const currentInvoiceTotal = useMemo(() => {
-    return watchedLineItems.reduce((acc, item) => {
+    return (watchedLineItems || []).reduce((acc, item) => {
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const quantity = item.quantity || 0;
       const itemTotal = price * quantity;
@@ -448,7 +438,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <Separator />
         <h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
-          const currentLineItem = watchedLineItems[index];
+          const currentLineItem = watchedLineItems?.[index];
           const quantity = currentLineItem?.quantity || 0;
           const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
           const isReturn = currentLineItem?.isReturn || false;
@@ -570,7 +560,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                             const num = parseFloat(val);
                             priceField.onChange(isNaN(num) ? undefined : num);
                            }}
-                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
+                          disabled={!isNonStock && !watchedLineItems?.[index]?.productId}
                           placeholder="0.00"
                         />
                       </FormControl>
@@ -590,7 +580,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                                 qtyField.onChange(isNaN(num) ? undefined : num);
                             }}
                             min="1"
-                            disabled={!isNonStock && !watchedLineItems[index]?.productId}
+                            disabled={!isNonStock && !watchedLineItems?.[index]?.productId}
                         />
                     </FormControl><FormMessage /></FormItem>
                 )}/>
