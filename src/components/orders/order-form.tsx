@@ -40,10 +40,30 @@ const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
 const lineItemSchema = z.object({
   id: z.string().optional(),
-  productId: z.string().min(1, "Product selection is required."),
+  isNonStock: z.boolean().optional().default(false),
+  productId: z.string().optional(),
+  productName: z.string().optional(),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
-  unitPrice: z.coerce.number().min(0, "Unit price must be non-negative").optional(),
+  unitPrice: z.coerce.number().min(0, "Unit price must be non-negative"),
   isReturn: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.isNonStock) {
+    if (!data.productName || data.productName.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Product name is required for non-stock items.",
+        path: ["productName"],
+      });
+    }
+  } else {
+    if (!data.productId || data.productId.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Product selection is required for stock items.",
+        path: ["productId"],
+      });
+    }
+  }
 });
 
 const orderFormSchema = z.object({
@@ -90,9 +110,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         lineItems: order.lineItems.map(li => ({
           id: li.id,
           productId: li.productId,
+          productName: li.productName,
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           isReturn: li.isReturn || false,
+          isNonStock: li.isNonStock || false,
         })),
         notes: order.notes || '',
       };
@@ -107,9 +129,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
         lineItems: initialData.lineItems.map(li => ({
             productId: li.productId,
+            productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
             quantity: li.quantity,
             unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
             isReturn: li.isReturn || false,
+            isNonStock: li.isNonStock || !li.productId,
         })),
       };
     } else {
@@ -121,7 +145,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         status: 'Draft',
         orderState: 'Open',
         poNumber: '',
-        lineItems: [{ productId: '', quantity: 1, unitPrice: 0, isReturn: false }],
+        lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
         notes: '',
         expectedDeliveryDate: undefined,
         readyForPickUpDate: undefined,
@@ -145,7 +169,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
     defaultFormValues.lineItems.map(item => {
-        if (item.productId) {
+        if (!item.isNonStock && item.productId) {
             const product = products.find(p => p.id === item.productId);
             return product?.category;
         }
@@ -157,7 +181,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     form.reset(defaultFormValues);
     setLineItemCategoryFilters(
         defaultFormValues.lineItems.map(item => {
-            if (item.productId) {
+            if (!item.isNonStock && item.productId) {
                 const product = products.find(p => p.id === item.productId);
                 return product?.category;
             }
@@ -168,7 +192,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
     let finalPrice = product.price; 
-
     if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
       const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
       const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
@@ -187,6 +210,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
     const updatedLineItems = watchedLineItems.map((item) => {
+      if (item.isNonStock || !item.productId) return item;
+
       const product = products.find(p => p.id === item.productId);
       if (!product) return item;
 
@@ -215,7 +240,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }, 0);
   }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal; // Assuming no tax for orders for now
+  const currentTotal = currentSubtotal;
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -225,8 +250,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       return newFilters;
     });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.productName`, '');
     form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
-    form.setValue(`lineItems.${index}.isReturn`, false);
     form.trigger(`lineItems.${index}.productId`);
   };
 
@@ -245,10 +270,10 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
     if (selectedProd) {
       const finalPrice = calculateUnitPrice(selectedProd, currentCustomer);
-
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.productName`, selectedProd.name);
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.isReturn`, false);
+      // form.setValue(`lineItems.${index}.isNonStock`, false);
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -260,13 +285,25 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const addLineItem = () => {
-    append({ productId: '', quantity: 1, unitPrice: 0, isReturn: false });
+    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
   const removeLineItem = (index: number) => {
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const handleNonStockToggle = (index: number, checked: boolean) => {
+    form.setValue(`lineItems.${index}.isNonStock`, checked);
+    if (checked) {
+      form.setValue(`lineItems.${index}.productId`, undefined); 
+      form.setValue(`lineItems.${index}.unitPrice`, 0); 
+      form.trigger(`lineItems.${index}.productName`); 
+      form.trigger(`lineItems.${index}.unitPrice`);
+    } else {
+      form.setValue(`lineItems.${index}.productName`, ''); 
+    }
   };
 
   return (
@@ -431,6 +468,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           const quantity = currentLineItem?.quantity || 0;
           const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
           const isReturn = currentLineItem?.isReturn || false;
+          const isNonStock = currentLineItem?.isNonStock || false;
           const lineTotal = isReturn ? -(quantity * unitPrice) : (quantity * unitPrice);
           const filteredProductsForLine = getFilteredProducts(index);
 
@@ -440,82 +478,106 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
 
-              <FormField
-                control={form.control}
-                name={`lineItems.${index}.isReturn`}
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-2">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">Return Item?</FormLabel>
-                  </FormItem>
-                )}
-              />
+              <div className="flex items-center space-x-4">
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.isReturn`}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2">
+                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="font-normal">Return Item?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.isNonStock`}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2">
+                      <FormControl><Checkbox checked={field.value} onCheckedChange={(checked) => handleNonStockToggle(index, !!checked)} /></FormControl>
+                      <FormLabel className="font-normal">Non-Stock Item?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-              <FormItem>
-                <FormLabel>Category Filter</FormLabel>
-                <Select
-                  value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
-                  onValueChange={(value) => handleCategoryFilterChange(index, value)}
-                >
-                  <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
-                    {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </FormItem>
-
-              <FormField
-                control={form.control}
-                name={`lineItems.${index}.productId`}
-                render={({ field: controllerField }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Product</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
-                            {controllerField.value ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
-                            <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                          <CommandInput placeholder="Search product..." />
-                          <CommandList>
-                            <CommandEmpty>No product found.</CommandEmpty>
-                            <CommandGroup>
-                              {filteredProductsForLine.map((product) => {
-                                const searchableValue = [product.name, product.category, product.unit]
-                                  .filter(Boolean)
-                                  .join(' ')
-                                  .toLowerCase();
-                                return (
-                                  <CommandItem
-                                    value={searchableValue}
-                                    key={product.id}
-                                    onSelect={() => handleProductSelect(index, product.id)}
-                                  >
-                                    <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                    {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
-                                  </CommandItem>
-                                );
-                              })}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
+              {isNonStock ? (
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.productName`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product/Service Name</FormLabel>
+                      <FormControl><Input {...field} placeholder="Enter item name" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <>
+                  <FormItem>
+                    <FormLabel>Category Filter</FormLabel>
+                    <Select
+                      value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                      onValueChange={(value) => handleCategoryFilterChange(index, value)}
+                    >
+                      <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                        {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </FormItem>
-                )}
-              />
+
+                  <FormField
+                    control={form.control}
+                    name={`lineItems.${index}.productId`}
+                    render={({ field: controllerField }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Product</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
+                                {controllerField.value ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
+                                <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                            <Command>
+                              <CommandInput placeholder="Search product..." />
+                              <CommandList>
+                                <CommandEmpty>No product found.</CommandEmpty>
+                                <CommandGroup>
+                                  {filteredProductsForLine.map((product) => {
+                                    const searchableValue = [product.name, product.category, product.unit]
+                                      .filter(Boolean)
+                                      .join(' ')
+                                      .toLowerCase();
+                                    return (
+                                      <CommandItem
+                                        value={searchableValue}
+                                        key={product.id}
+                                        onSelect={() => handleProductSelect(index, product.id)}
+                                      >
+                                        <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
+                                        {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
+                                      </CommandItem>
+                                    );
+                                  })}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
               <div className="grid grid-cols-3 gap-4 items-end">
                  <FormField
                   control={form.control}
@@ -534,7 +596,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                             const num = parseFloat(val);
                             priceField.onChange(isNaN(num) ? undefined : num);
                            }}
-                          disabled={!watchedLineItems[index]?.productId}
+                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
                           placeholder="0.00"
                         />
                       </FormControl>
@@ -559,7 +621,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                             qtyField.onChange(isNaN(num) ? undefined : num);
                            }}
                           min="1"
-                          disabled={!watchedLineItems[index]?.productId}
+                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
                         />
                       </FormControl>
                       <FormMessage />
@@ -575,10 +637,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           );
         })}
         <Button type="button" variant="outline" onClick={addLineItem}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Line Item
+          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
         </Button>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
+        )}
+        {form.formState.errors.lineItems?.root?.message && (
+            <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.root.message}</p>
         )}
 
         <Separator />

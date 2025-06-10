@@ -64,12 +64,13 @@ export interface Customer {
 
 export interface LineItem {
   id: string;
-  productId: string;
-  productName: string; // Denormalized
+  productId?: string; // Optional for non-stock items
+  productName: string; // Manually entered for non-stock, or denormalized from product
   quantity: number;
-  unitPrice: number; // Price of the product at the time of adding/calculating
+  unitPrice: number; // Manually entered for non-stock, or from product/override for stock
   total: number;
-  isReturn?: boolean; // Added for returns
+  isReturn?: boolean;
+  isNonStock?: boolean; // Flag to indicate if it's a non-stock item
 }
 
 

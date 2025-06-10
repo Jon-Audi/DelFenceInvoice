@@ -52,24 +52,28 @@ export function InvoiceDialog({
     const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
-      const productDetails = products.find(p => p.id === item.productId);
-      const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (productDetails ? productDetails.price : 0);
+      const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
+      const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const quantity = item.quantity;
       const isReturn = item.isReturn || false;
       const itemBaseTotal = quantity * finalUnitPrice;
       
+      const itemName = item.isNonStock 
+                       ? (item.productName || 'Non-Stock Item') 
+                       : (product?.name || 'Unknown Product');
       return {
         id: item.id || crypto.randomUUID(),
-        productId: item.productId,
-        productName: productDetails?.name || 'Unknown Product',
+        productId: item.isNonStock ? undefined : item.productId,
+        productName: itemName,
         quantity: quantity,
         unitPrice: finalUnitPrice,
         isReturn: isReturn,
         total: isReturn ? -itemBaseTotal : itemBaseTotal,
+        isNonStock: item.isNonStock || false,
       };
     });
 
-    const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0); // item.total already considers return
+    const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0); 
     const currentTaxAmount = 0; 
     const currentTotal = currentSubtotal + currentTaxAmount;
 
