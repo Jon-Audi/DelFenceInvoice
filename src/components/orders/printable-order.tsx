@@ -108,10 +108,10 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
         <tbody>
           {order.lineItems.map((item) => (
             <tr key={item.id}>
-              <td className="p-2 border border-gray-300">{item.productName}</td>
-              <td className="text-right p-2 border border-gray-300">{item.quantity}</td>
+              <td className="p-2 border border-gray-300">{item.productName}{item.isReturn ? " (Return)" : ""}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-${item.quantity}` : item.quantity}</td>
               <td className="text-right p-2 border border-gray-300">${item.unitPrice.toFixed(2)}</td>
-              <td className="text-right p-2 border border-gray-300">${item.total.toFixed(2)}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-$${(item.quantity * item.unitPrice).toFixed(2)}` : `$${item.total.toFixed(2)}`}</td>
             </tr>
           ))}
         </tbody>
@@ -125,7 +125,7 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
             <span className="font-semibold text-gray-700">Subtotal:</span>
             <span className="text-gray-800">${order.subtotal.toFixed(2)}</span>
           </div>
-          {order.taxAmount && order.taxAmount > 0 && (
+          {order.taxAmount && order.taxAmount !== 0 && (
             <div className="flex justify-between">
               <span className="font-semibold text-gray-700">Tax:</span>
               <span className="text-gray-800">${order.taxAmount.toFixed(2)}</span>

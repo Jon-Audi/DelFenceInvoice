@@ -27,6 +27,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
@@ -42,6 +43,7 @@ const lineItemSchema = z.object({
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
   unitPrice: z.coerce.number().min(0, "Unit price must be non-negative").optional(),
+  isReturn: z.boolean().optional(),
 });
 
 const orderFormSchema = z.object({
@@ -90,6 +92,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           productId: li.productId,
           quantity: li.quantity,
           unitPrice: li.unitPrice,
+          isReturn: li.isReturn || false,
         })),
         notes: order.notes || '',
       };
@@ -106,6 +109,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             productId: li.productId,
             quantity: li.quantity,
             unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
+            isReturn: li.isReturn || false,
         })),
       };
     } else {
@@ -117,7 +121,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         status: 'Draft',
         orderState: 'Open',
         poNumber: '',
-        lineItems: [{ productId: '', quantity: 1, unitPrice: 0 }],
+        lineItems: [{ productId: '', quantity: 1, unitPrice: 0, isReturn: false }],
         notes: '',
         expectedDeliveryDate: undefined,
         readyForPickUpDate: undefined,
@@ -163,7 +167,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   }, [defaultFormValues, form, products]);
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
-    let finalPrice = product.price; // Default product price
+    let finalPrice = product.price; 
 
     if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
       const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
@@ -205,11 +209,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
-      return acc + (price * (item.quantity || 0));
+      const quantity = item.quantity || 0;
+      const itemTotal = price * quantity;
+      return acc + (item.isReturn ? -itemTotal : itemTotal);
     }, 0);
   }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal;
+  const currentTotal = currentSubtotal; // Assuming no tax for orders for now
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -220,6 +226,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
+    form.setValue(`lineItems.${index}.isReturn`, false);
     form.trigger(`lineItems.${index}.productId`);
   };
 
@@ -241,6 +248,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.isReturn`, false);
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -252,7 +260,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const addLineItem = () => {
-    append({ productId: '', quantity: 1, unitPrice: 0 });
+    append({ productId: '', quantity: 1, unitPrice: 0, isReturn: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -422,7 +430,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           const currentLineItem = watchedLineItems[index];
           const quantity = currentLineItem?.quantity || 0;
           const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
-          const lineTotal = unitPrice * quantity;
+          const isReturn = currentLineItem?.isReturn || false;
+          const lineTotal = isReturn ? -(quantity * unitPrice) : (quantity * unitPrice);
           const filteredProductsForLine = getFilteredProducts(index);
 
           return (
@@ -430,6 +439,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
+
+              <FormField
+                control={form.control}
+                name={`lineItems.${index}.isReturn`}
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal">Return Item?</FormLabel>
+                  </FormItem>
+                )}
+              />
 
               <FormItem>
                 <FormLabel>Category Filter</FormLabel>
@@ -543,7 +568,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 />
                 <FormItem>
                   <FormLabel>Line Total</FormLabel>
-                  <Input type="text" readOnly value={lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'} className="bg-muted font-semibold" />
+                  <Input type="text" readOnly value={lineTotal !== 0 ? `${isReturn ? '-' : ''}$${Math.abs(lineTotal).toFixed(2)}` : '$0.00'} className={cn("bg-muted font-semibold", isReturn && "text-destructive")} />
                 </FormItem>
               </div>
             </div>
@@ -577,4 +602,3 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-

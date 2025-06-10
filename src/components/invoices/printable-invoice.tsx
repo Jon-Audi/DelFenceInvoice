@@ -105,10 +105,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
         <tbody>
           {invoice.lineItems.map((item) => (
             <tr key={item.id}>
-              <td className="p-2 border border-gray-300">{item.productName}</td>
-              <td className="text-right p-2 border border-gray-300">{item.quantity}</td>
+              <td className="p-2 border border-gray-300">{item.productName}{item.isReturn ? " (Return)" : ""}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-${item.quantity}` : item.quantity}</td>
               <td className="text-right p-2 border border-gray-300">${item.unitPrice.toFixed(2)}</td>
-              <td className="text-right p-2 border border-gray-300">${item.total.toFixed(2)}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-$${(item.quantity * item.unitPrice).toFixed(2)}` : `$${item.total.toFixed(2)}`}</td>
             </tr>
           ))}
         </tbody>
@@ -122,7 +122,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
             <span className="font-semibold text-gray-700">Subtotal:</span>
             <span className="text-gray-800">${invoice.subtotal.toFixed(2)}</span>
           </div>
-          {invoice.taxAmount && invoice.taxAmount > 0 && (
+          {invoice.taxAmount && invoice.taxAmount !== 0 && (
             <div className="flex justify-between">
               <span className="font-semibold text-gray-700">Tax:</span>
               <span className="text-gray-800">${invoice.taxAmount.toFixed(2)}</span>
@@ -135,7 +135,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
           {invoice.amountPaid && invoice.amountPaid > 0 && (
             <div className="flex justify-between text-md">
               <span className="font-semibold text-green-600">Amount Paid:</span>
-              <span className="text-green-600">-${invoice.amountPaid.toFixed(2)}</span>
+              <span className="text-green-600">(${invoice.amountPaid.toFixed(2)})</span> {/* Changed to positive display */}
             </div>
           )}
           {invoice.balanceDue !== undefined && (
@@ -146,6 +146,33 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
           )}
         </div>
       </div>
+
+      {/* Payments Section */}
+      {invoice.payments && invoice.payments.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">Payments Received:</h3>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Date</th>
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Method</th>
+                <th className="text-right p-2 border border-gray-300 font-semibold text-gray-700">Amount</th>
+                <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td className="p-2 border border-gray-300">{formatDate(payment.date)}</td>
+                  <td className="p-2 border border-gray-300">{payment.method}</td>
+                  <td className="text-right p-2 border border-gray-300">${payment.amount.toFixed(2)}</td>
+                  <td className="p-2 border border-gray-300">{payment.notes || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Notes and Payment Terms */}
       {(invoice.notes || invoice.paymentTerms) && (

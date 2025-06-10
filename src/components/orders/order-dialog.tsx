@@ -54,19 +54,23 @@ export function OrderDialog({
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
-      // Use unitPrice from form; fallback to product price if undefined
       const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (product ? product.price : 0);
+      const quantity = item.quantity;
+      const isReturn = item.isReturn || false;
+      const itemBaseTotal = quantity * finalUnitPrice;
+      
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
         productName: product?.name || 'Unknown Product',
-        quantity: item.quantity,
+        quantity: quantity,
         unitPrice: finalUnitPrice,
-        total: item.quantity * finalUnitPrice,
+        isReturn: isReturn,
+        total: isReturn ? -itemBaseTotal : itemBaseTotal,
       };
     });
 
-    const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
+    const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0); // item.total already considers return
     const taxAmount = 0; 
     const total = subtotal + taxAmount;
 

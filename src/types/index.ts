@@ -69,6 +69,7 @@ export interface LineItem {
   quantity: number;
   unitPrice: number; // Price of the product at the time of adding/calculating
   total: number;
+  isReturn?: boolean; // Added for returns
 }
 
 

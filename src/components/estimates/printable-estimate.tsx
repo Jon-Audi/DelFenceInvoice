@@ -91,7 +91,6 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
       <div className="mb-8 p-4 border border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Estimate For:</h3>
         <p className="font-medium text-gray-800">{estimate.customerName || 'N/A Customer'}</p>
-        {/* You might want to fetch and display customer's full address here if available */}
       </div>
 
       {/* Line Items Table */}
@@ -107,10 +106,10 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
         <tbody>
           {estimate.lineItems.map((item) => (
             <tr key={item.id}>
-              <td className="p-2 border border-gray-300">{item.productName}</td>
-              <td className="text-right p-2 border border-gray-300">{item.quantity}</td>
+              <td className="p-2 border border-gray-300">{item.productName}{item.isReturn ? " (Return)" : ""}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-${item.quantity}` : item.quantity}</td>
               <td className="text-right p-2 border border-gray-300">${item.unitPrice.toFixed(2)}</td>
-              <td className="text-right p-2 border border-gray-300">${item.total.toFixed(2)}</td>
+              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-$${(item.quantity * item.unitPrice).toFixed(2)}` : `$${item.total.toFixed(2)}`}</td>
             </tr>
           ))}
         </tbody>
@@ -124,7 +123,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
             <span className="font-semibold text-gray-700">Subtotal:</span>
             <span className="text-gray-800">${estimate.subtotal.toFixed(2)}</span>
           </div>
-          {estimate.taxAmount && estimate.taxAmount > 0 && (
+          {estimate.taxAmount && estimate.taxAmount !== 0 && ( // Show if not zero
             <div className="flex justify-between">
               <span className="font-semibold text-gray-700">Tax:</span>
               <span className="text-gray-800">${estimate.taxAmount.toFixed(2)}</span>
