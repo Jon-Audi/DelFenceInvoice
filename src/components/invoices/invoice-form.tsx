@@ -135,7 +135,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       newPaymentAmount: undefined,
       newPaymentDate: undefined,
       newPaymentMethod: undefined,
-      newPaymentNotes: undefined,
+      newPaymentNotes: '', // Default newPaymentNotes to empty string
     };
   }, [invoice, initialData, products]);
 
@@ -182,8 +182,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   }, [watchedLineItems]);
 
   const amountAlreadyPaid = invoice?.amountPaid || 0;
-  const newPaymentAmount = form.watch("newPaymentAmount") || 0;
-  const totalPaidDisplay = amountAlreadyPaid + newPaymentAmount;
+  const newPaymentAmountValue = form.watch("newPaymentAmount") || 0;
+  const totalPaidDisplay = amountAlreadyPaid + newPaymentAmountValue;
   const balanceDueDisplay = currentInvoiceTotal - totalPaidDisplay;
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
@@ -239,7 +239,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             newPaymentAmount: undefined,
             newPaymentDate: undefined,
             newPaymentMethod: undefined,
-            newPaymentNotes: undefined,
+            newPaymentNotes: '',
         });
     } else {
         form.setValue('newPaymentAmount', undefined);
@@ -491,8 +491,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             {invoice && amountAlreadyPaid > 0 && (
                  <div>Previously Paid: <span className="text-green-600">(${amountAlreadyPaid.toFixed(2)})</span></div>
             )}
-            {newPaymentAmount > 0 && (
-                 <div>New Payment: <span className="text-green-600">(${newPaymentAmount.toFixed(2)})</span></div>
+            {newPaymentAmountValue > 0 && (
+                 <div>New Payment: <span className="text-green-600">(${newPaymentAmountValue.toFixed(2)})</span></div>
             )}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
@@ -501,7 +501,24 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={form.control} name="newPaymentAmount" render={({ field }) => (
-                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl>
+                    <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                        onChange={e => {
+                            const val = e.target.value;
+                            if (val === '') {
+                                field.onChange(undefined);
+                            } else {
+                                const num = parseFloat(val);
+                                field.onChange(isNaN(num) ? undefined : num);
+                            }
+                        }}
+                    />
+                </FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="newPaymentDate" render={({ field }) => (
                 <FormItem className="flex flex-col">
@@ -520,7 +537,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <FormField control={form.control} name="newPaymentMethod" render={({ field }) => (
             <FormItem>
                 <FormLabel>Payment Method</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""} >
+                <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ""}
+                >
                 <FormControl><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger></FormControl>
                 <SelectContent>{PAYMENT_METHODS.map(method => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent>
                 </Select>
@@ -528,7 +548,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </FormItem>
         )} />
         <FormField control={form.control} name="newPaymentNotes" render={({ field }) => (
-          <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Check #123" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl>
+            <Textarea
+                placeholder="e.g., Check #123"
+                {...field}
+                value={field.value === undefined || field.value === null ? '' : field.value}
+                rows={2}
+            />
+            </FormControl><FormMessage /></FormItem>
         )} />
         {(form.formState.errors.newPaymentMethod || (form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount"))) && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.newPaymentMethod?.message || form.formState.errors.newPaymentDate?.message}</p>
@@ -548,3 +575,4 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     </Form>
   );
 }
+
