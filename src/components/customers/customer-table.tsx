@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Customer } from '@/types';
+import type { Customer, ProductCategory } from '@/types';
 import {
   Table,
   TableBody,
@@ -37,9 +37,10 @@ interface CustomerTableProps {
   customers: Customer[];
   onSave: (customer: Customer) => void;
   onDelete: (customerId: string) => void;
+  productCategories: ProductCategory[]; // Added this prop
 }
 
-export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProps) {
+export function CustomerTable({ customers, onSave, onDelete, productCategories }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
 
   return (
@@ -80,6 +81,7 @@ export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProp
                           </DropdownMenuItem>
                         }
                         onSave={onSave}
+                        productCategories={productCategories} // Pass productCategories
                       />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"

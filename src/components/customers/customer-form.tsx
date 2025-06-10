@@ -1,10 +1,11 @@
+
 "use client";
 
 import React from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Customer, CustomerType, EmailContactType } from '@/types';
+import type { Customer, CustomerType, EmailContactType, CustomerSpecificMarkup, ProductCategory } from '@/types';
 import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,10 +31,16 @@ import {
 import { Separator } from '@/components/ui/separator';
 
 const emailContactSchema = z.object({
-  id: z.string().optional(), // Keep existing IDs for updates
+  id: z.string().optional(),
   type: z.enum(EMAIL_CONTACT_TYPES as [EmailContactType, ...EmailContactType[]]),
   email: z.string().email("Invalid email address"),
   name: z.string().optional(),
+});
+
+const specificMarkupSchema = z.object({
+  id: z.string(), // Required for useFieldArray key
+  categoryName: z.string().min(1, "Category is required"),
+  markupPercentage: z.coerce.number().min(0, "Markup must be non-negative"),
 });
 
 const customerSchema = z.object({
@@ -50,6 +57,7 @@ const customerSchema = z.object({
     zip: z.string().optional(),
   }).optional(),
   notes: z.string().optional(),
+  specificMarkups: z.array(specificMarkupSchema).optional(),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -58,14 +66,16 @@ interface CustomerFormProps {
   customer?: Customer;
   onSubmit: (data: CustomerFormData) => void;
   onClose?: () => void;
+  productCategories: ProductCategory[];
 }
 
-export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps) {
+export function CustomerForm({ customer, onSubmit, onClose, productCategories = [] }: CustomerFormProps) {
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: customer ? {
       ...customer,
-      emailContacts: customer.emailContacts.map(ec => ({...ec, id: ec.id || crypto.randomUUID()}))
+      emailContacts: customer.emailContacts.map(ec => ({...ec, id: ec.id || crypto.randomUUID()})),
+      specificMarkups: customer.specificMarkups?.map(sm => ({...sm, id: sm.id || crypto.randomUUID() })) || [],
     } : {
       firstName: '',
       lastName: '',
@@ -75,12 +85,18 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
       emailContacts: [{ id: crypto.randomUUID(), type: EMAIL_CONTACT_TYPES[0], email: '', name: '' }],
       address: { street: '', city: '', state: '', zip: '' },
       notes: '',
+      specificMarkups: [],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({
     control: form.control,
     name: "emailContacts",
+  });
+
+  const { fields: markupFields, append: appendMarkup, remove: removeMarkup } = useFieldArray({
+    control: form.control,
+    name: "specificMarkups",
   });
 
   return (
@@ -115,10 +131,10 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
         
         <Separator />
         <h3 className="text-lg font-medium">Email Contacts</h3>
-        {fields.map((item, index) => (
+        {emailFields.map((item, index) => (
           <div key={item.id} className="space-y-2 p-3 border rounded-md relative">
-            {fields.length > 1 && (
-              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => remove(index)}>
+            {emailFields.length > 1 && (
+              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEmail(index)}>
                 <Icon name="Trash2" className="h-4 w-4 text-destructive" />
               </Button>
             )}
@@ -140,7 +156,7 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
             )} />
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => append({ id: crypto.randomUUID(), type: EMAIL_CONTACT_TYPES[0], email: '', name: '' })}>
+        <Button type="button" variant="outline" size="sm" onClick={() => appendEmail({ id: crypto.randomUUID(), type: EMAIL_CONTACT_TYPES[0], email: '', name: '' })}>
           <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Email Contact
         </Button>
 
@@ -160,6 +176,43 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
             <FormItem><FormLabel>Zip Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </div>
+
+        <Separator />
+        <h3 className="text-lg font-medium">Customer Specific Markups (Optional)</h3>
+        {markupFields.map((item, index) => (
+          <div key={item.id} className="space-y-3 p-4 border rounded-md relative">
+            <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7" onClick={() => removeMarkup(index)}>
+              <Icon name="Trash2" className="h-4 w-4 text-destructive" />
+            </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <FormField control={form.control} name={`specificMarkups.${index}.categoryName`} render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Product Category</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {(productCategories || []).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name={`specificMarkups.${index}.markupPercentage`} render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Markup (%)</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" {...field} placeholder="e.g., 10 for 10%" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => appendMarkup({ id: crypto.randomUUID(), categoryName: '', markupPercentage: 0 })}>
+          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Specific Markup Rule
+        </Button>
+        {form.formState.errors.specificMarkups && !form.formState.errors.specificMarkups.root && !markupFields.length && (
+             <p className="text-sm font-medium text-destructive">{form.formState.errors.specificMarkups.message}</p>
+        )}
 
         <Separator />
         <FormField control={form.control} name="notes" render={({ field }) => (

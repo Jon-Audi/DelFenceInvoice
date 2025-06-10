@@ -88,7 +88,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           id: li.id,
           productId: li.productId,
           quantity: li.quantity,
-          unitPrice: li.unitPrice, // Keep existing unit price
+          unitPrice: li.unitPrice,
         })),
         notes: order.notes || '',
       };
@@ -101,10 +101,10 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
-        lineItems: initialData.lineItems.map(li => ({ // Ensure unitPrice is included if converting
+        lineItems: initialData.lineItems.map(li => ({
             productId: li.productId,
             quantity: li.quantity,
-            unitPrice: products.find(p => p.id === li.productId)?.price || 0, // Default from product if not present
+            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
         })),
       };
     } else {
@@ -130,12 +130,14 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
   const watchedLineItems = form.watch('lineItems');
+  const watchedCustomerId = form.watch('customerId');
+
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
     defaultFormValues.lineItems.map(item => {
         if (item.productId) {
@@ -159,6 +161,38 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
      );
   }, [defaultFormValues, form, products]);
 
+  useEffect(() => {
+    if (!watchedCustomerId) return;
+    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+    if (!currentCustomer) return;
+
+    const updatedLineItems = watchedLineItems.map((item, index) => {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) return item;
+
+      let finalPrice = product.price;
+      if (currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === product.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = product.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+      if (item.unitPrice !== finalPrice) {
+        return { ...item, unitPrice: finalPrice };
+      }
+      return item;
+    });
+    
+    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
+        updatedLineItems.forEach((item, index) => {
+            update(index, item);
+        });
+    }
+  }, [watchedCustomerId, customers, products, watchedLineItems, form, update]);
+
 
   const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
@@ -167,7 +201,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }, 0);
   }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal; // Assuming no tax for now
+  const currentTotal = currentSubtotal;
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -191,9 +225,23 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const handleProductSelect = (index: number, productId: string) => {
     const selectedProd = products.find(p => p.id === productId);
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
     if (selectedProd) {
+      let finalPrice = selectedProd.price;
+      if (currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === selectedProd.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = selectedProd.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
+      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -254,7 +302,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                              customer.lastName,
                              customer.companyName,
                              customer.phone,
-                             allEmails
+                             allEmails,
+                             ...(customer.specificMarkups?.map(sm => `${sm.categoryName} ${sm.markupPercentage}%`) || [])
                            ].filter(Boolean).join(' ').toLowerCase();
 
                           return (
@@ -430,7 +479,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                                     onSelect={() => handleProductSelect(index, product.id)}
                                   >
                                     <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                    {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
+                                    {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
                                   </CommandItem>
                                 );
                               })}
@@ -529,4 +578,3 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-    

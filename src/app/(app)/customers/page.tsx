@@ -1,27 +1,31 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { CustomerTable } from '@/components/customers/customer-table';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
-import type { Customer, CustomerType, EmailContactType } from '@/types';
+import type { Customer, CustomerType, EmailContactType, ProductCategory, Product } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES } from '@/lib/constants';
+import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES, INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]); // State to hold products
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>(INITIAL_PRODUCT_CATEGORIES);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
 
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = onSnapshot(collection(db, 'customers'), (snapshot) => {
+    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
       const fetchedCustomers: Customer[] = [];
       snapshot.forEach((docSnap) => {
         const customerData = docSnap.data() as Omit<Customer, 'id'>;
@@ -40,7 +44,35 @@ export default function CustomersPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    setIsLoadingProducts(true);
+    const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const fetchedProducts: Product[] = [];
+      const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
+      snapshot.forEach((docSnap) => {
+        const productData = docSnap.data() as Omit<Product, 'id'>;
+        fetchedProducts.push({ ...productData, id: docSnap.id });
+        if (productData.category) {
+          categoriesFromDb.add(productData.category);
+        }
+      });
+      setProducts(fetchedProducts);
+      setProductCategories(Array.from(categoriesFromDb).sort((a, b) => a.localeCompare(b)));
+      setIsLoadingProducts(false);
+    }, (error) => {
+      console.error("[CustomersPage] Error fetching products:", error);
+      toast({
+        title: "Error Fetching Products",
+        description: "Could not fetch product categories for customer specific markups.",
+        variant: "destructive",
+      });
+      setIsLoadingProducts(false);
+    });
+
+
+    return () => {
+      unsubscribeCustomers();
+      unsubscribeProducts();
+    };
   }, [toast]);
 
   const handleSaveCustomer = async (customerToSave: Customer) => {
@@ -48,7 +80,6 @@ export default function CustomersPage() {
 
     try {
       if (id && customers.some(c => c.id === id)) {
-        // Edit existing customer
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, customerData, { merge: true });
         toast({
@@ -56,7 +87,6 @@ export default function CustomersPage() {
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
         });
       } else {
-        // Add new customer
         const docRef = await addDoc(collection(db, 'customers'), customerData);
         toast({
           title: "Customer Added",
@@ -94,11 +124,9 @@ export default function CustomersPage() {
   const cleanCsvValue = (value: string | undefined): string => {
     if (typeof value !== 'string') return '';
     let cleaned = value.trim();
-    // Remove surrounding quotes if they exist
     if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.substring(1, cleaned.length - 1);
     }
-    // Replace escaped double quotes "" with a single " (common in CSV)
     cleaned = cleaned.replace(/""/g, '"');
     return cleaned;
   };
@@ -133,7 +161,6 @@ export default function CustomersPage() {
     let skippedRowCount = 0;
 
     for (let i = 1; i < lineCount; i++) {
-      // Use regex to split by comma, but ignore commas inside double quotes
       const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
       const customerDataFromCsv: Record<string, string> = {};
       
@@ -178,6 +205,7 @@ export default function CustomersPage() {
           name: `${firstName} ${lastName}` 
         }] : [],
         customerType: CUSTOMER_TYPES[0], 
+        specificMarkups: [], // Initialize with empty specific markups
       };
 
       if (customerDataFromCsv.companyname) {
@@ -204,7 +232,7 @@ export default function CustomersPage() {
         toast({
             title: "CSV Parsed",
             description: toastDescription,
-            variant: skippedRowCount > 0 || (lineCount -1 !== parsedCustomerCount && missingRequiredHeaders.length === 0) ? "default" : "default", // Could be 'warning' if needed
+            variant: skippedRowCount > 0 || (lineCount -1 !== parsedCustomerCount && missingRequiredHeaders.length === 0) ? "default" : "default",
             duration: 8000,
         });
     } else if (lineCount > 1 && missingRequiredHeaders.length === 0) {
@@ -267,7 +295,7 @@ export default function CustomersPage() {
     reader.readAsText(file);
   };
 
-  if (isLoading && customers.length === 0) {
+  if ((isLoading || isLoadingProducts) && customers.length === 0) {
     return (
       <PageHeader title="Customers" description="Loading customer database...">
         <div className="flex items-center justify-center h-32">
@@ -287,25 +315,31 @@ export default function CustomersPage() {
             style={{ display: 'none' }}
             accept=".csv"
             onChange={handleFileChange}
-            disabled={isLoading}
+            disabled={isLoading || isLoadingProducts}
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading || isLoadingProducts}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
           <CustomerDialog
             triggerButton={
-              <Button disabled={isLoading}>
+              <Button disabled={isLoading || isLoadingProducts}>
                 <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
                 Add Customer
               </Button>
             }
             onSave={handleSaveCustomer}
+            productCategories={productCategories}
           />
         </div>
       </PageHeader>
-      <CustomerTable customers={customers} onSave={handleSaveCustomer} onDelete={handleDeleteCustomer} />
-       {customers.length === 0 && !isLoading && (
+      <CustomerTable
+        customers={customers}
+        onSave={handleSaveCustomer}
+        onDelete={handleDeleteCustomer}
+        productCategories={productCategories}
+      />
+       {customers.length === 0 && !isLoading && !isLoadingProducts && (
         <p className="p-4 text-center text-muted-foreground">
           No customers found. Try adding one or importing a CSV.
         </p>
@@ -313,5 +347,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-    

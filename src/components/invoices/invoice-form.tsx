@@ -135,7 +135,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       newPaymentAmount: undefined,
       newPaymentDate: undefined,
       newPaymentMethod: undefined,
-      newPaymentNotes: '', // Default newPaymentNotes to empty string
+      newPaymentNotes: '',
     };
   }, [invoice, initialData, products]);
 
@@ -144,12 +144,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     defaultValues: defaultFormValues,
   });
   
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
   const watchedLineItems = form.watch('lineItems');
+  const watchedCustomerId = form.watch('customerId');
+
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
     defaultFormValues.lineItems.map(item => {
         if (item.productId) {
@@ -172,6 +174,38 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         })
      );
   }, [defaultFormValues, form, products]);
+
+  useEffect(() => {
+    if (!watchedCustomerId) return;
+    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+    if (!currentCustomer) return;
+
+    const updatedLineItems = watchedLineItems.map((item, index) => {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) return item;
+
+      let finalPrice = product.price;
+      if (currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === product.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = product.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+      if (item.unitPrice !== finalPrice) {
+        return { ...item, unitPrice: finalPrice };
+      }
+      return item;
+    });
+
+    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
+        updatedLineItems.forEach((item, index) => {
+            update(index, item);
+        });
+    }
+  }, [watchedCustomerId, customers, products, watchedLineItems, form, update]);
 
 
   const currentInvoiceTotal = useMemo(() => {
@@ -208,9 +242,23 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
   const handleProductSelect = (index: number, productId: string) => {
     const selectedProd = products.find(p => p.id === productId);
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
     if (selectedProd) {
+      let finalPrice = selectedProd.price; 
+      if (currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === selectedProd.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = selectedProd.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); 
+      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true }); 
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -233,7 +281,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
-    if (!invoice && !initialData) {
+    if (!invoice && !initialData) { // For new invoices, reset payment fields for next entry
         form.reset({ 
             ...data, 
             newPaymentAmount: undefined,
@@ -241,7 +289,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             newPaymentMethod: undefined,
             newPaymentNotes: '',
         });
-    } else {
+    } else { // For existing invoices or conversions, just clear new payment fields after submission
         form.setValue('newPaymentAmount', undefined);
         form.setValue('newPaymentDate', undefined);
         form.setValue('newPaymentMethod', undefined);
@@ -290,7 +338,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                              customer.lastName,
                              customer.companyName,
                              customer.phone,
-                             allEmails
+                             allEmails,
+                             ...(customer.specificMarkups?.map(sm => `${sm.categoryName} ${sm.markupPercentage}%`) || [])
                            ].filter(Boolean).join(' ').toLowerCase();
 
                           return (
@@ -422,7 +471,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                                 onSelect={() => handleProductSelect(index, product.id)}
                               >
                                 <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
+                                {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
                               </CommandItem>
                             );
                           })}
@@ -575,4 +624,3 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     </Form>
   );
 }
-

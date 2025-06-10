@@ -38,6 +38,12 @@ export interface EmailContact {
   name?: string;
 }
 
+export interface CustomerSpecificMarkup {
+  id: string; // For React key and potentially Firestore ID if stored as subcollection
+  categoryName: string;
+  markupPercentage: number;
+}
+
 export interface Customer {
   id: string;
   firstName: string;
@@ -53,6 +59,7 @@ export interface Customer {
     zip: string;
   };
   notes?: string;
+  specificMarkups?: CustomerSpecificMarkup[];
 }
 
 export interface LineItem {
@@ -60,7 +67,7 @@ export interface LineItem {
   productId: string;
   productName: string; // Denormalized
   quantity: number;
-  unitPrice: number; // Price of the product at the time of adding
+  unitPrice: number; // Price of the product at the time of adding/calculating
   total: number;
 }
 
@@ -153,6 +160,6 @@ export interface CompanySettings {
   phone?: string;
   email?: string;
   website?: string;
-  logoUrl?: string; // Added logoUrl
+  logoUrl?: string;
   taxId?: string;
 }

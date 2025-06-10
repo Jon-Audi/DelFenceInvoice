@@ -89,7 +89,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         id: li.id,
         productId: li.productId,
         quantity: li.quantity,
-        unitPrice: li.unitPrice, // Keep existing unit price
+        unitPrice: li.unitPrice,
       })),
       notes: estimate.notes || '',
     } : {
@@ -109,12 +109,14 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
 
   const watchedLineItems = form.watch('lineItems');
+  const watchedCustomerId = form.watch('customerId');
+
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
     defaultFormValues.lineItems.map(item => {
         if (item.productId) {
@@ -137,6 +139,41 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         })
      );
   }, [defaultFormValues, form, products]);
+
+  // Recalculate prices if customer changes
+  useEffect(() => {
+    if (!watchedCustomerId) return;
+    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+    if (!currentCustomer) return;
+
+    const updatedLineItems = watchedLineItems.map((item, index) => {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) return item;
+
+      let finalPrice = product.price; // Default product price
+      if (currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === product.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = product.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+      // Only update if the price would actually change, to avoid unnecessary re-renders/validation triggers
+      if (item.unitPrice !== finalPrice) {
+        return { ...item, unitPrice: finalPrice };
+      }
+      return item;
+    });
+
+    // Check if any item actually changed to avoid infinite loop with form.reset
+    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
+        updatedLineItems.forEach((item, index) => {
+            update(index, item); // Use update from useFieldArray
+        });
+    }
+  }, [watchedCustomerId, customers, products, watchedLineItems, form, update]);
 
 
   const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {
@@ -166,9 +203,24 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
   const handleProductSelect = (index: number, productId: string) => {
     const selectedProd = products.find(p => p.id === productId);
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
     if (selectedProd) {
+      let finalPrice = selectedProd.price; // Default product price
+
+      if (currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === selectedProd.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = selectedProd.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
+      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -191,12 +243,27 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
   const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
     const newFilterEntries: (string | undefined)[] = [];
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
     itemsToAdd.forEach(item => {
       const productDetails = products.find(p => p.id === item.productId);
+      let finalPrice = productDetails?.price || 0;
+
+      if (productDetails && currentCustomer && currentCustomer.specificMarkups && currentCustomer.specificMarkups.length > 0) {
+        const customerMarkupRule = currentCustomer.specificMarkups.find(
+          (markup) => markup.categoryName === productDetails.category
+        );
+        if (customerMarkupRule) {
+          finalPrice = productDetails.cost * (1 + customerMarkupRule.markupPercentage / 100);
+        }
+      }
+      finalPrice = parseFloat(finalPrice.toFixed(2));
+
       append({
         productId: item.productId,
         quantity: item.quantity,
-        unitPrice: productDetails?.price || 0,
+        unitPrice: finalPrice,
       });
       newFilterEntries.push(productDetails?.category);
     });
@@ -219,7 +286,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     }, 0);
   }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal; // Assuming no tax for now
+  const currentTotal = currentSubtotal;
 
   return (
     <Form {...form}>
@@ -262,7 +329,8 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                               customer.lastName,
                               customer.companyName,
                               customer.phone,
-                              allEmails
+                              allEmails,
+                              ...(customer.specificMarkups?.map(sm => `${sm.categoryName} ${sm.markupPercentage}%`) || [])
                             ].filter(Boolean).join(' ').toLowerCase();
 
                             return (
@@ -411,7 +479,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                                     onSelect={() => handleProductSelect(index, product.id)}
                                   >
                                     <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                    {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
+                                    {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
                                   </CommandItem>
                                 );
                               })}
@@ -519,6 +587,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
           isOpen={isNewCustomerDialogOpen}
           onOpenChange={setIsNewCustomerDialogOpen}
           onSave={handleSaveNewCustomerFromEstimateForm}
+          productCategories={productCategories}
         />
       )}
       {isBulkAddDialogOpen && (
@@ -533,4 +602,3 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     </Form>
   );
 }
-    
