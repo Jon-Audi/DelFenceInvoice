@@ -88,7 +88,7 @@ const invoiceFormSchema = z.object({
     return true;
 }, {
     message: "Payment date and method are required if payment amount is entered.",
-    path: ["newPaymentMethod"], 
+    path: ["newPaymentMethod"],
 });
 
 export type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
@@ -104,48 +104,65 @@ interface InvoiceFormProps {
 }
 
 export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products, productCategories = [] }: InvoiceFormProps) {
-  const defaultFormValues = useMemo((): InvoiceFormData => {
-    let baseValues: Omit<InvoiceFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
+  const form = useForm<InvoiceFormData>({
+    resolver: zodResolver(invoiceFormSchema),
+    // Default values will be set by the useEffect hook based on props
+  });
 
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: "lineItems",
+  });
+
+  const watchedLineItems = form.watch('lineItems');
+  const watchedCustomerId = form.watch('customerId');
+
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
+
+  // Effect to reset form and initialize when invoice or initialData props change
+  useEffect(() => {
+    let currentDefaultValues: InvoiceFormData;
     if (invoice) {
-      baseValues = {
+      currentDefaultValues = {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         customerId: invoice.customerId,
         date: new Date(invoice.date),
         dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
         status: invoice.status,
-        poNumber: invoice.poNumber ?? '', 
-        lineItems: invoice.lineItems.map(li => ({ 
-            id: li.id, 
+        poNumber: invoice.poNumber ?? '',
+        lineItems: invoice.lineItems.map(li => ({
+            id: li.id,
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
-            unitPrice: li.unitPrice, 
+            unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
         })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
+        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
       };
     } else if (initialData) {
-      baseValues = {
-        ...initialData, 
-        poNumber: initialData.poNumber ?? '', 
+      currentDefaultValues = {
+        ...initialData,
+        poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
         lineItems: initialData.lineItems.map(li => ({
             id: li.id,
             productId: li.productId,
-            productName: li.productName, // Directly use the pre-populated value
+            productName: li.productName,
             quantity: li.quantity,
-            unitPrice: li.unitPrice,   // Directly use the pre-populated value
+            unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
         })),
+        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
       };
     } else {
-      baseValues = {
+      currentDefaultValues = {
         id: undefined,
         invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
         customerId: '',
@@ -156,71 +173,25 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
+        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
       };
     }
-
-    return {
-      ...baseValues,
-      newPaymentAmount: undefined,
-      newPaymentDate: undefined,
-      newPaymentMethod: undefined,
-      newPaymentNotes: '',
-    };
-  }, [invoice, initialData]);
-
-  const form = useForm<InvoiceFormData>({
-    resolver: zodResolver(invoiceFormSchema),
-    defaultValues: defaultFormValues,
-  });
-  
-  const { fields, append, remove, update } = useFieldArray({
-    control: form.control,
-    name: "lineItems",
-  });
-
-  const watchedLineItems = form.watch('lineItems');
-  const watchedCustomerId = form.watch('customerId');
-
-  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
-    defaultFormValues.lineItems.map(item => {
-        if (!item.isNonStock && item.productId) {
-            const product = products.find(p => p.id === item.productId);
-            return product?.category;
+    form.reset(currentDefaultValues);
+    // Initialize category filters based on the newly reset line items
+    setLineItemCategoryFilters(
+      currentDefaultValues.lineItems.map(item => {
+        if (!item.isNonStock && item.productId && products.length > 0) {
+          const product = products.find(p => p.id === item.productId);
+          return product?.category;
         }
         return undefined;
-    })
-  );
+      })
+    );
+  }, [invoice, initialData, form.reset, products]); // products is needed here for initial category filter setup
 
+  // Effect to update unit prices based on customer-specific markups
   useEffect(() => {
-    form.reset(defaultFormValues);
-     setLineItemCategoryFilters(
-        defaultFormValues.lineItems.map(item => {
-            if (!item.isNonStock && item.productId) {
-                const product = products.find(p => p.id === item.productId);
-                return product?.category;
-            }
-            return undefined;
-        })
-     );
-  }, [defaultFormValues, form, products]);
-
-  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
-    let finalPrice = product.price; 
-    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
-      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
-      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
-
-      if (specificRule) {
-        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
-      } else if (allCategoriesRule) {
-        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
-      }
-    }
-    return parseFloat(finalPrice.toFixed(2));
-  };
-
-  useEffect(() => {
-    if (!watchedCustomerId) return;
+    if (!watchedCustomerId || !products || products.length === 0) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
     const updatedLineItems = watchedLineItems.map((item) => {
@@ -231,7 +202,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
       const newUnitPrice = calculateUnitPrice(product, currentCustomer);
 
-      if (item.unitPrice !== newUnitPrice) {
+      if (item.unitPrice !== newUnitPrice) { // Only update if price logic dictates a change
         return { ...item, unitPrice: newUnitPrice };
       }
       return item;
@@ -244,6 +215,36 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     }
   }, [watchedCustomerId, customers, products, watchedLineItems, update]);
 
+
+  // Effect to update category filters when lineItems or products change
+  // This is separate to ensure filters are correct after dynamic additions/removals or product data loading.
+  useEffect(() => {
+    const currentFormLineItems = form.getValues('lineItems') || [];
+    setLineItemCategoryFilters(
+        currentFormLineItems.map(item => {
+            if (!item.isNonStock && item.productId && products.length > 0) {
+                const product = products.find(p => p.id === item.productId);
+                return product?.category;
+            }
+            return undefined;
+        })
+    );
+  }, [watchedLineItems, products, form]); // watchedLineItems ensures it runs after line items state is updated
+
+  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
+    let finalPrice = product.price;
+    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
+      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
+      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
+
+      if (specificRule) {
+        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
+      } else if (allCategoriesRule) {
+        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
+      }
+    }
+    return parseFloat(finalPrice.toFixed(2));
+  };
 
   const currentInvoiceTotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
@@ -286,10 +287,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     const currentCustomer = customers.find(c => c.id === currentCustomerId);
 
     if (selectedProd) {
-      const finalPrice = calculateUnitPrice(selectedProd, currentCustomer); 
+      const finalPrice = calculateUnitPrice(selectedProd, currentCustomer);
       form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
       form.setValue(`lineItems.${index}.productName`, selectedProd.name);
-      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true }); 
+      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -299,7 +300,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     form.trigger(`lineItems.${index}.productId`);
     form.trigger(`lineItems.${index}.unitPrice`);
   };
-  
+
   const addLineItem = () => {
     append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
@@ -309,20 +310,20 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
-  
+
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
   };
-  
+
   const handleNonStockToggle = (index: number, checked: boolean) => {
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
-      form.setValue(`lineItems.${index}.productId`, undefined); 
-      form.setValue(`lineItems.${index}.unitPrice`, 0); 
-      form.trigger(`lineItems.${index}.productName`); 
+      form.setValue(`lineItems.${index}.productId`, undefined);
+      form.setValue(`lineItems.${index}.unitPrice`, 0);
+      form.trigger(`lineItems.${index}.productName`);
       form.trigger(`lineItems.${index}.unitPrice`);
     } else {
-      form.setValue(`lineItems.${index}.productName`, ''); 
+      form.setValue(`lineItems.${index}.productName`, '');
     }
   };
 
@@ -358,8 +359,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                       <CommandEmpty>No customer found.</CommandEmpty>
                       <CommandGroup>
                         {customers.map((customer) => {
-                           const displayName = customer.companyName ? 
-                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` : 
+                           const displayName = customer.companyName ?
+                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` :
                                `${customer.firstName} ${customer.lastName}`;
                            const allEmails = customer.emailContacts?.map(ec => ec.email).join(' ') || '';
                            const searchableValue = [
@@ -373,7 +374,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
                           return (
                             <CommandItem
-                              value={searchableValue}
+                              value={searchableValue} // Use a combined searchable string
                               key={customer.id}
                               onSelect={() => {
                                 form.setValue("customerId", customer.id, { shouldValidate: true });
@@ -393,7 +394,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </FormItem>
           )}
         />
-        
+
         <FormField control={form.control} name="poNumber" render={({ field }) => (
           <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
         )} />
@@ -439,7 +440,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             <FormMessage />
           </FormItem>
         )} />
-        
+
         <FormField control={form.control} name="paymentTerms" render={({ field }) => (
           <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} placeholder="e.g., Due on receipt, NET 30" /></FormControl><FormMessage /></FormItem>
         )} />
@@ -579,8 +580,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                 />
                 <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field: qtyField }) => (
                     <FormItem><FormLabel>Quantity</FormLabel><FormControl>
-                        <Input 
-                            type="number" 
+                        <Input
+                            type="number"
                             {...qtyField}
                             value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                             onChange={(e) => {
@@ -622,7 +623,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             )}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-        
+
         <Separator />
         <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
