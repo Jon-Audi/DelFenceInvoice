@@ -32,7 +32,7 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
-import { BulkAddProductsDialog } from './bulk-add-products-dialog'; // Import the new dialog
+import { BulkAddProductsDialog } from './bulk-add-products-dialog';
 
 const ESTIMATE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Voided'>[] = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
@@ -71,7 +71,7 @@ interface EstimateFormProps {
 export function EstimateForm({ estimate, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
-  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false); // State for bulk add dialog
+  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
 
   useEffect(() => {
     setCustomers(initialCustomers);
@@ -126,33 +126,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
   );
 
   useEffect(() => {
-    const newCalculatedFilters = watchedLineItems.map(item => {
-      if (item.productId) {
-        const product = products.find(p => p.id === item.productId);
-        return product?.category;
-      }
-      return undefined;
-    });
-
-    let needsUpdate = false;
-    if (newCalculatedFilters.length !== lineItemCategoryFilters.length) {
-      needsUpdate = true;
-    } else {
-      for (let i = 0; i < newCalculatedFilters.length; i++) {
-        if (newCalculatedFilters[i] !== lineItemCategoryFilters[i]) {
-          needsUpdate = true;
-          break;
-        }
-      }
-    }
-
-    if (needsUpdate) {
-      setLineItemCategoryFilters(newCalculatedFilters);
-    }
-  }, [watchedLineItems, products, lineItemCategoryFilters.length]);
-
-
-  useEffect(() => {
     form.reset(defaultFormValues);
      setLineItemCategoryFilters(
         defaultFormValues.lineItems.map(item => {
@@ -186,7 +159,6 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
-    // Reset product selection for this line item when category filter changes
     const currentItem = form.getValues(`lineItems.${index}`);
     update(index, { ...currentItem, productId: '', unitPrice: 0 });
     form.trigger(`lineItems.${index}.productId`);
@@ -233,7 +205,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     }, 0);
   }, [watchedLineItems, products]);
 
-  const currentTotal = currentSubtotal; // Assuming no tax for now
+  const currentTotal = currentSubtotal;
 
   return (
     <Form {...form}>
