@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; 
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { PrintablePriceSheet } from '@/components/products/printable-price-sheet';
+import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; // New import
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -26,6 +27,7 @@ export default function ProductsPage() {
   const [productsForPrinting, setProductsForPrinting] = useState<Map<string, Product[]> | null>(null);
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+  const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -447,14 +449,7 @@ export default function ProductsPage() {
     products.forEach(product => {
       const category = product.category || 'Uncategorized'; 
       if (!groups.has(category)) {
-        // This case might occur if a product's category was somehow not added to productCategories state
-        // For robustness, add it now.
         groups.set(category, []);
-        if (!productCategories.includes(category)) {
-          // console.warn(`Discovered new category "${category}" from product data. Consider updating INITIAL_PRODUCT_CATEGORIES or category management logic.`);
-          // Optionally, update productCategories state here, but might cause re-renders.
-          // For now, just ensure the group exists for this render pass.
-        }
       }
       groups.get(category)!.push(product);
     });
@@ -474,7 +469,7 @@ export default function ProductsPage() {
     setIsLoadingCompanySettings(true);
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-      const docSnap = await getFirestoreDoc(docRef); // Use getFirestoreDoc
+      const docSnap = await getFirestoreDoc(docRef); 
       if (docSnap.exists()) {
         return docSnap.data() as CompanySettings;
       }
@@ -489,18 +484,31 @@ export default function ProductsPage() {
     }
   };
 
-  const handlePrintPriceSheet = async () => {
-    if (groupedProducts.size === 0) {
-      toast({ title: "No Products", description: "There are no products to print.", variant: "default" });
+  const handlePrintPriceSheet = async (selectedCategories: string[]) => {
+    if (selectedCategories.length === 0) {
+      toast({ title: "No Categories Selected", description: "Please select at least one category to print.", variant: "default" });
       return;
     }
     const settings = await fetchCompanySettings();
     if (settings) {
+      const filteredGroupedProducts = new Map<string, Product[]>();
+      selectedCategories.forEach(categoryName => {
+        if (groupedProducts.has(categoryName)) {
+          filteredGroupedProducts.set(categoryName, groupedProducts.get(categoryName)!);
+        }
+      });
+
+      if (filteredGroupedProducts.size === 0) {
+        toast({ title: "No Products in Selected Categories", description: "No products found in the chosen categories to print.", variant: "default" });
+        return;
+      }
+
       setCompanySettingsForPrinting(settings);
-      setProductsForPrinting(groupedProducts);
+      setProductsForPrinting(filteredGroupedProducts);
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
+    setIsSelectCategoriesDialogOpen(false); // Close dialog after attempting to prepare print
   };
 
   const handlePrintedPriceSheet = React.useCallback(() => {
@@ -551,7 +559,7 @@ export default function ProductsPage() {
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={handlePrintPriceSheet} disabled={isLoading || products.length === 0}>
+          <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print Price Sheet
           </Button>
@@ -582,6 +590,15 @@ export default function ProductsPage() {
         <p className="p-4 text-center text-muted-foreground">
           No products found. Try adding one or importing a CSV.
         </p>
+      )}
+
+      {isSelectCategoriesDialogOpen && (
+        <SelectCategoriesDialog
+          isOpen={isSelectCategoriesDialogOpen}
+          onOpenChange={setIsSelectCategoriesDialogOpen}
+          allCategories={productCategories}
+          onSubmit={handlePrintPriceSheet}
+        />
       )}
 
       <div className="print-only-container">
