@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { ProductTable } from '@/components/products/product-table';
 import { ProductDialog } from '@/components/products/product-dialog';
-import type { Product } from '@/types';
+import type { Product, CompanySettings } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; // Import firebaseAuthInstance
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; 
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc } from 'firebase/firestore';
+import { PrintablePriceSheet } from '@/components/products/printable-price-sheet';
+
+const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,6 +22,11 @@ export default function ProductsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+
+  const [productsForPrinting, setProductsForPrinting] = useState<Map<string, Product[]> | null>(null);
+  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
+  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+
 
   useEffect(() => {
     setIsLoading(true);
@@ -70,7 +78,6 @@ export default function ProductsPage() {
 
     const { id, ...restOfProductData } = productToSave;
 
-    // Prepare data for Firestore, explicitly excluding 'description' if it's undefined
     const dataForFirestore: Omit<Product, 'id'> = {
       name: restOfProductData.name,
       category: restOfProductData.category,
@@ -83,9 +90,7 @@ export default function ProductsPage() {
     if (restOfProductData.description !== undefined) {
       dataForFirestore.description = restOfProductData.description;
     }
-    // If restOfProductData.description is undefined, it won't be added to dataForFirestore,
-    // so Firestore won't see an undefined field.
-
+    
     const currentUser = firebaseAuthInstance.currentUser;
     if (!currentUser) {
       toast({
@@ -100,13 +105,13 @@ export default function ProductsPage() {
       setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
         const productRef = doc(db, 'products', id);
-        await setDoc(productRef, dataForFirestore); // Use dataForFirestore
+        await setDoc(productRef, dataForFirestore); 
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
         });
       } else {
-        const docRef = await addDoc(collection(db, 'products'), dataForFirestore); // Use dataForFirestore
+        const docRef = await addDoc(collection(db, 'products'), dataForFirestore); 
         toast({
           title: "Product Added",
           description: `Product ${productToSave.name} has been added with ID: ${docRef.id}.`,
@@ -205,7 +210,6 @@ export default function ProductsPage() {
     });
   };
 
-
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
     const newProductsData: Omit<Product, 'id'>[] = [];
     const lines = csvData.trim().split(/\r\n|\n/);
@@ -270,7 +274,6 @@ export default function ProductsPage() {
       if (markupPercentageStr === undefined) { missingFieldsForRow.push('markuppercentage'); rowIsValid = false; }
 
       if (!rowIsValid) {
-        // console.warn(`Skipping CSV row ${i+1}: missing required field(s): ${missingFieldsForRow.join(', ')}. Row data: ${lines[i]}`);
         skippedRowCount++;
         continue; 
       }
@@ -279,9 +282,9 @@ export default function ProductsPage() {
       const cost = parseFloat(costStr);
       const markupPercentage = parseFloat(markupPercentageStr || "0");
 
-      if (isNaN(price)) { /* console.warn(`Skipping CSV row ${i+1}: 'price' ("${priceStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
-      if (isNaN(cost)) { /* console.warn(`Skipping CSV row ${i+1}: 'cost' ("${costStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
-      if (isNaN(markupPercentage)) { /* console.warn(`Skipping CSV row ${i+1}: 'markupPercentage' ("${productDataFromCsv.markuppercentage}" -> "${markupPercentageStr}") is not a valid number. Row data: ${lines[i]}`); */ skippedRowCount++; continue; }
+      if (isNaN(price)) { skippedRowCount++; continue; }
+      if (isNaN(cost)) { skippedRowCount++; continue; }
+      if (isNaN(markupPercentage)) { skippedRowCount++; continue; }
       
       const trimmedCategory = category.trim();
       
@@ -346,7 +349,6 @@ export default function ProductsPage() {
             const batch = writeBatch(db);
             parsedProducts.forEach(productDataFromCsv => { 
               const newDocRef = doc(collection(db, 'products'));
-              // Ensure description is not undefined when writing to Firestore
               const productToWrite: Partial<Product> = { ...productDataFromCsv };
               if (productToWrite.description === undefined) {
                 delete productToWrite.description;
@@ -445,24 +447,80 @@ export default function ProductsPage() {
     products.forEach(product => {
       const category = product.category || 'Uncategorized'; 
       if (!groups.has(category)) {
-        groups.set(category, []); // Should not happen if productCategories is up-to-date
+        // This case might occur if a product's category was somehow not added to productCategories state
+        // For robustness, add it now.
+        groups.set(category, []);
+        if (!productCategories.includes(category)) {
+          // console.warn(`Discovered new category "${category}" from product data. Consider updating INITIAL_PRODUCT_CATEGORIES or category management logic.`);
+          // Optionally, update productCategories state here, but might cause re-renders.
+          // For now, just ensure the group exists for this render pass.
+        }
       }
       groups.get(category)!.push(product);
     });
-    // Sort categories: those with products first, then alphabetically.
-    // Then sort empty categories alphabetically.
     return new Map([...groups.entries()].sort(([catA, prodsA], [catB, prodsB]) => {
         const hasProdsA = prodsA.length > 0;
         const hasProdsB = prodsB.length > 0;
 
-        if (hasProdsA && !hasProdsB) return -1; // A comes before B
-        if (!hasProdsA && hasProdsB) return 1;  // B comes before A
+        if (hasProdsA && !hasProdsB) return -1; 
+        if (!hasProdsA && hasProdsB) return 1;  
         
-        // If both have products or both are empty, sort alphabetically
         return catA.localeCompare(catB);
     }));
   }, [products, productCategories]);
   
+
+  const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
+    setIsLoadingCompanySettings(true);
+    try {
+      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+      const docSnap = await getFirestoreDoc(docRef); // Use getFirestoreDoc
+      if (docSnap.exists()) {
+        return docSnap.data() as CompanySettings;
+      }
+      toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
+      return null;
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
+      return null;
+    } finally {
+      setIsLoadingCompanySettings(false);
+    }
+  };
+
+  const handlePrintPriceSheet = async () => {
+    if (groupedProducts.size === 0) {
+      toast({ title: "No Products", description: "There are no products to print.", variant: "default" });
+      return;
+    }
+    const settings = await fetchCompanySettings();
+    if (settings) {
+      setCompanySettingsForPrinting(settings);
+      setProductsForPrinting(groupedProducts);
+    } else {
+      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+    }
+  };
+
+  const handlePrintedPriceSheet = React.useCallback(() => {
+    setProductsForPrinting(null);
+    setCompanySettingsForPrinting(null);
+  }, []);
+
+
+  useEffect(() => {
+    if (productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+          handlePrintedPriceSheet(); 
+        });
+      });
+    }
+  }, [productsForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrintedPriceSheet]);
+
+
   if (isLoading && products.length === 0) { 
     return (
       <PageHeader title="Products" description="Loading product inventory...">
@@ -476,7 +534,7 @@ export default function ProductsPage() {
   return (
     <>
       <PageHeader title="Products" description="Manage your product inventory.">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             type="file"
             ref={fileInputRef}
@@ -492,6 +550,10 @@ export default function ProductsPage() {
           <Button variant="outline" onClick={handleExportCsv} disabled={isLoading || products.length === 0}>
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
+          </Button>
+          <Button variant="outline" onClick={handlePrintPriceSheet} disabled={isLoading || products.length === 0}>
+            <Icon name="Printer" className="mr-2 h-4 w-4" />
+            Print Price Sheet
           </Button>
           <ProductDialog 
             triggerButton={
@@ -516,7 +578,26 @@ export default function ProductsPage() {
         onApplyCategoryMarkup={handleApplyCategoryMarkup}
         onDeleteCategory={handleDeleteCategory}
       />
+       {groupedProducts.size === 0 && !isLoading && (
+        <p className="p-4 text-center text-muted-foreground">
+          No products found. Try adding one or importing a CSV.
+        </p>
+      )}
+
+      <div className="print-only-container">
+        {(productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
+          <PrintablePriceSheet
+            groupedProducts={productsForPrinting}
+            companySettings={companySettingsForPrinting}
+          />
+        )}
+      </div>
+       {(isLoadingCompanySettings && productsForPrinting) && ( 
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
+            <p className="ml-2 text-white">Preparing price sheet...</p>
+        </div>
+      )}
     </>
   );
 }
-
