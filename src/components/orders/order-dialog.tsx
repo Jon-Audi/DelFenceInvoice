@@ -54,14 +54,15 @@ export function OrderDialog({
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
-      const unitPrice = product ? product.price : 0;
+      // Use unitPrice from form; fallback to product price if undefined
+      const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (product ? product.price : 0);
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
         productName: product?.name || 'Unknown Product',
         quantity: item.quantity,
-        unitPrice: unitPrice,
-        total: item.quantity * unitPrice,
+        unitPrice: finalUnitPrice,
+        total: item.quantity * finalUnitPrice,
       };
     });
 

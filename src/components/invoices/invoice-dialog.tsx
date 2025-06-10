@@ -53,14 +53,15 @@ export function InvoiceDialog({
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const productDetails = products.find(p => p.id === item.productId);
-      const unitPrice = productDetails ? productDetails.price : 0;
+      // Use unitPrice from form; fallback to product price if undefined
+      const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (productDetails ? productDetails.price : 0);
       return {
         id: item.id || crypto.randomUUID(),
         productId: item.productId,
         productName: productDetails?.name || 'Unknown Product',
         quantity: item.quantity,
-        unitPrice: unitPrice,
-        total: item.quantity * unitPrice,
+        unitPrice: finalUnitPrice,
+        total: item.quantity * finalUnitPrice,
       };
     });
 
@@ -91,8 +92,10 @@ export function InvoiceDialog({
         } else if (totalAmountPaid > 0 && balanceDue > 0) {
             newStatus = 'Partially Paid';
         } else if (totalAmountPaid === 0 && formData.status !== 'Draft' && formData.status !== 'Sent') {
-            newStatus = invoice?.status === 'Sent' ? 'Sent' : 'Draft';
+            // If no payments and status isn't draft/sent, it becomes draft (unless it was 'Sent' before payment was removed)
+             newStatus = (invoice?.status === 'Sent' && formData.status !== 'Voided' && !formData.newPaymentAmount) ? 'Sent' : 'Draft';
         }
+        // If user explicitly set to Draft, Sent, or Voided, respect that unless payment status overrides
         if (formData.status === 'Draft' || formData.status === 'Sent' || formData.status === 'Voided') {
             if (newStatus !== 'Paid' && newStatus !== 'Partially Paid') { 
                 newStatus = formData.status;

@@ -40,6 +40,7 @@ const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
+  unitPrice: z.coerce.number().min(0, "Unit price must be non-negative").optional(),
 });
 
 const orderFormSchema = z.object({
@@ -87,6 +88,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           id: li.id,
           productId: li.productId,
           quantity: li.quantity,
+          unitPrice: li.unitPrice, // Keep existing unit price
         })),
         notes: order.notes || '',
       };
@@ -99,6 +101,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
+        lineItems: initialData.lineItems.map(li => ({ // Ensure unitPrice is included if converting
+            productId: li.productId,
+            quantity: li.quantity,
+            unitPrice: products.find(p => p.id === li.productId)?.price || 0, // Default from product if not present
+        })),
       };
     } else {
       return {
@@ -109,14 +116,14 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         status: 'Draft',
         orderState: 'Open',
         poNumber: '',
-        lineItems: [{ productId: '', quantity: 1 }],
+        lineItems: [{ productId: '', quantity: 1, unitPrice: 0 }],
         notes: '',
         expectedDeliveryDate: undefined,
         readyForPickUpDate: undefined,
         pickedUpDate: undefined,
       };
     }
-  }, [order, initialData]);
+  }, [order, initialData, products]);
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
@@ -152,22 +159,15 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
      );
   }, [defaultFormValues, form, products]);
 
-  const calculateSubtotal = React.useCallback(() => {
+
+  const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product ? product.price : 0;
+      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       return acc + (price * (item.quantity || 0));
     }, 0);
-  }, [watchedLineItems, products]);
+  }, [watchedLineItems]);
 
-  const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0);
-
-  useEffect(() => {
-    const newSubtotal = calculateSubtotal();
-    setSubtotal(newSubtotal);
-    setTotal(newSubtotal); 
-  }, [watchedLineItems, calculateSubtotal]);
+  const currentTotal = currentSubtotal; // Assuming no tax for now
 
   const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
     const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
@@ -177,6 +177,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       return newFilters;
     });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
 
@@ -189,9 +190,10 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const handleProductSelect = (index: number, productId: string) => {
-    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
     const selectedProd = products.find(p => p.id === productId);
     if (selectedProd) {
+      form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -199,22 +201,17 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       });
     }
     form.trigger(`lineItems.${index}.productId`);
+    form.trigger(`lineItems.${index}.unitPrice`);
   };
 
   const addLineItem = () => {
-    append({ productId: '', quantity: 1 });
+    append({ productId: '', quantity: 1, unitPrice: 0 });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
   const removeLineItem = (index: number) => {
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleQuantityChange = (index: number, quantityStr: string) => {
-     const quantity = parseInt(quantityStr, 10);
-     form.setValue(`lineItems.${index}.quantity`, isNaN(quantity) || quantity < 1 ? 1 : quantity, { shouldValidate: true });
-     form.trigger(`lineItems.${index}.quantity`);
   };
 
   return (
@@ -375,10 +372,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         <h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
           const currentLineItem = watchedLineItems[index];
-          const selectedProductDetails = currentLineItem ? products.find(p => p.id === currentLineItem.productId) : undefined;
-          const unitPriceForDisplay = selectedProductDetails ? selectedProductDetails.price : 0;
           const quantity = currentLineItem?.quantity || 0;
-          const lineTotal = unitPriceForDisplay * quantity;
+          const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
+          const lineTotal = unitPrice * quantity;
           const filteredProductsForLine = getFilteredProducts(index);
 
           return (
@@ -431,9 +427,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                                   <CommandItem
                                     value={searchableValue}
                                     key={product.id}
-                                    onSelect={() => {
-                                      handleProductSelect(index, product.id);
-                                    }}
+                                    onSelect={() => handleProductSelect(index, product.id)}
                                   >
                                     <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
                                     {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
@@ -450,10 +444,31 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 )}
               />
               <div className="grid grid-cols-3 gap-4 items-end">
-                <FormItem>
-                  <FormLabel>Unit Price</FormLabel>
-                  <Input type="text" readOnly value={unitPriceForDisplay > 0 ? `$${unitPriceForDisplay.toFixed(2)}` : '-'} className="bg-muted" />
-                </FormItem>
+                 <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.unitPrice`}
+                  render={({ field: priceField }) => (
+                    <FormItem>
+                      <FormLabel>Unit Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...priceField}
+                           value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
+                           onChange={(e) => {
+                            const val = e.target.value;
+                            const num = parseFloat(val);
+                            priceField.onChange(isNaN(num) ? undefined : num);
+                           }}
+                          disabled={!watchedLineItems[index]?.productId}
+                          placeholder="0.00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name={`lineItems.${index}.quantity`}
@@ -463,11 +478,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                       <FormControl>
                         <Input
                           type="number"
-                          ref={qtyField.ref}
-                          name={qtyField.name}
-                          onBlur={qtyField.onBlur}
-                          value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
-                          onChange={(e) => handleQuantityChange(index, e.target.value)}
+                          {...qtyField}
+                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
+                           onChange={(e) => {
+                            const val = e.target.value;
+                            const num = parseInt(val, 10);
+                            qtyField.onChange(isNaN(num) ? undefined : num);
+                           }}
                           min="1"
                           disabled={!watchedLineItems[index]?.productId}
                         />
@@ -494,11 +511,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         <Separator />
         <div className="flex justify-end space-x-4 text-lg font-semibold">
           <span>Subtotal:</span>
-          <span>${subtotal.toFixed(2)}</span>
+          <span>${currentSubtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-end space-x-4 text-xl font-bold">
           <span>Total:</span>
-          <span>${total.toFixed(2)}</span>
+          <span>${currentTotal.toFixed(2)}</span>
         </div>
 
         <FormField control={form.control} name="notes" render={({ field }) => (

@@ -41,6 +41,7 @@ const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
+  unitPrice: z.coerce.number().min(0, "Unit price must be non-negative").optional(),
 });
 
 const invoiceFormSchema = z.object({
@@ -93,7 +94,12 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         dueDate: invoice.dueDate ? new Date(invoice.dueDate) : undefined,
         status: invoice.status,
         poNumber: invoice.poNumber ?? '', 
-        lineItems: invoice.lineItems.map(li => ({ id: li.id, productId: li.productId, quantity: li.quantity })),
+        lineItems: invoice.lineItems.map(li => ({ 
+            id: li.id, 
+            productId: li.productId, 
+            quantity: li.quantity,
+            unitPrice: li.unitPrice, // Keep existing unit price
+        })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
       };
@@ -103,6 +109,11 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         poNumber: initialData.poNumber ?? '', 
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
+        lineItems: initialData.lineItems.map(li => ({
+            productId: li.productId,
+            quantity: li.quantity,
+            unitPrice: products.find(p => p.id === li.productId)?.price || 0, // Default from product
+        })),
       };
     } else {
       baseValues = {
@@ -112,7 +123,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         date: new Date(),
         status: 'Draft',
         poNumber: '',
-        lineItems: [{ productId: '', quantity: 1 }],
+        lineItems: [{ productId: '', quantity: 1, unitPrice: 0 }],
         paymentTerms: 'Due on receipt',
         notes: '',
         dueDate: undefined,
@@ -126,7 +137,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       newPaymentMethod: undefined,
       newPaymentNotes: undefined,
     };
-  }, [invoice, initialData]);
+  }, [invoice, initialData, products]);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
@@ -165,11 +176,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
   const currentInvoiceTotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product ? product.price : 0;
+      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       return acc + (price * (item.quantity || 0));
     }, 0);
-  }, [watchedLineItems, products]);
+  }, [watchedLineItems]);
 
   const amountAlreadyPaid = invoice?.amountPaid || 0;
   const newPaymentAmount = form.watch("newPaymentAmount") || 0;
@@ -184,6 +194,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       return newFilters;
     });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
 
@@ -196,9 +207,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
 
   const handleProductSelect = (index: number, productId: string) => {
-    form.setValue(`lineItems.${index}.productId`, productId, { shouldValidate: true });
     const selectedProd = products.find(p => p.id === productId);
     if (selectedProd) {
+      form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
       setLineItemCategoryFilters(prevFilters => {
         const newFilters = [...prevFilters];
         newFilters[index] = selectedProd.category;
@@ -206,10 +218,11 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       });
     }
     form.trigger(`lineItems.${index}.productId`);
+    form.trigger(`lineItems.${index}.unitPrice`);
   };
   
   const addLineItem = () => {
-    append({ productId: '', quantity: 1 });
+    append({ productId: '', quantity: 1, unitPrice: 0 });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -217,22 +230,31 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
-
-  const handleQuantityChange = (index: number, quantityStr: string) => {
-     const quantity = parseInt(quantityStr, 10);
-     form.setValue(`lineItems.${index}.quantity`, isNaN(quantity) || quantity < 1 ? 1 : quantity, { shouldValidate: true });
-     form.trigger(`lineItems.${index}.quantity`);
-  };
   
   const handleFormSubmit = (data: InvoiceFormData) => {
     onSubmit(data);
-    form.reset({ 
-        ...data, 
-        newPaymentAmount: undefined,
-        newPaymentDate: undefined,
-        newPaymentMethod: undefined,
-        newPaymentNotes: undefined,
-    });
+    // Do not reset payment fields here if it's an edit,
+    // or if you want them to persist for another quick payment.
+    // Only reset if it's a NEW invoice or explicitly cleared by user.
+    // For simplicity, if it's a save of an existing invoice, let's not clear them.
+    // If it was a new invoice (initialData was null and invoice was null), then clear.
+    if (!invoice && !initialData) {
+        form.reset({ 
+            ...data, 
+            newPaymentAmount: undefined,
+            newPaymentDate: undefined,
+            newPaymentMethod: undefined,
+            newPaymentNotes: undefined,
+        });
+    } else {
+        // For edits, just update the form state without clearing payment fields,
+        // as they might be part of the 'current' save operation.
+        // The main `onSave` in dialog will handle final state.
+        form.setValue('newPaymentAmount', undefined);
+        form.setValue('newPaymentDate', undefined);
+        form.setValue('newPaymentMethod', undefined);
+        form.setValue('newPaymentNotes', '');
+    }
   };
 
 
@@ -356,10 +378,9 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
           const currentLineItem = watchedLineItems[index];
-          const selectedProductDetails = currentLineItem ? products.find(p => p.id === currentLineItem.productId) : undefined;
-          const unitPriceForDisplay = selectedProductDetails ? selectedProductDetails.price : 0;
           const quantity = currentLineItem?.quantity || 0;
-          const lineTotal = unitPriceForDisplay * quantity;
+          const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
+          const lineTotal = unitPrice * quantity;
           const filteredProductsForLine = getFilteredProducts(index);
 
           return (
@@ -419,16 +440,42 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                 )}
               />
               <div className="grid grid-cols-3 gap-4 items-end">
-                <FormItem><FormLabel>Unit Price</FormLabel><Input type="text" readOnly value={unitPriceForDisplay > 0 ? `$${unitPriceForDisplay.toFixed(2)}` : '-'} className="bg-muted" /></FormItem>
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.unitPrice`}
+                  render={({ field: priceField }) => (
+                    <FormItem>
+                      <FormLabel>Unit Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...priceField}
+                           value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
+                           onChange={(e) => {
+                            const val = e.target.value;
+                            const num = parseFloat(val);
+                            priceField.onChange(isNaN(num) ? undefined : num);
+                           }}
+                          disabled={!watchedLineItems[index]?.productId}
+                          placeholder="0.00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field: qtyField }) => (
                     <FormItem><FormLabel>Quantity</FormLabel><FormControl>
                         <Input 
                             type="number" 
-                            ref={qtyField.ref}
-                            name={qtyField.name}
-                            onBlur={qtyField.onBlur}
+                            {...qtyField}
                             value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
-                            onChange={(e) => handleQuantityChange(index, e.target.value)}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                const num = parseInt(val, 10);
+                                qtyField.onChange(isNaN(num) ? undefined : num);
+                            }}
                             min="1"
                             disabled={!watchedLineItems[index]?.productId}
                         />
@@ -462,7 +509,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={form.control} name="newPaymentAmount" render={({ field }) => (
-                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="newPaymentDate" render={({ field }) => (
                 <FormItem className="flex flex-col">
@@ -481,7 +528,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <FormField control={form.control} name="newPaymentMethod" render={({ field }) => (
             <FormItem>
                 <FormLabel>Payment Method</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || ""} >
                 <FormControl><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger></FormControl>
                 <SelectContent>{PAYMENT_METHODS.map(method => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent>
                 </Select>
@@ -491,7 +538,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         <FormField control={form.control} name="newPaymentNotes" render={({ field }) => (
           <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Check #123" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
         )} />
-        {(form.formState.errors.newPaymentMethod || form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount")) && (
+        {(form.formState.errors.newPaymentMethod || (form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount"))) && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.newPaymentMethod?.message || form.formState.errors.newPaymentDate?.message}</p>
         )}
 

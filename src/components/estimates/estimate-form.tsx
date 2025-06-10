@@ -41,7 +41,7 @@ const lineItemSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, "Product selection is required."),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
-  unitPrice: z.number().optional(),
+  unitPrice: z.coerce.number().min(0, "Unit price must be non-negative").optional(),
 });
 
 const estimateFormSchema = z.object({
@@ -89,7 +89,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         id: li.id,
         productId: li.productId,
         quantity: li.quantity,
-        unitPrice: li.unitPrice,
+        unitPrice: li.unitPrice, // Keep existing unit price
       })),
       notes: estimate.notes || '',
     } : {
@@ -109,7 +109,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     defaultValues: defaultFormValues,
   });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
   });
@@ -159,9 +159,24 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
-    const currentItem = form.getValues(`lineItems.${index}`);
-    update(index, { ...currentItem, productId: '', unitPrice: 0 });
+    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
+  };
+
+  const handleProductSelect = (index: number, productId: string) => {
+    const selectedProd = products.find(p => p.id === productId);
+    if (selectedProd) {
+      form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price, { shouldValidate: true }); // Set unitPrice from product
+      setLineItemCategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = selectedProd.category;
+        return newFilters;
+      });
+    }
+    form.trigger(`lineItems.${index}.productId`);
+    form.trigger(`lineItems.${index}.unitPrice`);
   };
 
   const addLineItem = () => {
@@ -199,13 +214,12 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
   const currentSubtotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product ? product.price : 0;
+      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       return acc + (price * (item.quantity || 0));
     }, 0);
-  }, [watchedLineItems, products]);
+  }, [watchedLineItems]);
 
-  const currentTotal = currentSubtotal;
+  const currentTotal = currentSubtotal; // Assuming no tax for now
 
   return (
     <Form {...form}>
@@ -339,10 +353,9 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         <h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
           const currentLineItem = watchedLineItems[index];
-          const selectedProductDetails = currentLineItem ? products.find(p => p.id === currentLineItem.productId) : undefined;
-          const unitPriceForDisplay = selectedProductDetails ? selectedProductDetails.price : 0;
           const quantity = currentLineItem?.quantity || 0;
-          const lineTotal = unitPriceForDisplay * quantity;
+          const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
+          const lineTotal = unitPrice * quantity;
           const filteredProductsForLine = getFilteredProducts(index);
 
           return (
@@ -395,19 +408,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                                   <CommandItem
                                     value={searchableValue}
                                     key={product.id}
-                                    onSelect={() => {
-                                      controllerField.onChange(product.id);
-                                      const selectedProd = products.find(p => p.id === product.id);
-                                      if (selectedProd) {
-                                        setLineItemCategoryFilters(prevFilters => {
-                                          const newFilters = [...prevFilters];
-                                          newFilters[index] = selectedProd.category;
-                                          return newFilters;
-                                        });
-                                        form.setValue(`lineItems.${index}.unitPrice`, selectedProd.price);
-                                      }
-                                      form.trigger(`lineItems.${index}.productId`);
-                                    }}
+                                    onSelect={() => handleProductSelect(index, product.id)}
                                   >
                                     <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
                                     {product.name} ({product.unit}) - Price: ${product.price.toFixed(2)}
@@ -424,11 +425,31 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                 )}
               />
               <div className="grid grid-cols-3 gap-4 items-end">
-                <FormItem>
-                  <FormLabel>Unit Price</FormLabel>
-                  <Input type="text" readOnly value={unitPriceForDisplay > 0 ? `$${unitPriceForDisplay.toFixed(2)}` : '-'} className="bg-muted" />
-                </FormItem>
-
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.unitPrice`}
+                  render={({ field: priceField }) => (
+                    <FormItem>
+                      <FormLabel>Unit Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...priceField}
+                          value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const num = parseFloat(val);
+                            priceField.onChange(isNaN(num) ? undefined : num);
+                          }}
+                          disabled={!watchedLineItems[index]?.productId}
+                          placeholder="0.00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name={`lineItems.${index}.quantity`}
@@ -438,18 +459,12 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
                       <FormControl>
                         <Input
                           type="number"
-                          ref={qtyField.ref}
-                          name={qtyField.name}
-                          onBlur={qtyField.onBlur}
+                          {...qtyField}
                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                           onChange={(e) => {
                             const val = e.target.value;
-                            if (val === '') {
-                              qtyField.onChange(undefined);
-                            } else {
-                              const num = parseInt(val, 10);
-                              qtyField.onChange(isNaN(num) ? undefined : num);
-                            }
+                            const num = parseInt(val, 10);
+                            qtyField.onChange(isNaN(num) ? undefined : num);
                           }}
                           min="1"
                           disabled={!watchedLineItems[index]?.productId}
