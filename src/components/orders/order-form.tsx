@@ -182,7 +182,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
    useEffect(() => {
     form.reset(defaultFormValues);
-  }, [defaultFormValues, form.reset]);
+  }, [defaultFormValues, form]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -332,14 +332,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const handleFormSubmit = (data: OrderFormData) => {
     onSubmit(data);
-    // Optionally reset payment fields if the dialog stays open for more edits
-    // form.reset({ 
-    //     ...data, // keep other form data
-    //     newPaymentAmount: undefined,
-    //     newPaymentDate: undefined,
-    //     newPaymentMethod: undefined,
-    //     newPaymentNotes: '',
-    // });
   };
 
   return (

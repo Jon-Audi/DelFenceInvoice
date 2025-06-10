@@ -116,7 +116,7 @@ export default function OrdersPage() {
           orderState: 'Open',
           poNumber: estimateToConvert.poNumber || '', 
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id, 
+            id: li.id || crypto.randomUUID(), 
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -128,7 +128,6 @@ export default function OrdersPage() {
           expectedDeliveryDate: undefined,
           readyForPickUpDate: undefined,
           pickedUpDate: undefined,
-          // Payment fields will be undefined initially
           newPaymentAmount: undefined,
           newPaymentDate: undefined,
           newPaymentMethod: undefined,
@@ -141,7 +140,7 @@ export default function OrdersPage() {
         toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
       }
     }
-  }, [toast]);
+  }, [toast, products]); // Added products to dependency array as it's used in productName fallback
 
   useEffect(() => {
     setIsLoadingOrders(true);
@@ -150,7 +149,7 @@ export default function OrdersPage() {
       snapshot.forEach((docSnap) => {
          const data = docSnap.data();
         fetchedOrders.push({ 
-          ...data as Omit<Order, 'id' | 'total' | 'amountPaid' | 'balanceDue'>, 
+          ...data as Omit<Order, 'id' | 'total' | 'amountPaid' | 'balanceDue' | 'payments'>, 
           id: docSnap.id,
           total: data.total || 0,
           amountPaid: data.amountPaid || 0,
@@ -225,27 +224,22 @@ export default function OrdersPage() {
   const handleSaveOrder = async (orderToSave: Order) => {
     const { id, ...orderDataFromDialog } = orderToSave;
     
-    const basePayload: any = {
-      orderNumber: orderDataFromDialog.orderNumber,
-      customerId: orderDataFromDialog.customerId,
-      customerName: orderDataFromDialog.customerName,
-      date: orderDataFromDialog.date,
-      status: orderDataFromDialog.status,
-      orderState: orderDataFromDialog.orderState,
-      lineItems: orderDataFromDialog.lineItems,
-      subtotal: orderDataFromDialog.subtotal,
-      taxAmount: orderDataFromDialog.taxAmount || 0,
-      total: orderDataFromDialog.total,
-      payments: orderDataFromDialog.payments || [],
-      amountPaid: orderDataFromDialog.amountPaid || 0,
-    };
-    basePayload.balanceDue = (basePayload.total || 0) - (basePayload.amountPaid || 0);
+    // All calculations (subtotal, total, amountPaid, balanceDue, payments array) are done in OrderDialog
+    // So, orderDataFromDialog is the complete, calculated Order object (minus id)
     
     try {
       if (id && orders.some(o => o.id === id)) { 
         const orderRef = doc(db, 'orders', id);
-        const updatePayload = { ...basePayload };
-
+        // For updates, we pass the entire orderDataFromDialog object.
+        // Firestore's setDoc with { merge: true } (if used) or a direct setDoc
+        // will update all fields. Fields that might be removed (like an optional date cleared)
+        // should be handled by passing `deleteField()` for those specific fields if desired.
+        // Here, we assume orderDataFromDialog contains the final state.
+        // Optional fields that are undefined in orderDataFromDialog will be removed if the previous doc had them.
+        
+        // Create a payload that explicitly uses deleteField for potentially empty optional fields
+        const updatePayload: any = { ...orderDataFromDialog }; 
+        
         updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') 
                                   ? orderDataFromDialog.poNumber.trim() 
                                   : deleteField();
@@ -255,28 +249,21 @@ export default function OrdersPage() {
         updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') 
                                ? orderDataFromDialog.notes.trim() 
                                : deleteField();
-
-        await setDoc(orderRef, updatePayload, { merge: true });
+        // payments, amountPaid, balanceDue are always set by the dialog, so they don't need deleteField()
+                               
+        await setDoc(orderRef, updatePayload, { merge: true }); // Using merge: true to be safe
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
       } else { 
-        const addPayload = { ...basePayload };
+         // For new documents, ensure optional fields are only included if they have values.
+        const addPayload: any = { ...orderDataFromDialog };
 
-        if (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') {
-          addPayload.poNumber = orderDataFromDialog.poNumber.trim();
-        }
-        if (orderDataFromDialog.expectedDeliveryDate) {
-          addPayload.expectedDeliveryDate = orderDataFromDialog.expectedDeliveryDate;
-        }
-        if (orderDataFromDialog.readyForPickUpDate) {
-          addPayload.readyForPickUpDate = orderDataFromDialog.readyForPickUpDate;
-        }
-        if (orderDataFromDialog.pickedUpDate) {
-          addPayload.pickedUpDate = orderDataFromDialog.pickedUpDate;
-        }
-        if (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') {
-          addPayload.notes = orderDataFromDialog.notes.trim();
-        }
-
+        if (!addPayload.poNumber || addPayload.poNumber.trim() === '') delete addPayload.poNumber;
+        if (!addPayload.expectedDeliveryDate) delete addPayload.expectedDeliveryDate;
+        if (!addPayload.readyForPickUpDate) delete addPayload.readyForPickUpDate;
+        if (!addPayload.pickedUpDate) delete addPayload.pickedUpDate;
+        if (!addPayload.notes || addPayload.notes.trim() === '') delete addPayload.notes;
+        // payments, amountPaid, balanceDue should always exist from the dialog calculation
+        
         const docRef = await addDoc(collection(db, 'orders'), addPayload);
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
       }

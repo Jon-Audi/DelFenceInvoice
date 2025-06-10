@@ -141,7 +141,7 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
               <span className="text-green-600">(${order.amountPaid.toFixed(2)})</span>
             </div>
           )}
-          {order.balanceDue !== undefined && (
+          {(order.balanceDue !== undefined && order.balanceDue !== null) && (
             <div className="flex justify-between text-lg font-semibold">
               <span className="text-gray-800">Balance Due:</span>
               <span className="text-gray-800">${order.balanceDue.toFixed(2)}</span>
