@@ -145,9 +145,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
-            productName: li.productName, // Trust productName from initialData
+            productName: li.productName, 
             quantity: li.quantity,
-            unitPrice: li.unitPrice,     // Trust unitPrice from initialData
+            unitPrice: li.unitPrice,     
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
         })),
@@ -183,54 +183,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   });
 
   useEffect(() => {
-    let currentResetValues: OrderFormData;
-    if (order) {
-      currentResetValues = {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customerId: order.customerId,
-        date: new Date(order.date),
-        status: order.status,
-        orderState: order.orderState,
-        poNumber: order.poNumber || '',
-        expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
-        readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
-        pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
-        lineItems: order.lineItems.map(li => ({
-          id: li.id, productId: li.productId, productName: li.productName,
-          quantity: li.quantity, unitPrice: li.unitPrice,
-          isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
-        })),
-        notes: order.notes || '',
-        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
-      };
-      form.reset(currentResetValues);
-    } else if (initialData) {
-      currentResetValues = {
-        ...initialData,
-        id: initialData.id,
-        poNumber: initialData.poNumber ?? '',
-        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
-        expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
-        readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
-        pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
-        lineItems: (initialData.lineItems || []).map(li => ({
-            id: li.id || crypto.randomUUID(),
-            productId: li.productId,
-            productName: li.productName,
-            quantity: li.quantity,
-            unitPrice: li.unitPrice,
-            isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false,
-        })),
-        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
-      };
-      form.reset(currentResetValues);
-      setConversionJustProcessed(true); // Set flag after resetting with initialData
+    form.reset(initialDefaultValues);
+    if (initialData && !order) { // Check if it's a conversion (initialData present, no existing order being edited)
+        setConversionJustProcessed(true);
     } else {
-      form.reset(initialDefaultValues); // For brand new order
+        setConversionJustProcessed(false);
     }
-  }, [order, initialData, form.reset, initialDefaultValues]);
+  }, [initialDefaultValues, form.reset, initialData, order]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -273,9 +232,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
-    if (conversionJustProcessed) {
-      setConversionJustProcessed(false); // Consume flag and skip price recalculation for this cycle
-      return;
+    if (conversionJustProcessed) { 
+      setConversionJustProcessed(false); 
+      return; 
     }
 
     if (!watchedCustomerId || !products || products.length === 0) return;
@@ -301,7 +260,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]); // Add conversionJustProcessed
+  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]); 
 
 
   const currentSubtotal = useMemo(() => {
@@ -815,4 +774,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+    
+
     
