@@ -137,6 +137,7 @@ export function OrderDialog({
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <OrderForm 
+          key={order?.id || initialData?.id || 'new-order-form'} // Added key here
           order={order} 
           initialData={initialData}
           onSubmit={handleSubmit} 
