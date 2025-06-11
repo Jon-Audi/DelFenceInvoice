@@ -110,7 +110,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   const [conversionJustProcessed, setConversionJustProcessed] = useState(false);
 
   const initialDefaultValues = useMemo((): OrderFormData => {
-    let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
+    let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'> & { id?: string};
     if (order) {
       baseValues = {
         id: order.id,
@@ -137,7 +137,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else if (initialData) {
       baseValues = {
         ...initialData,
-        id: initialData.id,
+        id: initialData.id, // If converting, this ID might be undefined if it's a new order
         poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
@@ -200,7 +200,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else {
         setConversionJustProcessed(false);
     }
-  }, [initialDefaultValues, form.reset, initialData, order, products]);
+  }, [initialDefaultValues, form.reset, products, initialData, order]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -229,8 +229,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   useEffect(() => {
     if (conversionJustProcessed) {
-      setConversionJustProcessed(false);
-      return;
+      setConversionJustProcessed(false); // Clear the flag after one render cycle
+      return; // Skip price recalculation if it was a conversion
     }
 
     if (!watchedCustomerId || !products || products.length === 0) return;
@@ -330,13 +330,15 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined);
-      form.setValue(`lineItems.${index}.unitPrice`, 0);
+      form.setValue(`lineItems.${index}.unitPrice`, 0); // Reset unit price for manual entry
       form.trigger(`lineItems.${index}.productName`);
       form.trigger(`lineItems.${index}.unitPrice`);
     } else {
-      form.setValue(`lineItems.${index}.productName`, '');
+      form.setValue(`lineItems.${index}.productName`, ''); // Clear manual name if stock
+      // Let product selection repopulate unit price after category/product chosen
     }
   };
+
 
   const handleFormSubmit = (data: OrderFormData) => {
     onSubmit(data);
