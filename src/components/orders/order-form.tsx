@@ -106,7 +106,8 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
-  const defaultFormValues = useMemo((): OrderFormData => {
+  // useMemo for initial defaultValues provided to useForm
+  const initialDefaultValues = useMemo((): OrderFormData => {
     let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
     if (order) {
       baseValues = {
@@ -140,7 +141,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
         readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
         pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
-        lineItems: initialData.lineItems.map(li => ({
+        lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
             productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
@@ -177,12 +178,87 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
-    defaultValues: defaultFormValues,
+    defaultValues: initialDefaultValues, // For initial mount
   });
 
-   useEffect(() => {
-    form.reset(defaultFormValues);
-  }, [defaultFormValues, form]);
+  // useEffect to reset form when 'order' or 'initialData' prop changes.
+  // This provides a more direct way to handle prop updates for form data.
+  useEffect(() => {
+    let currentResetValues: OrderFormData;
+    if (order) {
+      currentResetValues = {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        date: new Date(order.date),
+        status: order.status,
+        orderState: order.orderState,
+        poNumber: order.poNumber || '',
+        expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
+        readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
+        pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
+        lineItems: order.lineItems.map(li => ({
+          id: li.id,
+          productId: li.productId,
+          productName: li.productName,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          isReturn: li.isReturn || false,
+          isNonStock: li.isNonStock || false,
+        })),
+        notes: order.notes || '',
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: '',
+      };
+    } else if (initialData) {
+      currentResetValues = {
+        ...initialData,
+        id: initialData.id,
+        poNumber: initialData.poNumber ?? '',
+        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+        expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
+        readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
+        pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
+        lineItems: (initialData.lineItems || []).map(li => ({
+            id: li.id || crypto.randomUUID(),
+            productId: li.productId,
+            productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
+            quantity: li.quantity,
+            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
+            isReturn: li.isReturn || false,
+            isNonStock: li.isNonStock || !li.productId,
+        })),
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: '',
+      };
+    } else {
+      // This case is for creating a brand new order, typically handled by the initial useForm defaultValues
+      // and the component re-mounting due to key change. However, including it for completeness if reset is called.
+      currentResetValues = {
+        id: undefined,
+        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+        customerId: '',
+        date: new Date(),
+        status: 'Draft',
+        orderState: 'Open',
+        poNumber: '',
+        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+        notes: '',
+        expectedDeliveryDate: undefined,
+        readyForPickUpDate: undefined,
+        pickedUpDate: undefined,
+        newPaymentAmount: undefined,
+        newPaymentDate: undefined,
+        newPaymentMethod: undefined,
+        newPaymentNotes: '',
+      };
+    }
+    form.reset(currentResetValues);
+  }, [order, initialData, form.reset, products]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -260,7 +336,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }, 0);
   }, [watchedLineItems]);
 
-  const currentOrderTotal = currentSubtotal; // Assuming no tax for orders for now
+  const currentOrderTotal = currentSubtotal; 
 
   const amountAlreadyPaid = order?.amountPaid || 0;
   const newPaymentAmountValue = form.watch("newPaymentAmount") || 0;
@@ -762,3 +838,5 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+
+    
