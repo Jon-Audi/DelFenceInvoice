@@ -106,7 +106,8 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
-  // useMemo for initial defaultValues provided to useForm
+  const [conversionJustProcessed, setConversionJustProcessed] = useState(false);
+
   const initialDefaultValues = useMemo((): OrderFormData => {
     let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'>;
     if (order) {
@@ -144,11 +145,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
-            productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
+            productName: li.productName, // Trust productName from initialData
             quantity: li.quantity,
-            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
+            unitPrice: li.unitPrice,     // Trust unitPrice from initialData
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || !li.productId,
+            isNonStock: li.isNonStock || false,
         })),
       };
     } else {
@@ -174,15 +175,13 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       newPaymentMethod: undefined,
       newPaymentNotes: undefined,
     };
-  }, [order, initialData, products]);
+  }, [order, initialData]);
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
-    defaultValues: initialDefaultValues, // For initial mount
+    defaultValues: initialDefaultValues,
   });
 
-  // useEffect to reset form when 'order' or 'initialData' prop changes.
-  // This provides a more direct way to handle prop updates for form data.
   useEffect(() => {
     let currentResetValues: OrderFormData;
     if (order) {
@@ -198,20 +197,14 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
         pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
         lineItems: order.lineItems.map(li => ({
-          id: li.id,
-          productId: li.productId,
-          productName: li.productName,
-          quantity: li.quantity,
-          unitPrice: li.unitPrice,
-          isReturn: li.isReturn || false,
-          isNonStock: li.isNonStock || false,
+          id: li.id, productId: li.productId, productName: li.productName,
+          quantity: li.quantity, unitPrice: li.unitPrice,
+          isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
         })),
         notes: order.notes || '',
-        newPaymentAmount: undefined,
-        newPaymentDate: undefined,
-        newPaymentMethod: undefined,
-        newPaymentNotes: '',
+        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
       };
+      form.reset(currentResetValues);
     } else if (initialData) {
       currentResetValues = {
         ...initialData,
@@ -224,41 +217,20 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
-            productName: li.productName || products.find(p => p.id === li.productId)?.name || '',
+            productName: li.productName,
             quantity: li.quantity,
-            unitPrice: li.unitPrice ?? products.find(p => p.id === li.productId)?.price ?? 0,
+            unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || !li.productId,
+            isNonStock: li.isNonStock || false,
         })),
-        newPaymentAmount: undefined,
-        newPaymentDate: undefined,
-        newPaymentMethod: undefined,
-        newPaymentNotes: '',
+        newPaymentAmount: undefined, newPaymentDate: undefined, newPaymentMethod: undefined, newPaymentNotes: '',
       };
+      form.reset(currentResetValues);
+      setConversionJustProcessed(true); // Set flag after resetting with initialData
     } else {
-      // This case is for creating a brand new order, typically handled by the initial useForm defaultValues
-      // and the component re-mounting due to key change. However, including it for completeness if reset is called.
-      currentResetValues = {
-        id: undefined,
-        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
-        customerId: '',
-        date: new Date(),
-        status: 'Draft',
-        orderState: 'Open',
-        poNumber: '',
-        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
-        notes: '',
-        expectedDeliveryDate: undefined,
-        readyForPickUpDate: undefined,
-        pickedUpDate: undefined,
-        newPaymentAmount: undefined,
-        newPaymentDate: undefined,
-        newPaymentMethod: undefined,
-        newPaymentNotes: '',
-      };
+      form.reset(initialDefaultValues); // For brand new order
     }
-    form.reset(currentResetValues);
-  }, [order, initialData, form.reset, products]);
+  }, [order, initialData, form.reset, initialDefaultValues]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -286,7 +258,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
-    let finalPrice = product.price; 
+    let finalPrice = product.price;
     if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
       const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
       const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
@@ -301,6 +273,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
+    if (conversionJustProcessed) {
+      setConversionJustProcessed(false); // Consume flag and skip price recalculation for this cycle
+      return;
+    }
+
     if (!watchedCustomerId || !products || products.length === 0) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
 
@@ -312,19 +289,19 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       if (!product) return item;
 
       const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-      
+
       if (item.unitPrice !== newUnitPrice) {
         return { ...item, unitPrice: newUnitPrice };
       }
       return item;
     });
-    
+
     if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
         updatedLineItems.forEach((item, index) => {
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, form, update]);
+  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]); // Add conversionJustProcessed
 
 
   const currentSubtotal = useMemo(() => {
@@ -336,7 +313,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }, 0);
   }, [watchedLineItems]);
 
-  const currentOrderTotal = currentSubtotal; 
+  const currentOrderTotal = currentSubtotal;
 
   const amountAlreadyPaid = order?.amountPaid || 0;
   const newPaymentAmountValue = form.watch("newPaymentAmount") || 0;
@@ -393,16 +370,16 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
-  
+
   const handleNonStockToggle = (index: number, checked: boolean) => {
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
-      form.setValue(`lineItems.${index}.productId`, undefined); 
-      form.setValue(`lineItems.${index}.unitPrice`, 0); 
-      form.trigger(`lineItems.${index}.productName`); 
+      form.setValue(`lineItems.${index}.productId`, undefined);
+      form.setValue(`lineItems.${index}.unitPrice`, 0);
+      form.trigger(`lineItems.${index}.productName`);
       form.trigger(`lineItems.${index}.unitPrice`);
     } else {
-      form.setValue(`lineItems.${index}.productName`, ''); 
+      form.setValue(`lineItems.${index}.productName`, '');
     }
   };
 
@@ -441,8 +418,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                       <CommandEmpty>No customer found.</CommandEmpty>
                       <CommandGroup>
                         {customers.map((customer) => {
-                           const displayName = customer.companyName ? 
-                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` : 
+                           const displayName = customer.companyName ?
+                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` :
                                `${customer.firstName} ${customer.lastName}`;
                            const allEmails = customer.emailContacts?.map(ec => ec.email).join(' ') || '';
                            const searchableValue = [
@@ -476,7 +453,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </FormItem>
           )}
         />
-        
+
         <FormField control={form.control} name="poNumber" render={({ field }) => (
           <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
         )} />
@@ -761,7 +738,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             )}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-        
+
         <Separator />
         <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -838,5 +815,4 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-
     
