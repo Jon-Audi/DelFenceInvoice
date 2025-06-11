@@ -33,8 +33,13 @@ import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteF
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
+import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
+
+type SortableInvoiceKeys = 
+  'invoiceNumber' | 'customerName' | 'poNumber' | 'date' | 'dueDate' | 
+  'total' | 'amountPaid' | 'balanceDue' | 'status';
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -72,6 +77,8 @@ export default function InvoicesPage() {
   const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+
 
   const [invoiceForViewingItems, setInvoiceForViewingItems] = useState<Invoice | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -149,7 +156,9 @@ export default function InvoicesPage() {
       }
     }
 
-    setConversionInvoiceData(newInvoiceData);
+    if (newInvoiceData) {
+        setConversionInvoiceData(newInvoiceData);
+    }
   }, [toast]);
 
   useEffect(() => {
@@ -175,7 +184,7 @@ export default function InvoicesPage() {
              poNumber: data.poNumber || undefined,
            });
       });
-      setInvoices(fetchedInvoices.sort((a, b) => a.invoiceNumber.localeCompare(b.invoiceNumber)));
+      setInvoices(fetchedInvoices);
       setIsLoadingInvoices(false);
     }, (error) => {
       console.error("Error fetching invoices:", error);
@@ -473,23 +482,63 @@ export default function InvoicesPage() {
     setIsLineItemsViewerOpen(true);
   };
 
-  const filteredInvoices = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return invoices;
+  const requestSort = (key: SortableInvoiceKeys) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key) {
+      direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      if (key === 'date' || key === 'dueDate' || key === 'total' || key === 'amountPaid' || key === 'balanceDue') {
+        direction = 'desc';
+      } else {
+        direction = 'asc';
+      }
     }
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return invoices.filter(invoice => {
-      const searchFields = [
-        invoice.invoiceNumber,
-        invoice.customerName,
-        invoice.poNumber,
-        invoice.status,
-      ];
-      return searchFields.some(field =>
-        field && field.toLowerCase().includes(lowercasedFilter)
-      );
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAndFilteredInvoices = useMemo(() => {
+    let sortableItems = invoices.filter(invoice => {
+        if (!searchTerm.trim()) return true;
+        const lowercasedFilter = searchTerm.toLowerCase();
+        const searchFields = [
+            invoice.invoiceNumber,
+            invoice.customerName,
+            invoice.poNumber,
+            invoice.status,
+        ];
+        return searchFields.some(field =>
+            field && field.toLowerCase().includes(lowercasedFilter)
+        );
     });
-  }, [invoices, searchTerm]);
+
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        const valA = a[sortConfig.key as keyof Invoice];
+        const valB = b[sortConfig.key as keyof Invoice];
+
+        let comparison = 0;
+
+        if (valA === null || valA === undefined) comparison = 1;
+        else if (valB === null || valB === undefined) comparison = -1;
+        else if (sortConfig.key === 'date' || sortConfig.key === 'dueDate') {
+          comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+          comparison = valA - valB;
+        } else {
+          comparison = String(valA).toLowerCase().localeCompare(String(valB).toLowerCase());
+        }
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    }
+    return sortableItems;
+  }, [invoices, searchTerm, sortConfig]);
+  
+  const renderSortArrow = (columnKey: SortableInvoiceKeys) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
+    }
+    return null;
+  };
 
 
   if (isLoadingInvoices || isLoadingCustomers || isLoadingProducts) {
@@ -547,7 +596,7 @@ export default function InvoicesPage() {
             className="max-w-sm mb-4"
           />
           <InvoiceTable
-            invoices={filteredInvoices}
+            invoices={sortedAndFilteredInvoices}
             onSave={handleSaveInvoice}
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
@@ -558,8 +607,11 @@ export default function InvoicesPage() {
             products={products}
             productCategories={stableProductCategories}
             onViewItems={handleViewItems} 
+            sortConfig={sortConfig}
+            requestSort={requestSort}
+            renderSortArrow={renderSortArrow}
           />
-           {filteredInvoices.length === 0 && (
+           {sortedAndFilteredInvoices.length === 0 && (
             <p className="p-4 text-center text-muted-foreground">
               {invoices.length === 0 ? "No invoices found." : "No invoices match your search."}
             </p>
@@ -681,5 +733,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    

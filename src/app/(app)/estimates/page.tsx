@@ -56,8 +56,11 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableEstimate } from '@/components/estimates/printable-estimate';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
+import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
+
+type SortableEstimateKeys = 'estimateNumber' | 'customerName' | 'poNumber' | 'date' | 'total' | 'status' | 'validUntil';
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -89,6 +92,8 @@ export default function EstimatesPage() {
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: SortableEstimateKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+
 
   const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -104,7 +109,8 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedEstimates.push({ ...docSnap.data() as Omit<Estimate, 'id'>, id: docSnap.id });
       });
-      setEstimates(fetchedEstimates.sort((a, b) => a.estimateNumber.localeCompare(b.estimateNumber)));
+      // Initial sort from Firestore can be minimal, client-side sort will handle display
+      setEstimates(fetchedEstimates); 
       setIsLoadingEstimates(false);
     }, (error) => {
       
@@ -392,10 +398,12 @@ export default function EstimatesPage() {
     setIsEmailModalOpen(false);
   };
 
-  const formatDateForDisplay = (dateString: string) => {
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0];
+  const formatDateForDisplay = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR or pre-hydration
     return new Date(dateString).toLocaleDateString();
   };
+
 
   const handleConvertToOrder = (estimate: Estimate) => {
     localStorage.setItem('estimateToConvert_order', JSON.stringify(estimate));
@@ -412,23 +420,63 @@ export default function EstimatesPage() {
     setIsLineItemsViewerOpen(true);
   };
 
-  const filteredEstimates = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return estimates;
+  const requestSort = (key: SortableEstimateKeys) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key) {
+      direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      if (key === 'date' || key === 'total' || key === 'validUntil') {
+        direction = 'desc';
+      } else {
+        direction = 'asc';
+      }
     }
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return estimates.filter(estimate => {
-      const searchFields = [
-        estimate.estimateNumber,
-        estimate.customerName,
-        estimate.poNumber,
-        estimate.status,
-      ];
-      return searchFields.some(field =>
-        field && field.toLowerCase().includes(lowercasedFilter)
-      );
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAndFilteredEstimates = useMemo(() => {
+    let sortableItems = estimates.filter(estimate => {
+        if (!searchTerm.trim()) return true;
+        const lowercasedFilter = searchTerm.toLowerCase();
+        const searchFields = [
+            estimate.estimateNumber,
+            estimate.customerName,
+            estimate.poNumber,
+            estimate.status,
+        ];
+        return searchFields.some(field =>
+            field && field.toLowerCase().includes(lowercasedFilter)
+        );
     });
-  }, [estimates, searchTerm]);
+
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        const valA = a[sortConfig.key as keyof Estimate];
+        const valB = b[sortConfig.key as keyof Estimate];
+
+        let comparison = 0;
+
+        if (valA === null || valA === undefined) comparison = 1;
+        else if (valB === null || valB === undefined) comparison = -1;
+        else if (sortConfig.key === 'date' || sortConfig.key === 'validUntil') {
+          comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+          comparison = valA - valB;
+        } else {
+          comparison = String(valA).toLowerCase().localeCompare(String(valB).toLowerCase());
+        }
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    }
+    return sortableItems;
+  }, [estimates, searchTerm, sortConfig]);
+
+  const renderSortArrow = (columnKey: SortableEstimateKeys) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
+    }
+    return null;
+  };
 
 
   if (isLoadingEstimates || isLoadingCustomers || isLoadingProducts) {
@@ -474,23 +522,35 @@ export default function EstimatesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Number</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>P.O. #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead onClick={() => requestSort('estimateNumber')} className="cursor-pointer hover:bg-muted/50">
+                  Number {renderSortArrow('estimateNumber')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('customerName')} className="cursor-pointer hover:bg-muted/50">
+                  Customer {renderSortArrow('customerName')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('poNumber')} className="cursor-pointer hover:bg-muted/50">
+                  P.O. # {renderSortArrow('poNumber')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('date')} className="cursor-pointer hover:bg-muted/50">
+                  Date {renderSortArrow('date')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
+                  Total {renderSortArrow('total')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
+                  Status {renderSortArrow('status')}
+                </TableHead>
                 <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEstimates.map((estimate) => (
+              {sortedAndFilteredEstimates.map((estimate) => (
                 <TableRow key={estimate.id}>
                   <TableCell>{estimate.estimateNumber}</TableCell>
                   <TableCell>{estimate.customerName}</TableCell>
                   <TableCell>{estimate.poNumber || 'N/A'}</TableCell>
                   <TableCell>{formatDateForDisplay(estimate.date)}</TableCell>
-                  <TableCell>${estimate.total.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">${estimate.total.toFixed(2)}</TableCell>
                   <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -543,7 +603,7 @@ export default function EstimatesPage() {
               ))}
             </TableBody>
           </Table>
-           {filteredEstimates.length === 0 && (
+           {sortedAndFilteredEstimates.length === 0 && (
             <p className="p-4 text-center text-muted-foreground">
               {estimates.length === 0 ? "No estimates found." : "No estimates match your search."}
             </p>
@@ -669,8 +729,6 @@ export default function EstimatesPage() {
   );
 }
 
-// Simple wrapper to mimic FormField structure for layout if needed
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-

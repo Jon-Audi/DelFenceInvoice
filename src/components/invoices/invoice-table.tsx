@@ -34,6 +34,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 
+type SortableInvoiceKeys = 
+  'invoiceNumber' | 'customerName' | 'poNumber' | 'date' | 'dueDate' | 
+  'total' | 'amountPaid' | 'balanceDue' | 'status';
+
 interface InvoiceTableProps {
   invoices: Invoice[];
   onSave: (invoice: Invoice) => void;
@@ -45,10 +49,28 @@ interface InvoiceTableProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
-  onViewItems: (invoice: Invoice) => void; // New prop
+  onViewItems: (invoice: Invoice) => void;
+  sortConfig: { key: SortableInvoiceKeys; direction: 'asc' | 'desc' };
+  requestSort: (key: SortableInvoiceKeys) => void;
+  renderSortArrow: (columnKey: SortableInvoiceKeys) => JSX.Element | null;
 }
 
-export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPrint, onPrintPackingSlip, formatDate, customers, products, productCategories, onViewItems }: InvoiceTableProps) {
+export function InvoiceTable({ 
+  invoices, 
+  onSave, 
+  onDelete, 
+  onGenerateEmail, 
+  onPrint, 
+  onPrintPackingSlip, 
+  formatDate, 
+  customers, 
+  products, 
+  productCategories, 
+  onViewItems,
+  sortConfig,
+  requestSort,
+  renderSortArrow
+}: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
 
   const getStatusVariant = (status: Invoice['status']): "default" | "secondary" | "outline" | "destructive" => {
@@ -74,15 +96,33 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Number</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>P.O. #</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Due Date</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="text-right">Paid</TableHead>
-            <TableHead className="text-right">Balance</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead onClick={() => requestSort('invoiceNumber')} className="cursor-pointer hover:bg-muted/50">
+              Number {renderSortArrow('invoiceNumber')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('customerName')} className="cursor-pointer hover:bg-muted/50">
+              Customer {renderSortArrow('customerName')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('poNumber')} className="cursor-pointer hover:bg-muted/50">
+              P.O. # {renderSortArrow('poNumber')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('date')} className="cursor-pointer hover:bg-muted/50">
+              Date {renderSortArrow('date')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('dueDate')} className="cursor-pointer hover:bg-muted/50">
+              Due Date {renderSortArrow('dueDate')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
+              Total {renderSortArrow('total')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
+              Paid {renderSortArrow('amountPaid')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
+              Balance {renderSortArrow('balanceDue')}
+            </TableHead>
+            <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
+              Status {renderSortArrow('status')}
+            </TableHead>
             <TableHead className="w-[80px] text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -95,8 +135,10 @@ export function InvoiceTable({ invoices, onSave, onDelete, onGenerateEmail, onPr
               <TableCell>{formatDate(invoice.date)}</TableCell>
               <TableCell>{formatDate(invoice.dueDate)}</TableCell>
               <TableCell className="text-right">${invoice.total.toFixed(2)}</TableCell>
-              <TableCell className="text-right">${(invoice.amountPaid || 0).toFixed(2)}</TableCell>
-              <TableCell className="text-right">${(invoice.balanceDue || invoice.total).toFixed(2)}</TableCell>
+              <TableCell className="text-right text-green-600">${(invoice.amountPaid || 0).toFixed(2)}</TableCell>
+              <TableCell className={cn("text-right", (invoice.balanceDue !== undefined && invoice.balanceDue > 0) ? "text-destructive" : "text-green-600")}>
+                  ${(invoice.balanceDue || 0).toFixed(2)}
+              </TableCell>
               <TableCell>
                 <Badge variant={getStatusVariant(invoice.status)}
                        className={cn(

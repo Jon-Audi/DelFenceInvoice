@@ -62,6 +62,12 @@ import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dia
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
+type SortableOrderKeys = 
+  'orderNumber' | 'customerName' | 'poNumber' | 'date' | 
+  'total' | 'amountPaid' | 'balanceDue' | 'status' | 'orderState' |
+  'expectedDeliveryDate' | 'readyForPickUpDate' | 'pickedUpDate';
+
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -100,6 +106,8 @@ export default function OrdersPage() {
 
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: SortableOrderKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+
 
   const [orderForViewingItems, setOrderForViewingItems] = useState<Order | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -161,7 +169,7 @@ export default function OrdersPage() {
           payments: data.payments || [],
         });
       });
-      setOrders(fetchedOrders.sort((a, b) => a.orderNumber.localeCompare(b.orderNumber)));
+      setOrders(fetchedOrders);
       setIsLoadingOrders(false);
     }, (error) => {
       console.error("Error fetching orders:", error);
@@ -424,7 +432,7 @@ export default function OrdersPage() {
   };
 
   const formatDateForDisplay = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
-    if (!dateString) return '';
+    if (!dateString) return 'N/A';
     if (!isClient) return new Date(dateString).toISOString().split('T')[0];
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
@@ -439,24 +447,65 @@ export default function OrdersPage() {
     setIsLineItemsViewerOpen(true);
   };
 
-  const filteredOrders = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return orders;
+  const requestSort = (key: SortableOrderKeys) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key) {
+      direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      if (key === 'date' || key === 'total' || key === 'amountPaid' || key === 'balanceDue' || 
+          key === 'expectedDeliveryDate' || key === 'readyForPickUpDate' || key === 'pickedUpDate') {
+        direction = 'desc';
+      } else {
+        direction = 'asc';
+      }
     }
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return orders.filter(order => {
-      const searchFields = [
-        order.orderNumber,
-        order.customerName,
-        order.poNumber,
-        order.status,
-        order.orderState,
-      ];
-      return searchFields.some(field =>
-        field && field.toLowerCase().includes(lowercasedFilter)
-      );
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAndFilteredOrders = useMemo(() => {
+    let sortableItems = orders.filter(order => {
+        if (!searchTerm.trim()) return true;
+        const lowercasedFilter = searchTerm.toLowerCase();
+        const searchFields = [
+            order.orderNumber,
+            order.customerName,
+            order.poNumber,
+            order.status,
+            order.orderState,
+        ];
+        return searchFields.some(field =>
+            field && field.toLowerCase().includes(lowercasedFilter)
+        );
     });
-  }, [orders, searchTerm]);
+
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        const valA = a[sortConfig.key as keyof Order];
+        const valB = b[sortConfig.key as keyof Order];
+        
+        let comparison = 0;
+
+        if (valA === null || valA === undefined) comparison = 1;
+        else if (valB === null || valB === undefined) comparison = -1;
+        else if (['date', 'expectedDeliveryDate', 'readyForPickUpDate', 'pickedUpDate'].includes(sortConfig.key)) {
+          comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+          comparison = valA - valB;
+        } else {
+          comparison = String(valA).toLowerCase().localeCompare(String(valB).toLowerCase());
+        }
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    }
+    return sortableItems;
+  }, [orders, searchTerm, sortConfig]);
+
+  const renderSortArrow = (columnKey: SortableOrderKeys) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
+    }
+    return null;
+  };
 
   if (isLoadingOrders || isLoadingCustomers || isLoadingProducts) {
     return (
@@ -516,20 +565,38 @@ export default function OrdersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Number</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>P.O. #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Order State</TableHead>
+                <TableHead onClick={() => requestSort('orderNumber')} className="cursor-pointer hover:bg-muted/50">
+                  Number {renderSortArrow('orderNumber')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('customerName')} className="cursor-pointer hover:bg-muted/50">
+                  Customer {renderSortArrow('customerName')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('poNumber')} className="cursor-pointer hover:bg-muted/50">
+                  P.O. # {renderSortArrow('poNumber')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('date')} className="cursor-pointer hover:bg-muted/50">
+                  Date {renderSortArrow('date')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
+                  Total {renderSortArrow('total')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
+                  Paid {renderSortArrow('amountPaid')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
+                  Balance {renderSortArrow('balanceDue')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
+                  Status {renderSortArrow('status')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('orderState')} className="cursor-pointer hover:bg-muted/50">
+                  Order State {renderSortArrow('orderState')}
+                </TableHead>
                 <TableHead className="w-[80px] text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map((order) => (
+              {sortedAndFilteredOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.customerName}</TableCell>
@@ -606,7 +673,7 @@ export default function OrdersPage() {
               ))}
             </TableBody>
           </Table>
-           {filteredOrders.length === 0 && (
+           {sortedAndFilteredOrders.length === 0 && (
              <p className="p-4 text-center text-muted-foreground">
                {orders.length === 0 ? "No orders found." : "No orders match your search."}
             </p>
@@ -747,4 +814,3 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-

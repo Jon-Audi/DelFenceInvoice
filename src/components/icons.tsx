@@ -9,6 +9,7 @@ import {
   Calculator,
   ChevronDown,
   ChevronRight,
+  ChevronUp, // Added ChevronUp
   PlusCircle,
   Edit,
   Trash2,
@@ -38,7 +39,7 @@ import {
   TrendingUp,
   Printer,
   Layers,
-  PackageCheck, // Added PackageCheck icon
+  PackageCheck,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -54,6 +55,7 @@ const iconComponents = {
   Calculator,
   ChevronDown,
   ChevronRight,
+  ChevronUp, // Added ChevronUp
   PlusCircle,
   Edit,
   Trash2,
@@ -83,7 +85,7 @@ const iconComponents = {
   TrendingUp,
   Printer,
   Layers,
-  PackageCheck, // Added PackageCheck icon
+  PackageCheck,
 };
 
 interface IconProps extends LucideProps {
