@@ -106,6 +106,7 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [conversionJustProcessed, setConversionJustProcessed] = useState(false);
 
   const initialDefaultValues = useMemo((): OrderFormData => {
@@ -145,9 +146,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
-            productName: li.productName, 
+            productName: li.productName,
             quantity: li.quantity,
-            unitPrice: li.unitPrice,     
+            unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
         })),
@@ -184,12 +185,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   useEffect(() => {
     form.reset(initialDefaultValues);
-    if (initialData && !order) { // Check if it's a conversion (initialData present, no existing order being edited)
+
+    const newCategoryFilters = (initialDefaultValues.lineItems || []).map(item => {
+        if (!item.isNonStock && item.productId && products.length > 0) {
+            const product = products.find(p => p.id === item.productId);
+            return product?.category;
+        }
+        return undefined;
+    });
+    setLineItemCategoryFilters(newCategoryFilters);
+
+    if (initialData && !order) {
         setConversionJustProcessed(true);
     } else {
         setConversionJustProcessed(false);
     }
-  }, [initialDefaultValues, form.reset, initialData, order]);
+  }, [initialDefaultValues, form.reset, initialData, order, products]);
 
 
   const { fields, append, remove, update } = useFieldArray({
@@ -199,21 +210,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   const watchedLineItems = form.watch('lineItems') || [];
   const watchedCustomerId = form.watch('customerId');
-
-  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
-
-  useEffect(() => {
-     const currentFormLineItems = form.getValues('lineItems') || [];
-    setLineItemCategoryFilters(
-        currentFormLineItems.map(item => {
-            if (!item.isNonStock && item.productId && products.length > 0) {
-                const product = products.find(p => p.id === item.productId);
-                return product?.category;
-            }
-            return undefined;
-        })
-    );
-  }, [watchedLineItems, products, form]);
 
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
@@ -232,9 +228,9 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
-    if (conversionJustProcessed) { 
-      setConversionJustProcessed(false); 
-      return; 
+    if (conversionJustProcessed) {
+      setConversionJustProcessed(false);
+      return;
     }
 
     if (!watchedCustomerId || !products || products.length === 0) return;
@@ -260,7 +256,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             update(index, item);
         });
     }
-  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]); 
+  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]);
 
 
   const currentSubtotal = useMemo(() => {
@@ -774,6 +770,3 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
-    
-
-    
