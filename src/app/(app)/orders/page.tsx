@@ -7,47 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateOrderEmailDraft } from '@/ai/flows/order-email-draft';
 import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact } from '@/types';
@@ -57,16 +17,25 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
-import { cn } from '@/lib/utils';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
+import { OrderTable, type SortableOrderKeys } from '@/components/orders/order-table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+
 
 const COMPANY_SETTINGS_DOC_ID = "main";
-
-type SortableOrderKeys = 
-  'orderNumber' | 'customerName' | 'poNumber' | 'date' | 
-  'total' | 'amountPaid' | 'balanceDue' | 'status' | 'orderState' |
-  'expectedDeliveryDate' | 'readyForPickUpDate' | 'pickedUpDate';
-
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -83,7 +52,6 @@ export default function OrdersPage() {
   const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
   const [additionalRecipientEmail, setAdditionalRecipientEmail] = useState<string>('');
 
-  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject?: string; body?: string } | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
   const [editableBody, setEditableBody] = useState<string>('');
@@ -99,15 +67,13 @@ export default function OrdersPage() {
   const [orderForPrinting, setOrderForPrinting] = useState<Order | null>(null);
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
-  
+
   const [orderForPackingSlipPrinting, setOrderForPackingSlipPrinting] = useState<Order | null>(null);
   const [companySettingsForPackingSlip, setCompanySettingsForPackingSlip] = useState<CompanySettings | null>(null);
   const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
 
-
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableOrderKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
-
 
   const [orderForViewingItems, setOrderForViewingItems] = useState<Order | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -120,21 +86,21 @@ export default function OrdersPage() {
       try {
         const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
         const newOrderData: OrderFormData = {
-          id: undefined, 
+          id: undefined,
           orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Ordered',
           orderState: 'Open',
-          poNumber: estimateToConvert.poNumber || '', 
+          poNumber: estimateToConvert.poNumber || '',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id || crypto.randomUUID(), 
+            id: li.id || crypto.randomUUID(),
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false, 
+            isNonStock: li.isNonStock || false,
           })),
           notes: estimateToConvert.notes || '',
           expectedDeliveryDate: undefined,
@@ -160,8 +126,8 @@ export default function OrdersPage() {
       const fetchedOrders: Order[] = [];
       snapshot.forEach((docSnap) => {
          const data = docSnap.data();
-        fetchedOrders.push({ 
-          ...data as Omit<Order, 'id' | 'total' | 'amountPaid' | 'balanceDue' | 'payments'>, 
+        fetchedOrders.push({
+          ...data as Omit<Order, 'id' | 'total' | 'amountPaid' | 'balanceDue' | 'payments'>,
           id: docSnap.id,
           total: data.total || 0,
           amountPaid: data.amountPaid || 0,
@@ -232,28 +198,27 @@ export default function OrdersPage() {
     }
   }, [products]);
 
-
   const handleSaveOrder = async (orderToSave: Order) => {
     const { id, ...orderDataFromDialog } = orderToSave;
-    
+
     try {
-      if (id && orders.some(o => o.id === id)) { 
+      if (id && orders.some(o => o.id === id)) {
         const orderRef = doc(db, 'orders', id);
-        const updatePayload: any = { ...orderDataFromDialog }; 
-        
-        updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '') 
-                                  ? orderDataFromDialog.poNumber.trim() 
+        const updatePayload: any = { ...orderDataFromDialog };
+
+        updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '')
+                                  ? orderDataFromDialog.poNumber.trim()
                                   : deleteField();
         updatePayload.expectedDeliveryDate = orderDataFromDialog.expectedDeliveryDate ? orderDataFromDialog.expectedDeliveryDate : deleteField();
         updatePayload.readyForPickUpDate = orderDataFromDialog.readyForPickUpDate ? orderDataFromDialog.readyForPickUpDate : deleteField();
         updatePayload.pickedUpDate = orderDataFromDialog.pickedUpDate ? orderDataFromDialog.pickedUpDate : deleteField();
-        updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '') 
-                               ? orderDataFromDialog.notes.trim() 
+        updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '')
+                               ? orderDataFromDialog.notes.trim()
                                : deleteField();
-                               
-        await setDoc(orderRef, updatePayload, { merge: true }); 
+
+        await setDoc(orderRef, updatePayload, { merge: true });
         toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
-      } else { 
+      } else {
         const addPayload: any = { ...orderDataFromDialog };
 
         if (!addPayload.poNumber || addPayload.poNumber.trim() === '') delete addPayload.poNumber;
@@ -261,7 +226,7 @@ export default function OrdersPage() {
         if (!addPayload.readyForPickUpDate) delete addPayload.readyForPickUpDate;
         if (!addPayload.pickedUpDate) delete addPayload.pickedUpDate;
         if (!addPayload.notes || addPayload.notes.trim() === '') delete addPayload.notes;
-        
+
         const docRef = await addDoc(collection(db, 'orders'), addPayload);
         toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
       }
@@ -283,7 +248,6 @@ export default function OrdersPage() {
       console.error("Error deleting order:", error);
       toast({ title: "Error", description: "Could not delete order.", variant: "destructive" });
     }
-    setOrderToDelete(null);
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
@@ -330,7 +294,6 @@ export default function OrdersPage() {
     }
   }, [orderForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
 
-
   const handlePrintOrderPackingSlip = async (order: Order) => {
     setIsLoadingPackingSlipCompanySettings(true);
     const settings = await fetchCompanySettings();
@@ -359,7 +322,6 @@ export default function OrdersPage() {
     }
   }, [orderForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings]);
 
-
   const handleGenerateEmail = async (order: Order) => {
     setSelectedOrderForEmail(order);
     const customer = customers.find(c => c.id === order.customerId);
@@ -381,15 +343,14 @@ export default function OrdersPage() {
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
       const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com';
 
-
       const result = await generateOrderEmailDraft({
         customerName: customerDisplayName,
-        customerEmail: customerEmail, 
+        customerEmail: customerEmail,
         orderNumber: order.orderNumber,
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
         orderTotal: order.total,
-        companyName: "Delaware Fence Solutions", 
+        companyName: "Delaware Fence Solutions",
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -452,7 +413,7 @@ export default function OrdersPage() {
     if (sortConfig.key === key) {
       direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
     } else {
-      if (key === 'date' || key === 'total' || key === 'amountPaid' || key === 'balanceDue' || 
+      if (key === 'date' || key === 'total' || key === 'amountPaid' || key === 'balanceDue' ||
           key === 'expectedDeliveryDate' || key === 'readyForPickUpDate' || key === 'pickedUpDate') {
         direction = 'desc';
       } else {
@@ -482,7 +443,7 @@ export default function OrdersPage() {
       sortableItems.sort((a, b) => {
         const valA = a[sortConfig.key as keyof Order];
         const valB = b[sortConfig.key as keyof Order];
-        
+
         let comparison = 0;
 
         if (valA === null || valA === undefined) comparison = 1;
@@ -549,7 +510,6 @@ export default function OrdersPage() {
         />
       )}
 
-
       <Card>
         <CardHeader>
           <CardTitle>All Orders</CardTitle>
@@ -562,117 +522,23 @@ export default function OrdersPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-sm mb-4"
           />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead onClick={() => requestSort('orderNumber')} className="cursor-pointer hover:bg-muted/50">
-                  Number {renderSortArrow('orderNumber')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('customerName')} className="cursor-pointer hover:bg-muted/50">
-                  Customer {renderSortArrow('customerName')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('poNumber')} className="cursor-pointer hover:bg-muted/50">
-                  P.O. # {renderSortArrow('poNumber')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('date')} className="cursor-pointer hover:bg-muted/50">
-                  Date {renderSortArrow('date')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
-                  Total {renderSortArrow('total')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
-                  Paid {renderSortArrow('amountPaid')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
-                  Balance {renderSortArrow('balanceDue')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
-                  Status {renderSortArrow('status')}
-                </TableHead>
-                <TableHead onClick={() => requestSort('orderState')} className="cursor-pointer hover:bg-muted/50">
-                  Order State {renderSortArrow('orderState')}
-                </TableHead>
-                <TableHead className="w-[80px] text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedAndFilteredOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell>{order.orderNumber}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{order.poNumber || 'N/A'}</TableCell>
-                  <TableCell>{formatDateForDisplay(order.date)}</TableCell>
-                  <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-green-600">${(order.amountPaid || 0).toFixed(2)}</TableCell>
-                  <TableCell className={cn("text-right", (order.balanceDue !== undefined && order.balanceDue > 0) ? "text-destructive" : "text-green-600")}>
-                     ${(order.balanceDue || 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      order.status === 'Picked up' || order.status === 'Invoiced' ? 'default' :
-                      order.status === 'Ready for pick up' ? 'secondary' :
-                      'outline'
-                    }>
-                      {order.status}
-                      {order.status === 'Ready for pick up' && order.readyForPickUpDate && ` (${formatDateForDisplay(order.readyForPickUpDate, { month: '2-digit', day: '2-digit' })})`}
-                      {order.status === 'Picked up' && order.pickedUpDate && ` (${formatDateForDisplay(order.pickedUpDate, { month: '2-digit', day: '2-digit' })})`}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={order.orderState === 'Open' ? 'outline' : 'default'}>
-                      {order.orderState}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Icon name="MoreHorizontal" className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleViewItems(order)}>
-                          <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
-                        </DropdownMenuItem>
-                        <OrderDialog
-                          order={order}
-                          triggerButton={
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                              <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                          }
-                          onSave={handleSaveOrder}
-                          customers={customers}
-                          products={products}
-                          productCategories={stableProductCategories}
-                        />
-                        <DropdownMenuItem onClick={() => handleGenerateEmail(order)}>
-                          <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handlePrintOrder(order)}>
-                           <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Order
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handlePrintOrderPackingSlip(order)}>
-                           <Icon name="PackageCheck" className="mr-2 h-4 w-4" /> Print Packing Slip
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleConvertToInvoice(order)}>
-                          <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          onSelect={() => setOrderToDelete(order)}
-                        >
-                          <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <OrderTable
+            orders={sortedAndFilteredOrders}
+            onSave={handleSaveOrder}
+            onDelete={handleDeleteOrder}
+            onGenerateEmail={handleGenerateEmail}
+            onPrint={handlePrintOrder}
+            onPrintPackingSlip={handlePrintOrderPackingSlip}
+            formatDate={formatDateForDisplay}
+            customers={customers}
+            products={products}
+            productCategories={stableProductCategories}
+            onViewItems={handleViewItems}
+            onConvertToInvoice={handleConvertToInvoice}
+            sortConfig={sortConfig}
+            requestSort={requestSort}
+            renderSortArrow={renderSortArrow}
+          />
            {sortedAndFilteredOrders.length === 0 && (
              <p className="p-4 text-center text-muted-foreground">
                {orders.length === 0 ? "No orders found." : "No orders match your search."}
@@ -707,7 +573,7 @@ export default function OrdersPage() {
                             id={`email-contact-order-${contact.id}`}
                             checked={selectedRecipientEmails.includes(contact.email)}
                             onCheckedChange={(checked) => {
-                              setSelectedRecipientEmails(prev => 
+                              setSelectedRecipientEmails(prev =>
                                 checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
                               );
                             }}
@@ -723,9 +589,9 @@ export default function OrdersPage() {
                   )}
                   <FormFieldWrapper>
                     <Label htmlFor="additionalEmailOrder">Or add another email:</Label>
-                    <Input 
-                      id="additionalEmailOrder" 
-                      type="email" 
+                    <Input
+                      id="additionalEmailOrder"
+                      type="email"
                       placeholder="another@example.com"
                       value={additionalRecipientEmail}
                       onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
@@ -734,12 +600,12 @@ export default function OrdersPage() {
                 </div>
                 <Separator />
                 <div>
-                  <Label htmlFor="emailSubject">Subject</Label>
-                  <Input id="emailSubject" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
+                  <Label htmlFor="emailSubjectOrder">Subject</Label>
+                  <Input id="emailSubjectOrder" value={editableSubject} onChange={(e) => setEditableSubject(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="emailBody">Body</Label>
-                  <Textarea id="emailBody" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={8} className="min-h-[150px]" />
+                  <Label htmlFor="emailBodyOrder">Body</Label>
+                  <Textarea id="emailBodyOrder" value={editableBody} onChange={(e) => setEditableBody(e.target.value)} rows={8} className="min-h-[150px]" />
                 </div>
               </div>
             ) : ( <p className="text-center py-4">Could not load email draft.</p> )}
@@ -751,25 +617,6 @@ export default function OrdersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-
-      {orderToDelete && (
-        <AlertDialog open={!!orderToDelete} onOpenChange={(isOpen) => !isOpen && setOrderToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete order "{orderToDelete.orderNumber}".
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setOrderToDelete(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { orderToDelete && handleDeleteOrder(orderToDelete.id)}} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       )}
 
       <div className="print-only-container">
@@ -786,13 +633,13 @@ export default function OrdersPage() {
             />
         )}
       </div>
-       {(isLoadingCompanySettings && orderForPrinting) && ( 
+       {(isLoadingCompanySettings && orderForPrinting) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable order...</p>
         </div>
       )}
-      {(isLoadingPackingSlipCompanySettings && orderForPackingSlipPrinting) && ( 
+      {(isLoadingPackingSlipCompanySettings && orderForPackingSlipPrinting) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing printable packing slip...</p>
@@ -814,3 +661,4 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
