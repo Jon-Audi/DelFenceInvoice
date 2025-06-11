@@ -137,7 +137,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else if (initialData) {
       baseValues = {
         ...initialData,
-        id: initialData.id, // If converting, this ID might be undefined if it's a new order
+        id: initialData.id, 
         poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
@@ -183,11 +183,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     defaultValues: initialDefaultValues,
   });
 
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: "lineItems",
+  });
+
+  const watchedLineItems = form.watch('lineItems') || [];
+  const watchedCustomerId = form.watch('customerId');
+
+
   useEffect(() => {
     form.reset(initialDefaultValues);
 
-    const newCategoryFilters = (initialDefaultValues.lineItems || []).map(item => {
-        if (!item.isNonStock && item.productId && products.length > 0) {
+    // After reset, get the line items from the form's current state
+    const formLineItemsAfterReset = form.getValues('lineItems') || [];
+    const newCategoryFilters = formLineItemsAfterReset.map(item => {
+        if (!item.isNonStock && item.productId && products && products.length > 0) {
             const product = products.find(p => p.id === item.productId);
             return product?.category;
         }
@@ -200,16 +211,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else {
         setConversionJustProcessed(false);
     }
-  }, [initialDefaultValues, form.reset, products, initialData, order]);
-
-
-  const { fields, append, remove, update } = useFieldArray({
-    control: form.control,
-    name: "lineItems",
-  });
-
-  const watchedLineItems = form.watch('lineItems') || [];
-  const watchedCustomerId = form.watch('customerId');
+  }, [initialDefaultValues, form, products, initialData, order]); // form is stable, products are needed for category derivation
 
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
@@ -229,8 +231,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
 
   useEffect(() => {
     if (conversionJustProcessed) {
-      setConversionJustProcessed(false); // Clear the flag after one render cycle
-      return; // Skip price recalculation if it was a conversion
+      setConversionJustProcessed(false); 
+      return; 
     }
 
     if (!watchedCustomerId || !products || products.length === 0) return;
@@ -330,12 +332,11 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined);
-      form.setValue(`lineItems.${index}.unitPrice`, 0); // Reset unit price for manual entry
+      form.setValue(`lineItems.${index}.unitPrice`, 0); 
       form.trigger(`lineItems.${index}.productName`);
       form.trigger(`lineItems.${index}.unitPrice`);
     } else {
-      form.setValue(`lineItems.${index}.productName`, ''); // Clear manual name if stock
-      // Let product selection repopulate unit price after category/product chosen
+      form.setValue(`lineItems.${index}.productName`, ''); 
     }
   };
 
@@ -577,7 +578,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
-                                {controllerField.value ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
+                                {controllerField.value && products.length > 0 ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
                                 <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </FormControl>
@@ -634,7 +635,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                             const num = parseFloat(val);
                             priceField.onChange(isNaN(num) ? undefined : num);
                            }}
-                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
+                          disabled={!isNonStock && (!watchedLineItems[index]?.productId || products.length === 0)}
                           placeholder="0.00"
                         />
                       </FormControl>
@@ -659,7 +660,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                             qtyField.onChange(isNaN(num) ? undefined : num);
                            }}
                           min="1"
-                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
+                          disabled={!isNonStock && (!watchedLineItems[index]?.productId || products.length === 0)}
                         />
                       </FormControl>
                       <FormMessage />
@@ -772,3 +773,4 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+
