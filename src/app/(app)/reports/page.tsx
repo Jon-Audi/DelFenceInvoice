@@ -10,35 +10,52 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import { PrintableOrderReport } from '@/components/reports/printable-order-report';
-import { PrintableCustomerBalanceReport } from '@/components/reports/printable-customer-balance-report'; // New import
+import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
 import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 type ReportType = 'sales' | 'orders' | 'customerBalances';
 
-interface CustomerBalanceData {
-  customerId: string;
-  customerName: string;
-  totalOutstandingBalance: number;
-}
-
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('sales');
   const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(endOfMonth(new Date()));
-  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerBalanceData[] | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
+  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | null>(null);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [reportTitleForPrint, setReportTitleForPrint] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setIsLoadingCustomers(true);
+      try {
+        const customersSnapshot = await getDocs(collection(db, 'customers'));
+        const fetchedCustomers: Customer[] = [];
+        customersSnapshot.forEach(docSnap => fetchedCustomers.push({ id: docSnap.id, ...docSnap.data() } as Customer));
+        setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
+      } catch (error) {
+        console.error("Error fetching customers for report:", error);
+        toast({ title: "Error", description: "Could not fetch customers.", variant: "destructive" });
+      } finally {
+        setIsLoadingCustomers(false);
+      }
+    };
+    fetchCustomers();
+  }, [toast]);
 
   const handleGenerateReport = async () => {
     if (reportType !== 'customerBalances' && (!startDate || !endDate)) {
@@ -52,70 +69,82 @@ export default function ReportsPage() {
 
     setIsLoading(true);
     setGeneratedReportData(null);
+    let currentReportTitle = '';
 
     try {
-      let data: Invoice[] | Order[] | CustomerBalanceData[] = [];
+      let data: Invoice[] | Order[] | CustomerInvoiceDetail[] = [];
 
-      if (reportType === 'sales' || reportType === 'orders') {
+      if (reportType === 'sales') {
+        currentReportTitle = `Sales Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
         const startQueryDate = Timestamp.fromDate(new Date(startDate!.setHours(0, 0, 0, 0)));
         const endQueryDate = Timestamp.fromDate(new Date(endDate!.setHours(23, 59, 59, 999)));
         
-        if (reportType === 'sales') {
-          const invoicesRef = collection(db, 'invoices');
-          const q = query(invoicesRef, 
-                          where('date', '>=', startQueryDate.toDate().toISOString()), 
-                          where('date', '<=', endQueryDate.toDate().toISOString()));
-          const querySnapshot = await getDocs(q);
-          const fetchedInvoices: Invoice[] = [];
-          querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
-          data = fetchedInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        } else if (reportType === 'orders') {
-          const ordersRef = collection(db, 'orders');
-          const q = query(ordersRef, 
-                          where('date', '>=', startQueryDate.toDate().toISOString()), 
-                          where('date', '<=', endQueryDate.toDate().toISOString()));
-          const querySnapshot = await getDocs(q);
-          const fetchedOrders: Order[] = [];
-          querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
-          data = fetchedOrders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        }
-      } else if (reportType === 'customerBalances') {
-        const customersSnapshot = await getDocs(collection(db, 'customers'));
-        const allCustomers: Customer[] = [];
-        customersSnapshot.forEach(docSnap => allCustomers.push({ id: docSnap.id, ...docSnap.data() } as Customer));
-
         const invoicesRef = collection(db, 'invoices');
-        // Fetch invoices that are not Paid and not Voided
-        const qInvoices = query(invoicesRef, 
-                                where('status', 'not-in', ['Paid', 'Voided'])
-                              );
+        const q = query(invoicesRef, 
+                        where('date', '>=', startQueryDate.toDate().toISOString()), 
+                        where('date', '<=', endQueryDate.toDate().toISOString()));
+        const querySnapshot = await getDocs(q);
+        const fetchedInvoices: Invoice[] = [];
+        querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
+        data = fetchedInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      } else if (reportType === 'orders') {
+        currentReportTitle = `Order Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
+        const startQueryDate = Timestamp.fromDate(new Date(startDate!.setHours(0, 0, 0, 0)));
+        const endQueryDate = Timestamp.fromDate(new Date(endDate!.setHours(23, 59, 59, 999)));
+
+        const ordersRef = collection(db, 'orders');
+        const q = query(ordersRef, 
+                        where('date', '>=', startQueryDate.toDate().toISOString()), 
+                        where('date', '<=', endQueryDate.toDate().toISOString()));
+        const querySnapshot = await getDocs(q);
+        const fetchedOrders: Order[] = [];
+        querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
+        data = fetchedOrders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      } else if (reportType === 'customerBalances') {
+        const invoicesRef = collection(db, 'invoices');
+        let qInvoices;
+
+        if (selectedCustomerId === 'all') {
+          currentReportTitle = "Outstanding Invoices Report (All Customers)";
+          qInvoices = query(invoicesRef,
+                            where('status', 'not-in', ['Paid', 'Voided']),
+                            where('balanceDue', '>', 0)
+                          );
+        } else {
+          const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+          currentReportTitle = `Outstanding Invoices for ${selectedCustomer?.companyName || `${selectedCustomer?.firstName} ${selectedCustomer?.lastName}` || 'Selected Customer'}`;
+          qInvoices = query(invoicesRef,
+                            where('customerId', '==', selectedCustomerId),
+                            where('status', 'not-in', ['Paid', 'Voided']),
+                            where('balanceDue', '>', 0)
+                          );
+        }
         const invoicesSnapshot = await getDocs(qInvoices);
         
-        const customerBalancesMap = new Map<string, number>();
-
+        const customerInvoiceDetails: CustomerInvoiceDetail[] = [];
         invoicesSnapshot.forEach(docSnap => {
           const invoice = docSnap.data() as Invoice;
-          if (invoice.balanceDue && invoice.balanceDue > 0) {
-            const currentBalance = customerBalancesMap.get(invoice.customerId) || 0;
-            customerBalancesMap.set(invoice.customerId, currentBalance + invoice.balanceDue);
-          }
+          const customer = customers.find(c => c.id === invoice.customerId);
+          customerInvoiceDetails.push({
+            customerId: invoice.customerId,
+            customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'Unknown Customer',
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            poNumber: invoice.poNumber,
+            invoiceDate: invoice.date,
+            dueDate: invoice.dueDate,
+            balanceDue: invoice.balanceDue || 0,
+            invoiceTotal: invoice.total,
+            amountPaid: invoice.amountPaid || 0,
+          });
         });
-
-        const customerBalanceReportData: CustomerBalanceData[] = [];
-        allCustomers.forEach(customer => {
-          const balance = customerBalancesMap.get(customer.id);
-          if (balance && balance > 0) {
-            customerBalanceReportData.push({
-              customerId: customer.id,
-              customerName: customer.companyName || `${customer.firstName} ${customer.lastName}`,
-              totalOutstandingBalance: balance,
-            });
-          }
-        });
-        data = customerBalanceReportData.sort((a,b) => b.totalOutstandingBalance - a.totalOutstandingBalance);
+        data = customerInvoiceDetails.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
       }
 
       setGeneratedReportData(data);
+      setReportTitleForPrint(currentReportTitle);
       if (data.length === 0) {
         toast({ title: "No Data", description: "No records found for the selected criteria.", variant: "default" });
       } else {
@@ -172,6 +201,10 @@ export default function ReportsPage() {
     }
   }, [isPrinting, companySettings, generatedReportData]);
 
+  const customerForSummary = reportType === 'customerBalances' && selectedCustomerId !== 'all' 
+    ? customers.find(c => c.id === selectedCustomerId) 
+    : null;
+
   return (
     <>
       <PageHeader title="Reports" description="Generate and print business reports." />
@@ -183,11 +216,12 @@ export default function ReportsPage() {
           <Tabs value={reportType} onValueChange={(value) => {
             setReportType(value as ReportType);
             setGeneratedReportData(null); 
+            setSelectedCustomerId('all'); // Reset customer selection when changing report type
           }}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="sales">Sales Report</TabsTrigger>
               <TabsTrigger value="orders">Order Report</TabsTrigger>
-              <TabsTrigger value="customerBalances">Customer Balances</TabsTrigger>
+              <TabsTrigger value="customerBalances">Outstanding Invoices</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -201,6 +235,7 @@ export default function ReportsPage() {
                       id="start-date"
                       variant={"outline"}
                       className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                      disabled={isLoading}
                     >
                       <Icon name="Calendar" className="mr-2 h-4 w-4" />
                       {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
@@ -219,6 +254,7 @@ export default function ReportsPage() {
                       id="end-date"
                       variant={"outline"}
                       className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                      disabled={isLoading}
                     >
                       <Icon name="Calendar" className="mr-2 h-4 w-4" />
                       {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
@@ -231,13 +267,39 @@ export default function ReportsPage() {
               </div>
             </div>
           )}
-           {reportType === 'customerBalances' && (
-            <p className="text-sm text-muted-foreground">This report shows current outstanding balances for all customers. Date range selection is not applicable.</p>
+
+          {reportType === 'customerBalances' && (
+            <div className="space-y-2">
+              <Label htmlFor="customer-select">Customer</Label>
+              <Select 
+                value={selectedCustomerId} 
+                onValueChange={setSelectedCustomerId}
+                disabled={isLoadingCustomers || isLoading}
+              >
+                <SelectTrigger id="customer-select">
+                  <SelectValue placeholder="Select Customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  {customers.map(customer => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.companyName || `${customer.firstName} ${customer.lastName}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                This report shows currently outstanding invoices (not Paid or Voided, with a balance due).
+              </p>
+            </div>
           )}
 
           <div className="flex space-x-2">
-            <Button onClick={handleGenerateReport} disabled={isLoading || (reportType !== 'customerBalances' && (!startDate || !endDate))}>
-              {isLoading && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+            <Button 
+              onClick={handleGenerateReport} 
+              disabled={isLoading || isLoadingCustomers || (reportType !== 'customerBalances' && (!startDate || !endDate))}
+            >
+              {(isLoading || isLoadingCustomers) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
             </Button>
             <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData || generatedReportData.length === 0}>
@@ -254,16 +316,33 @@ export default function ReportsPage() {
             <CardTitle>Generated Report Summary</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>Report Type: <span className="font-semibold capitalize">
-              {reportType === 'customerBalances' ? 'Customer Balances' : reportType}
-            </span></p>
+             <p>Report Type: <span className="font-semibold capitalize">
+                {reportType === 'sales' && 'Sales'}
+                {reportType === 'orders' && 'Orders'}
+                {reportType === 'customerBalances' && 
+                  (selectedCustomerId === 'all' 
+                    ? 'Outstanding Invoices (All Customers)' 
+                    : `Outstanding Invoices for ${customerForSummary?.companyName || `${customerForSummary?.firstName} ${customerForSummary?.lastName}` || ''}`)
+                }
+              </span>
+            </p>
             {reportType !== 'customerBalances' && (
               <p>Date Range: {startDate ? format(startDate, "PPP") : 'N/A'} - {endDate ? format(endDate, "PPP") : 'N/A'}</p>
             )}
             <p>Records Found: <span className="font-semibold">{generatedReportData.length}</span></p>
             {reportType === 'customerBalances' && (
               <p>Total Outstanding: <span className="font-semibold">
-                ${(generatedReportData as CustomerBalanceData[]).reduce((sum, item) => sum + item.totalOutstandingBalance, 0).toFixed(2)}
+                ${(generatedReportData as CustomerInvoiceDetail[]).reduce((sum, item) => sum + item.balanceDue, 0).toFixed(2)}
+              </span></p>
+            )}
+             {reportType === 'sales' && (
+              <p>Total Sales Amount: <span className="font-semibold">
+                ${(generatedReportData as Invoice[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+              </span></p>
+            )}
+             {reportType === 'orders' && (
+              <p>Total Order Amount: <span className="font-semibold">
+                ${(generatedReportData as Order[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}
               </span></p>
             )}
           </CardContent>
@@ -290,9 +369,10 @@ export default function ReportsPage() {
               />
             )}
             {reportType === 'customerBalances' && (
-              <PrintableCustomerBalanceReport
-                customerBalances={generatedReportData as CustomerBalanceData[]}
+              <PrintableOutstandingInvoicesReport
+                reportData={generatedReportData as CustomerInvoiceDetail[]}
                 companySettings={companySettings}
+                reportTitle={reportTitleForPrint}
               />
             )}
           </>
@@ -301,5 +381,3 @@ export default function ReportsPage() {
     </>
   );
 }
-
-    

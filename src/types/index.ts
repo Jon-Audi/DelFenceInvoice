@@ -168,3 +168,17 @@ export interface CompanySettings {
   logoUrl?: string;
   taxId?: string;
 }
+
+// New type for the detailed customer balance/outstanding invoices report
+export interface CustomerInvoiceDetail {
+  customerId: string;
+  customerName: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  poNumber?: string;
+  invoiceDate: string; // ISO string
+  dueDate?: string;   // ISO string
+  balanceDue: number;
+  invoiceTotal: number; // Added for clarity in reports
+  amountPaid: number;   // Added for clarity in reports
+}
