@@ -108,7 +108,7 @@ export const PrintableOrderReport: React.FC<PrintableOrderReportProps> = ({ orde
               </tr>
             ))}
             {orders.length === 0 && (
-              <tr>
+              <tr key="no-orders-row">
                 <td colSpan={6} className="p-1.5 border border-gray-300 text-center text-gray-500">No orders found for this period.</td>
               </tr>
             )}

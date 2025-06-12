@@ -106,7 +106,7 @@ export const PrintableSalesReport: React.FC<PrintableSalesReportProps> = ({ invo
               </tr>
             ))}
             {invoices.length === 0 && (
-              <tr>
+              <tr key="no-invoices-row">
                 <td colSpan={5} className="p-1.5 border border-gray-300 text-center text-gray-500">No invoices found for this period.</td>
               </tr>
             )}
