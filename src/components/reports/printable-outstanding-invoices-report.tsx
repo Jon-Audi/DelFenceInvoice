@@ -121,7 +121,7 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
                     <td className="text-right p-1.5 border border-gray-300 font-semibold">${invoice.balanceDue.toFixed(2)}</td>
                   </tr>
                 ))}
-                <tr className="bg-gray-50">
+                <tr key={`${customerId}-summary`} className="bg-gray-50">
                   <td colSpan={6} className="text-right p-1.5 border border-gray-300 font-bold">Customer Total Outstanding:</td>
                   <td className="text-right p-1.5 border border-gray-300 font-bold">${group.totalCustomerBalance.toFixed(2)}</td>
                 </tr>
