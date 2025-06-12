@@ -104,23 +104,19 @@ export default function ReportsPage() {
 
       } else if (reportType === 'customerBalances') {
         const invoicesRef = collection(db, 'invoices');
-        let qInvoices;
+        let qConstraints = [
+            where('status', 'not-in', ['Paid', 'Voided']),
+            where('balanceDue', '>', 0)
+        ];
 
         if (selectedCustomerId === 'all') {
           currentReportTitle = "Outstanding Invoices Report (All Customers)";
-          qInvoices = query(invoicesRef,
-                            where('status', 'not-in', ['Paid', 'Voided']),
-                            where('balanceDue', '>', 0)
-                          );
         } else {
           const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
           currentReportTitle = `Outstanding Invoices for ${selectedCustomer?.companyName || `${selectedCustomer?.firstName} ${selectedCustomer?.lastName}` || 'Selected Customer'}`;
-          qInvoices = query(invoicesRef,
-                            where('customerId', '==', selectedCustomerId),
-                            where('status', 'not-in', ['Paid', 'Voided']),
-                            where('balanceDue', '>', 0)
-                          );
+          qConstraints.push(where('customerId', '==', selectedCustomerId));
         }
+        const qInvoices = query(invoicesRef, ...qConstraints);
         const invoicesSnapshot = await getDocs(qInvoices);
         
         const customerInvoiceDetails: CustomerInvoiceDetail[] = [];
@@ -130,7 +126,7 @@ export default function ReportsPage() {
           customerInvoiceDetails.push({
             customerId: invoice.customerId,
             customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'Unknown Customer',
-            invoiceId: invoice.id,
+            invoiceId: invoice.id!,
             invoiceNumber: invoice.invoiceNumber,
             poNumber: invoice.poNumber,
             invoiceDate: invoice.date,
@@ -216,7 +212,7 @@ export default function ReportsPage() {
           <Tabs value={reportType} onValueChange={(value) => {
             setReportType(value as ReportType);
             setGeneratedReportData(null); 
-            setSelectedCustomerId('all'); // Reset customer selection when changing report type
+            setSelectedCustomerId('all'); 
           }}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="sales">Sales Report</TabsTrigger>
