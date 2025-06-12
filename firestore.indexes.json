@@ -1,5 +1,16 @@
 
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "balanceDue", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
