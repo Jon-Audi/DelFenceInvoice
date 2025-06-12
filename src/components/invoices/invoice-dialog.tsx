@@ -53,10 +53,10 @@ export function InvoiceDialog({
 
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
-      const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+      const finalUnitPrice = parseFloat((typeof item.unitPrice === 'number' ? item.unitPrice : 0).toFixed(2));
       const quantity = item.quantity;
       const isReturn = item.isReturn || false;
-      const itemBaseTotal = quantity * finalUnitPrice;
+      const itemBaseTotal = parseFloat((quantity * finalUnitPrice).toFixed(2));
       
       const itemName = item.isNonStock 
                        ? (item.productName || 'Non-Stock Item') 
@@ -75,47 +75,45 @@ export function InvoiceDialog({
       if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }
-      // For non-stock items, productId field is omitted
-
       return lineItemForDb as LineItem;
     });
 
-    const currentSubtotal = lineItems.reduce((acc, item) => acc + item.total, 0); 
-    const currentTaxAmount = 0; 
-    const currentTotal = currentSubtotal + currentTaxAmount;
+    const currentSubtotal = parseFloat(lineItems.reduce((acc, item) => acc + item.total, 0).toFixed(2)); 
+    const currentTaxAmount = 0; // Assuming no tax for now, or would be calculated & rounded
+    const currentTotal = parseFloat((currentSubtotal + currentTaxAmount).toFixed(2));
 
     let existingPayments: Payment[] = invoice?.payments ? [...invoice.payments] : [];
-    let newStatus = formData.status;
-
+    
     if (formData.newPaymentAmount && formData.newPaymentAmount > 0 && formData.newPaymentDate && formData.newPaymentMethod) {
       const newPayment: Payment = {
         id: crypto.randomUUID(),
         date: formData.newPaymentDate.toISOString(),
-        amount: formData.newPaymentAmount,
+        amount: parseFloat(formData.newPaymentAmount.toFixed(2)),
         method: formData.newPaymentMethod,
         notes: formData.newPaymentNotes,
       };
       existingPayments.push(newPayment);
     }
 
-    const totalAmountPaid = existingPayments.reduce((acc, p) => acc + p.amount, 0);
-    const balanceDue = currentTotal - totalAmountPaid;
+    const roundedTotalAmountPaid = parseFloat(existingPayments.reduce((acc, p) => acc + p.amount, 0).toFixed(2));
+    const roundedBalanceDue = parseFloat((currentTotal - roundedTotalAmountPaid).toFixed(2));
+    const EPSILON = 0.005; // Half a cent
 
-    if (newStatus !== 'Voided') {
-        if (balanceDue <= 0 && totalAmountPaid >= currentTotal && currentTotal > 0) {
-            newStatus = 'Paid';
-        } else if (totalAmountPaid > 0 && balanceDue > 0) {
-            newStatus = 'Partially Paid';
-        } else if (totalAmountPaid === 0 && formData.status !== 'Draft' && formData.status !== 'Sent') {
-             newStatus = (invoice?.status === 'Sent' && formData.status !== 'Voided' && !formData.newPaymentAmount) ? 'Sent' : 'Draft';
-        }
-        if (formData.status === 'Draft' || formData.status === 'Sent' || formData.status === 'Voided') {
-            if (newStatus !== 'Paid' && newStatus !== 'Partially Paid') { 
-                newStatus = formData.status;
-            }
-        }
+    let determinedStatus: Invoice['status'];
+
+    if (formData.status === 'Voided') {
+      determinedStatus = 'Voided';
+    } else if (currentTotal > EPSILON && roundedBalanceDue <= EPSILON) { // Positive total, fully paid
+      determinedStatus = 'Paid';
+    } else if (currentTotal > EPSILON && roundedTotalAmountPaid > 0 && roundedBalanceDue > EPSILON) { // Positive total, some payment made, but still a balance
+      determinedStatus = 'Partially Paid';
+    } else if (currentTotal <= EPSILON && roundedBalanceDue <= EPSILON) { // Zero or negative total (e.g. credit memo), considered paid/closed if balance is zero
+      determinedStatus = 'Paid'; 
+    } else {
+      // Fallback to the status selected in the form if no payment-driven status applies
+      // This handles 'Draft', 'Sent', or an invoice with no payments yet, or a $0 invoice with no payments.
+      determinedStatus = formData.status;
     }
-
 
     const invoiceToSave: Invoice = {
       id: invoice?.id || initialData?.id || crypto.randomUUID(),
@@ -124,7 +122,7 @@ export function InvoiceDialog({
       customerName: customerName,
       date: formData.date.toISOString(),
       dueDate: formData.dueDate?.toISOString(),
-      status: newStatus,
+      status: determinedStatus,
       poNumber: formData.poNumber,
       lineItems: lineItems,
       subtotal: currentSubtotal,
@@ -133,8 +131,8 @@ export function InvoiceDialog({
       paymentTerms: formData.paymentTerms,
       notes: formData.notes,
       payments: existingPayments,
-      amountPaid: totalAmountPaid,
-      balanceDue: balanceDue,
+      amountPaid: roundedTotalAmountPaid,
+      balanceDue: roundedBalanceDue,
     };
     onSave(invoiceToSave);
     setOpen(false);
