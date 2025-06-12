@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; 
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { PrintablePriceSheet } from '@/components/products/printable-price-sheet';
-import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; // New import
+import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; 
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -508,24 +508,31 @@ export default function ProductsPage() {
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
-    setIsSelectCategoriesDialogOpen(false); // Close dialog after attempting to prepare print
+    setIsSelectCategoriesDialogOpen(false); 
   };
 
-  const handlePrintedPriceSheet = React.useCallback(() => {
+  const handlePrintedPriceSheet = useCallback(() => {
     setProductsForPrinting(null);
     setCompanySettingsForPrinting(null);
   }, []);
 
 
   useEffect(() => {
+    const doPrint = () => window.print();
+    const afterPrintHandler = () => {
+      handlePrintedPriceSheet();
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+
     if (productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-          handlePrintedPriceSheet(); 
-        });
+        requestAnimationFrame(doPrint);
       });
     }
+    return () => {
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
   }, [productsForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrintedPriceSheet]);
 
 
@@ -618,3 +625,4 @@ export default function ProductsPage() {
     </>
   );
 }
+

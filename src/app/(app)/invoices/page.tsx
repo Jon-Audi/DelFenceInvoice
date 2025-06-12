@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -358,21 +358,28 @@ export default function InvoicesPage() {
     setIsLoadingCompanySettings(false);
   };
 
-  const handlePrinted = () => {
+  const handlePrinted = useCallback(() => {
     setInvoiceForPrinting(null);
     setCompanySettingsForPrinting(null);
-  };
+  }, []);
 
   useEffect(() => {
+    const doPrint = () => window.print();
+    const afterPrintHandler = () => {
+      handlePrinted();
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
+      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-          handlePrinted();
-        });
+        requestAnimationFrame(doPrint);
       });
     }
-  }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
+    return () => {
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+  }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
 
 
   const handlePrintInvoicePackingSlip = async (invoice: Invoice) => {
@@ -387,21 +394,27 @@ export default function InvoicesPage() {
     setIsLoadingPackingSlipCompanySettings(false);
   };
 
-  const handlePrintedPackingSlip = () => {
+  const handlePrintedPackingSlip = useCallback(() => {
     setInvoiceForPackingSlipPrinting(null);
     setCompanySettingsForPackingSlip(null);
-  };
+  }, []);
 
   useEffect(() => {
+    const doPrint = () => window.print();
+    const afterPrintHandler = () => {
+      handlePrintedPackingSlip();
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
     if (invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
+        window.addEventListener('afterprint', afterPrintHandler);
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                window.print();
-                handlePrintedPackingSlip();
-            });
+            requestAnimationFrame(doPrint);
         });
     }
-  }, [invoiceForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings]);
+    return () => {
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+  }, [invoiceForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings, handlePrintedPackingSlip]);
 
 
   const handleGenerateEmail = async (invoice: Invoice) => {
@@ -733,3 +746,4 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+

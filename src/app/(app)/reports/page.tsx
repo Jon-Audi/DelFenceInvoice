@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -186,16 +186,29 @@ export default function ReportsPage() {
     setIsLoading(false);
   };
 
+  const handleReportPrinted = useCallback(() => {
+    setIsPrinting(false);
+    setCompanySettings(null);
+  }, [setIsPrinting, setCompanySettings]);
+
   useEffect(() => {
-    if (isPrinting && companySettings && generatedReportData) {
-      const timer = setTimeout(() => {
-        window.print();
-        setIsPrinting(false); 
-        setCompanySettings(null); 
-      }, 100); 
-      return () => clearTimeout(timer);
+    const doPrint = () => window.print();
+    const afterPrintHandler = () => {
+      handleReportPrinted();
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+
+    if (isPrinting && companySettings && generatedReportData && generatedReportData.length > 0) {
+      window.addEventListener('afterprint', afterPrintHandler);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(doPrint);
+      });
     }
-  }, [isPrinting, companySettings, generatedReportData]);
+
+    return () => {
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+  }, [isPrinting, companySettings, generatedReportData, handleReportPrinted]);
 
   const customerForSummary = reportType === 'customerBalances' && selectedCustomerId !== 'all' 
     ? customers.find(c => c.id === selectedCustomerId) 
@@ -377,3 +390,4 @@ export default function ReportsPage() {
     </>
   );
 }
+

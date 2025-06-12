@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -109,7 +109,6 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedEstimates.push({ ...docSnap.data() as Omit<Estimate, 'id'>, id: docSnap.id });
       });
-      // Initial sort from Firestore can be minimal, client-side sort will handle display
       setEstimates(fetchedEstimates); 
       setIsLoadingEstimates(false);
     }, (error) => {
@@ -302,23 +301,28 @@ export default function EstimatesPage() {
     }
   };
 
-  const handlePrinted = () => {
+  const handlePrinted = useCallback(() => {
     setEstimateForPrinting(null);
     setCompanySettingsForPrinting(null);
-  };
+  }, []);
 
   useEffect(() => {
+    const doPrint = () => window.print();
+    const afterPrintHandler = () => {
+      handlePrinted();
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      
-      
+      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-          handlePrinted(); 
-        });
+        requestAnimationFrame(doPrint);
       });
     }
-  }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings]);
+    return () => {
+      window.removeEventListener('afterprint', afterPrintHandler);
+    };
+  }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
 
 
   const handleGenerateEmail = async (estimate: Estimate) => {
@@ -732,3 +736,4 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
