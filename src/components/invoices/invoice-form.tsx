@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
+import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog'; // Import bulk add dialog
 
 const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
@@ -104,9 +105,12 @@ interface InvoiceFormProps {
 }
 
 export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products, productCategories = [] }: InvoiceFormProps) {
+  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false); // State for bulk add dialog
+  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
+
+
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
-    // Default values will be set by the useEffect hook based on props
   });
 
   const { fields, append, remove, update } = useFieldArray({
@@ -114,10 +118,23 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     name: "lineItems",
   });
 
-  const watchedLineItems = form.watch('lineItems');
+  const watchedLineItems = form.watch('lineItems') || [];
   const watchedCustomerId = form.watch('customerId');
+  
+  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
+    let finalPrice = product.price;
+    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
+      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
+      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
 
-  const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
+      if (specificRule) {
+        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
+      } else if (allCategoriesRule) {
+        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
+      }
+    }
+    return parseFloat(finalPrice.toFixed(2));
+  };
 
   // Effect to reset form and initialize when invoice or initialData props change
   useEffect(() => {
@@ -151,7 +168,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         poNumber: initialData.poNumber ?? '',
         date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
         dueDate: initialData.dueDate ? (initialData.dueDate instanceof Date ? initialData.dueDate : new Date(initialData.dueDate)) : undefined,
-        lineItems: (initialData.lineItems || []).map(li => ({ // Guard against undefined initialData.lineItems
+        lineItems: (initialData.lineItems || []).map(li => ({
             id: li.id || crypto.randomUUID(),
             productId: li.productId,
             productName: li.productName,
@@ -181,7 +198,18 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       };
     }
     form.reset(currentDefaultValues);
-  }, [invoice, initialData, form.reset]); // form.reset is stable
+
+    const formLineItemsAfterReset = form.getValues('lineItems') || [];
+    const newCategoryFilters = formLineItemsAfterReset.map(item => {
+        if (!item.isNonStock && item.productId && products && products.length > 0) {
+            const product = products.find(p => p.id === item.productId);
+            return product?.category;
+        }
+        return undefined;
+    });
+    setLineItemCategoryFilters(newCategoryFilters);
+
+  }, [invoice, initialData, form, products]); // form.reset is stable, added products dependency
 
   // Effect to update unit prices based on customer-specific markups
   useEffect(() => {
@@ -209,36 +237,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         });
     }
   }, [watchedCustomerId, customers, products, form, update]);
-
-
-  // Effect to update category filters when lineItems or products change
-  useEffect(() => {
-    const currentFormLineItems = form.getValues('lineItems') || [];
-    setLineItemCategoryFilters(
-        currentFormLineItems.map(item => {
-            if (!item.isNonStock && item.productId && products.length > 0) {
-                const product = products.find(p => p.id === item.productId);
-                return product?.category;
-            }
-            return undefined;
-        })
-    );
-  }, [watchedLineItems, products, form]);
-
-  const calculateUnitPrice = (product: Product, customer?: Customer): number => {
-    let finalPrice = product.price;
-    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
-      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
-      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
-
-      if (specificRule) {
-        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
-      } else if (allCategoriesRule) {
-        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
-      }
-    }
-    return parseFloat(finalPrice.toFixed(2));
-  };
 
   const currentInvoiceTotal = useMemo(() => {
     return (watchedLineItems || []).reduce((acc, item) => {
@@ -304,11 +302,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
-
-  const handleFormSubmit = (data: InvoiceFormData) => {
-    onSubmit(data);
-  };
-
+  
   const handleNonStockToggle = (index: number, checked: boolean) => {
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
@@ -321,6 +315,35 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     }
   };
 
+  const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
+    const newFilterEntries: (string | undefined)[] = [];
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
+    itemsToAdd.forEach(item => {
+      const productDetails = products.find(p => p.id === item.productId);
+      if (!productDetails) return;
+
+      const finalPrice = calculateUnitPrice(productDetails, currentCustomer);
+
+      append({
+        id: crypto.randomUUID(),
+        productId: item.productId,
+        productName: productDetails.name,
+        quantity: item.quantity,
+        unitPrice: finalPrice,
+        isReturn: false,
+        isNonStock: false,
+      });
+      newFilterEntries.push(productDetails?.category);
+    });
+    setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
+    setIsBulkAddDialogOpen(false);
+  };
+
+  const handleFormSubmit = (data: InvoiceFormData) => {
+    onSubmit(data);
+  };
 
   return (
     <Form {...form}>
@@ -596,9 +619,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={addLineItem}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
-        </Button>
+        <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={addLineItem}>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
+            </Button>
+             <Button type="button" variant="outline" onClick={() => setIsBulkAddDialogOpen(true)}>
+                <Icon name="Layers" className="mr-2 h-4 w-4" /> Bulk Add Stock Items
+            </Button>
+        </div>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
         )}
@@ -617,7 +645,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             )}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-
+        
         <Separator />
         <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -693,7 +721,15 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
           <Button type="submit">{invoice || initialData ? 'Save Changes' : 'Create Invoice'}</Button>
         </div>
       </form>
+      {isBulkAddDialogOpen && (
+        <BulkAddProductsDialog
+          isOpen={isBulkAddDialogOpen}
+          onOpenChange={setIsBulkAddDialogOpen}
+          products={products}
+          productCategories={productCategories}
+          onAddItems={handleBulkAddItems}
+        />
+      )}
     </Form>
   );
 }
-

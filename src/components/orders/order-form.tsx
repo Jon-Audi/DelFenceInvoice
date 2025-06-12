@@ -33,6 +33,7 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { ALL_CATEGORIES_MARKUP_KEY, PAYMENT_METHODS } from '@/lib/constants';
+import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog'; // Import bulk add dialog
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
@@ -108,6 +109,7 @@ interface OrderFormProps {
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [conversionJustProcessed, setConversionJustProcessed] = useState(false);
+  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false); // State for bulk add dialog
 
   const initialDefaultValues = useMemo((): OrderFormData => {
     let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'> & { id?: string};
@@ -195,7 +197,6 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   useEffect(() => {
     form.reset(initialDefaultValues);
 
-    // After reset, get the line items from the form's current state
     const formLineItemsAfterReset = form.getValues('lineItems') || [];
     const newCategoryFilters = formLineItemsAfterReset.map(item => {
         if (!item.isNonStock && item.productId && products && products.length > 0) {
@@ -211,7 +212,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     } else {
         setConversionJustProcessed(false);
     }
-  }, [initialDefaultValues, form, products, initialData, order]); // form is stable, products are needed for category derivation
+  }, [initialDefaultValues, form, products, initialData, order]);
 
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
@@ -340,6 +341,31 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     }
   };
 
+  const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
+    const newFilterEntries: (string | undefined)[] = [];
+    const currentCustomerId = form.getValues('customerId');
+    const currentCustomer = customers.find(c => c.id === currentCustomerId);
+
+    itemsToAdd.forEach(item => {
+      const productDetails = products.find(p => p.id === item.productId);
+      if (!productDetails) return;
+
+      const finalPrice = calculateUnitPrice(productDetails, currentCustomer);
+
+      append({
+        id: crypto.randomUUID(),
+        productId: item.productId,
+        productName: productDetails.name,
+        quantity: item.quantity,
+        unitPrice: finalPrice,
+        isReturn: false,
+        isNonStock: false,
+      });
+      newFilterEntries.push(productDetails?.category);
+    });
+    setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
+    setIsBulkAddDialogOpen(false);
+  };
 
   const handleFormSubmit = (data: OrderFormData) => {
     onSubmit(data);
@@ -675,9 +701,14 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={addLineItem}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
-        </Button>
+        <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={addLineItem}>
+              <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setIsBulkAddDialogOpen(true)}>
+                <Icon name="Layers" className="mr-2 h-4 w-4" /> Bulk Add Stock Items
+            </Button>
+        </div>
         {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
              <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
         )}
@@ -770,7 +801,15 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           <Button type="submit">{order || initialData ? 'Save Changes' : 'Create Order'}</Button>
         </div>
       </form>
+       {isBulkAddDialogOpen && (
+        <BulkAddProductsDialog
+          isOpen={isBulkAddDialogOpen}
+          onOpenChange={setIsBulkAddDialogOpen}
+          products={products}
+          productCategories={productCategories}
+          onAddItems={handleBulkAddItems}
+        />
+      )}
     </Form>
   );
 }
-
