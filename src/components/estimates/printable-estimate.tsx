@@ -17,20 +17,23 @@ interface PrintableEstimateProps {
   }>;
   subtotal?: number;
   total?: number;
+  logoUrl?: string; // Added logoUrl prop
 }
 
 const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProps>(
-  ({ estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0 }, ref) => {
+  ({ estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0, logoUrl }, ref) => {
   return (
     <div ref={ref} className="print-only-container">
       <div className="print-only p-8">
         {/* Logo */}
-        <img
-          src="/logo.png" // Assumes logo.png is in the public folder
-          alt="Delaware Fence Solutions Logo"
-          className="mx-auto mb-4 h-20 object-contain"
-          data-ai-hint="company logo"
-        />
+        {logoUrl && (
+          <img
+            src={logoUrl} // Use the logoUrl prop
+            alt="Delaware Fence Solutions Logo"
+            className="mx-auto mb-4 h-20 object-contain"
+            data-ai-hint="company logo"
+          />
+        )}
 
         {/* Heading */}
         <div className="text-center mb-4">
@@ -97,5 +100,4 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
 
 PrintableEstimate.displayName = "PrintableEstimate";
 
-// Remove PrintEstimateButton component from here; its logic moves to EstimatesPage.tsx
 export default PrintableEstimate;

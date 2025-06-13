@@ -54,7 +54,7 @@ import type { Estimate, Product, Customer, CompanySettings, EmailContact } from 
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
-import PrintableEstimate from '@/components/estimates/printable-estimate'; // Default import
+import PrintableEstimate from '@/components/estimates/printable-estimate';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
 
@@ -91,8 +91,7 @@ export default function EstimatesPage() {
   const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
 
-  // State and ref for the new printing mechanism
-  const [estimateToPrint, setEstimateToPrint] = useState<Estimate | null>(null);
+  const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null); // Use any for flexible props
   const printRef = useRef<HTMLDivElement>(null);
 
 
@@ -385,17 +384,30 @@ export default function EstimatesPage() {
   };
 
   const handlePrepareAndPrint = (estimate: Estimate) => {
-    setEstimateToPrint(estimate);
-    // Use a timeout to allow React to re-render the hidden component with new data
+    const estimateDataForPrint = {
+        estimateNumber: estimate.estimateNumber,
+        date: formatDateForDisplay(estimate.date),
+        poNumber: estimate.poNumber || '',
+        customerName: estimate.customerName || 'N/A',
+        items: estimate.lineItems.map(li => ({
+          description: li.productName + (li.isReturn ? " (Return)" : ""),
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          total: li.total,
+        })),
+        subtotal: estimate.subtotal,
+        total: estimate.total,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/logo.png` : "/logo.png",
+      };
+    setEstimateToPrint(estimateDataForPrint);
+
     setTimeout(() => {
       if (printRef.current) {
         const printContents = printRef.current.innerHTML;
         const win = window.open('', '_blank');
         if (win) {
           win.document.write('<html><head><title>Print Estimate</title>');
-          // Link to Tailwind CSS via CDN for the new window
           win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
-          // Add any other essential global styles or print-specific CSS links here if needed
           win.document.write('</head><body>');
           win.document.write(printContents);
           win.document.write('</body></html>');
@@ -404,16 +416,14 @@ export default function EstimatesPage() {
           setTimeout(() => {
             win.print();
             win.close();
-          }, 750); // Delay to ensure content and styles load
+          }, 750);
         } else {
           toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
         }
       } else {
         toast({ title: "Print Error", description: "Printable content not found. Ref is null.", variant: "destructive" });
       }
-      // Optionally clear estimateToPrint after a delay or based on window close, though immediate clearing is also fine
-      // setEstimateToPrint(null);
-    }, 100); // Short timeout for React to update the hidden component
+    }, 100);
   };
 
 
@@ -645,21 +655,7 @@ export default function EstimatesPage() {
       {/* Hidden PrintableEstimate component, updated by estimateToPrint state */}
       {estimateToPrint && (
         <div style={{ display: 'none' }}>
-          <PrintableEstimate
-            ref={printRef}
-            estimateNumber={estimateToPrint.estimateNumber}
-            date={formatDateForDisplay(estimateToPrint.date)}
-            poNumber={estimateToPrint.poNumber || ''}
-            customerName={estimateToPrint.customerName || 'N/A'}
-            items={estimateToPrint.lineItems.map(li => ({
-              description: li.productName + (li.isReturn ? " (Return)" : ""),
-              quantity: li.quantity,
-              unitPrice: li.unitPrice,
-              total: li.total,
-            }))}
-            subtotal={estimateToPrint.subtotal}
-            total={estimateToPrint.total}
-          />
+          <PrintableEstimate ref={printRef} {...estimateToPrint} />
         </div>
       )}
 
