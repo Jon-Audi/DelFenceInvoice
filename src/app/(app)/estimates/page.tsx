@@ -295,12 +295,12 @@ export default function EstimatesPage() {
     const settings = await fetchCompanySettings();
     if (settings) {
       setCompanySettingsForPrinting(settings);
-      setEstimateForPrinting(estimate); // This will trigger the useEffect below
+      setEstimateForPrinting(estimate); 
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
   };
-
+  
   const handlePrinted = useCallback(() => {
     setEstimateForPrinting(null);
     setCompanySettingsForPrinting(null);
@@ -310,7 +310,7 @@ export default function EstimatesPage() {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
       const timer = setTimeout(() => {
         window.print();
-      }, 150); // Delay before printing
+      }, 250); // Standardized timeout
 
       const afterPrintHandler = () => {
         handlePrinted();
@@ -738,3 +738,5 @@ const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) =
   <div className="space-y-1">{children}</div>
 );
 
+
+    

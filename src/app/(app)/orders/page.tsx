@@ -290,17 +290,18 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
+      const timer = setTimeout(() => {
+        window.print();
+      }, 250); // Standardized timeout
+
       const afterPrintHandler = () => {
         handlePrinted();
         window.removeEventListener('afterprint', afterPrintHandler);
       };
       window.addEventListener('afterprint', afterPrintHandler);
+
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('afterprint', afterPrintHandler);
       };
     }
@@ -325,17 +326,18 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                window.print();
-            });
-        });
+        const timer = setTimeout(() => {
+          window.print();
+        }, 250); // Standardized timeout
+        
         const afterPrintHandler = () => {
           handlePrintedPackingSlip();
           window.removeEventListener('afterprint', afterPrintHandler);
         };
         window.addEventListener('afterprint', afterPrintHandler);
+
         return () => {
+          clearTimeout(timer);
           window.removeEventListener('afterprint', afterPrintHandler);
         };
     }
@@ -681,3 +683,5 @@ const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) =
   <div className="space-y-1">{children}</div>
 );
 
+
+    

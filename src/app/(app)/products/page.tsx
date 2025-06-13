@@ -519,17 +519,18 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
+      const timer = setTimeout(() => {
+        window.print();
+      }, 250); // Standardized timeout
+      
       const afterPrintHandler = () => {
         handlePrintedPriceSheet();
         window.removeEventListener('afterprint', afterPrintHandler);
       };
       window.addEventListener('afterprint', afterPrintHandler);
+
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('afterprint', afterPrintHandler);
       };
     }
@@ -626,3 +627,5 @@ export default function ProductsPage() {
   );
 }
 
+
+    

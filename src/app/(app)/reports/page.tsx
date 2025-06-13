@@ -188,22 +188,23 @@ export default function ReportsPage() {
 
   const handleReportPrinted = useCallback(() => {
     setIsPrinting(false);
-    setCompanySettings(null);
+    setCompanySettings(null); // Clear settings after printing
   }, []);
 
   useEffect(() => {
     if (isPrinting && companySettings && generatedReportData && generatedReportData.length > 0) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
+      const timer = setTimeout(() => {
+        window.print();
+      }, 250); // Standardized timeout
+
       const afterPrintHandler = () => {
         handleReportPrinted();
         window.removeEventListener('afterprint', afterPrintHandler);
       };
       window.addEventListener('afterprint', afterPrintHandler);
+
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('afterprint', afterPrintHandler);
       };
     }
@@ -390,3 +391,5 @@ export default function ReportsPage() {
   );
 }
 
+
+    

@@ -113,69 +113,70 @@
 }
 
 @media print {
-  body {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Aggressively hide everything not in the print container */
+  body > *:not(.print-only-container) {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important; /* Move it out of flow */
+    left: -9999px !important;
+    top: -9999px !important;
+  }
+
+  .print-only-container {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
     color: black !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
-    height: auto !important;
-    overflow: visible !important;
-    width: 100% !important; /* Ensure body takes full width */
   }
 
-  /* Hide everything on the page more aggressively */
-  body > *:not(.print-only-container) {
-    display: none !important;
-    visibility: hidden !important; /* Also hide for good measure */
-  }
-
-  .print-only-container {
+  .print-only {
     display: block !important;
     visibility: visible !important;
-    position: static !important; /* Crucial: ensure it's in the normal document flow */
-    width: 100% !important; /* Take full available width */
-    height: auto !important; /* Adjust height based on content */
-    margin: 0 !important; /* No margins on the container itself */
-    padding: 0 !important; /* No padding on the container itself */
-    background: white !important; /* White background for the container */
-    color: black !important; /* Black text for the container */
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 0.5in !important; /* Page margins */
+    background-color: white !important;
+    color: black !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 10pt !important;
+    box-sizing: border-box !important;
+    border: 3px dotted red !important; /* DEBUGGING BORDER */
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  .print-only { /* This is the direct child component that actually holds the content */
-    display: block !important; /* Ensure it's a block element */
-    visibility: visible !important; /* Ensure it's visible */
-    width: 100% !important; /* Use full width of parent */
-    height: auto !important; /* Height based on content */
-    margin: 0 auto !important; /* Center if needed */
-    padding: 0.5in !important; /* This acts as the page margins */
-    background-color: white !important; /* Ensure white background */
-    color: black !important; /* Ensure black text */
-    font-family: Arial, sans-serif !important; /* Basic print font */
-    font-size: 10pt !important; /* Basic print font size */
-    box-sizing: border-box !important; /* Consistent box model */
-    border: 2px dashed red !important; /* DEBUGGING BORDER */
-    -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  /* Ensure children of .print-only are visible and styled for print */
   .print-only * {
     visibility: visible !important;
-    background-color: transparent !important; /* Allow parent .print-only bg to show */
+    display: revert !important; /* Allow elements to take their natural display type if not block */
+    background-color: transparent !important;
     color: black !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
     box-shadow: none !important;
     text-shadow: none !important;
-    /* Avoid overriding specific display properties unless necessary */
-    /* display: revert !important; was too broad */
+    border-color: #ccc !important; /* Ensure borders are visible */
   }
   
-  .print-only img { /* Make sure images are block and fit */
+  .print-only img {
     display: block !important;
     max-width: 100% !important;
     height: auto !important;
@@ -186,21 +187,29 @@
     border-collapse: collapse !important;
     margin-top: 0.5rem !important;
     margin-bottom: 0.5rem !important;
-    page-break-inside: auto !important; /* Allow tables to break across pages if long */
+    page-break-inside: auto !important;
   }
-  .print-only th, .print-only td {
+
+  .print-only th,
+  .print-only td {
     border: 1px solid #ccc !important;
-    padding: 4px !important;
-    page-break-inside: avoid !important; /* Try to keep cell content together */
+    padding: 6px !important;
+    page-break-inside: avoid !important;
     word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
   }
+
   .print-only th {
     background-color: #f0f0f0 !important;
     font-weight: bold !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
   @page {
-    size: auto; /* Browser default (usually letter or A4) */
-    margin: 0; /* Margins are handled by .print-only's padding */
+    size: auto;
+    margin: 0;
   }
 }
+
+    
