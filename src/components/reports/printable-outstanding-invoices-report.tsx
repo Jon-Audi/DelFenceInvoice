@@ -3,7 +3,6 @@
 
 import React from 'react';
 import type { CompanySettings, CustomerInvoiceDetail } from '@/types';
-// import Image from 'next/image'; // No longer using next/image
 import { format } from 'date-fns';
 
 interface PrintableOutstandingInvoicesReportProps {
@@ -12,39 +11,13 @@ interface PrintableOutstandingInvoicesReportProps {
   reportTitle: string;
 }
 
-const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (url.startsWith('https://') || url.startsWith('http://')) return url;
-  if (url.startsWith('gs://')) {
-    try {
-      const noPrefix = url.substring(5);
-      const parts = noPrefix.split('/');
-      const bucket = parts.shift();
-      if (!bucket) {
-          console.error("Invalid gs:// URL structure, missing bucket:", url);
-          return undefined;
-      }
-      const objectPath = parts.join('/');
-      if (!objectPath) {
-           console.error("Invalid gs:// URL structure, missing object path:", url);
-          return undefined;
-      }
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    } catch (error) {
-      console.error("Error transforming gs:// URL:", url, error);
-      return undefined;
-    }
-  }
-  console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url;
-};
-
 export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingInvoicesReportProps> = ({ reportData, companySettings, reportTitle }) => {
-  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+  // Using local /public/logo.png
+  const logoUrl = "/logo.png";
   const reportGeneratedDate = format(new Date(), "MM/dd/yyyy HH:mm");
 
   const groupedInvoices = reportData.reduce((acc, invoice) => {
-    const customerKey = invoice.customerId || 'unknown_customer'; // Fallback key
+    const customerKey = invoice.customerId || 'unknown_customer'; 
     if (!acc[customerKey]) {
       acc[customerKey] = {
         customerName: invoice.customerName || 'Unknown Customer',
@@ -63,10 +36,10 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
     <div className="print-only p-8 bg-white text-black font-sans text-xs">
       <header className="grid grid-cols-2 gap-8 mb-6">
         <div>
-          {logoHttpUrl && (
+          {logoUrl && (
             <div className="mb-2" style={{ width: '96px' }}>
               <img
-                src={logoHttpUrl}
+                src={logoUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
                 style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                 data-ai-hint="company logo"

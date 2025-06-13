@@ -3,41 +3,11 @@
 
 import React from 'react';
 import type { Invoice, CompanySettings } from '@/types';
-// import Image from 'next/image'; // No longer using next/image
 
 interface PrintableInvoiceProps {
   invoice: Invoice | null;
   companySettings: CompanySettings | null;
 }
-
-const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (url.startsWith('https://') || url.startsWith('http://')) {
-    return url;
-  }
-  if (url.startsWith('gs://')) {
-    try {
-      const noPrefix = url.substring(5); // Remove "gs://"
-      const parts = noPrefix.split('/');
-      const bucket = parts.shift(); // Get the first part as bucket
-      if (!bucket) {
-          console.error("Invalid gs:// URL structure, missing bucket:", url);
-          return undefined;
-      }
-      const objectPath = parts.join('/');
-      if (!objectPath) {
-          console.error("Invalid gs:// URL structure, missing object path:", url);
-          return undefined;
-      }
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    } catch (error) {
-      console.error("Error transforming gs:// URL:", url, error);
-      return undefined;
-    }
-  }
-  console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url;
-};
 
 export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
   if (!invoice || !companySettings) {
@@ -49,17 +19,18 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
     return new Date(dateString).toLocaleDateString();
   };
 
-  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+  // Using local /public/logo.png
+  const logoUrl = "/logo.png";
 
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
       {/* Invoice Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
-          {logoHttpUrl && (
+          {logoUrl && (
              <div className="mb-4" style={{ width: '128px' }}>
               <img
-                src={logoHttpUrl}
+                src={logoUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
                 style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                 data-ai-hint="company logo"
@@ -134,7 +105,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
           {invoice.amountPaid && invoice.amountPaid > 0 && (
             <div className="flex justify-between text-md">
               <span className="font-semibold text-green-600">Amount Paid:</span>
-              <span className="text-green-600">(${invoice.amountPaid.toFixed(2)})</span> {/* Changed to positive display */}
+              <span className="text-green-600">(${invoice.amountPaid.toFixed(2)})</span>
             </div>
           )}
           {invoice.balanceDue !== undefined && (
@@ -173,7 +144,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
         </div>
       )}
 
-      {/* Notes and Payment Terms */}
       {(invoice.notes || invoice.paymentTerms) && (
         <div className="mb-8 p-4 border border-gray-200 rounded-md bg-gray-50 text-sm">
           {invoice.paymentTerms && (
@@ -191,7 +161,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
         </div>
       )}
 
-      {/* Footer (Optional) */}
       <div className="text-center text-xs text-gray-500 pt-8 border-t border-gray-300">
         <p>Thank you for your business!</p>
         <p>{companySettings.companyName}</p>

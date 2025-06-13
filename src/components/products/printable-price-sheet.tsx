@@ -3,41 +3,11 @@
 
 import React from 'react';
 import type { Product, CompanySettings } from '@/types';
-// import Image from 'next/image'; // No longer using next/image
 
 interface PrintablePriceSheetProps {
   groupedProducts: Map<string, Product[]>;
   companySettings: CompanySettings | null;
 }
-
-const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (url.startsWith('https://') || url.startsWith('http://')) {
-    return url;
-  }
-  if (url.startsWith('gs://')) {
-    try {
-      const noPrefix = url.substring(5);
-      const parts = noPrefix.split('/');
-      const bucket = parts.shift();
-      if (!bucket) {
-          console.error("Invalid gs:// URL structure, missing bucket:", url);
-          return undefined;
-      }
-      const objectPath = parts.join('/');
-      if (!objectPath) {
-          console.error("Invalid gs:// URL structure, missing object path:", url);
-          return undefined;
-      }
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    } catch (error) {
-      console.error("Error transforming gs:// URL:", url, error);
-      return undefined;
-    }
-  }
-  console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url;
-};
 
 export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupedProducts, companySettings }) => {
   if (!groupedProducts || groupedProducts.size === 0 || !companySettings) {
@@ -48,18 +18,18 @@ export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupe
     );
   }
 
-  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+  // Using local /public/logo.png
+  const logoUrl = "/logo.png";
   const currentDate = new Date().toLocaleDateString();
 
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
-      {/* Header */}
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
-          {logoHttpUrl && (
+          {logoUrl && (
              <div className="mb-4" style={{ width: '128px' }}>
               <img
-                src={logoHttpUrl}
+                src={logoUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
                 style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                 data-ai-hint="company logo"
@@ -82,7 +52,6 @@ export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupe
         </div>
       </div>
 
-      {/* Products List */}
       {Array.from(groupedProducts.entries()).map(([category, productsInCategory]) => (
         <div key={category} className="mb-6 last:mb-0">
           <h3 className="text-xl font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-400">{category}</h3>
@@ -111,7 +80,6 @@ export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupe
         </div>
       ))}
 
-      {/* Footer (Optional) */}
       <div className="text-center text-xs text-gray-500 pt-8 mt-8 border-t border-gray-300">
         <p>Prices subject to change without notice.</p>
         <p>{companySettings.companyName}</p>

@@ -3,7 +3,6 @@
 
 import React from 'react';
 import type { Order, CompanySettings } from '@/types';
-// import Image from 'next/image'; // No longer using next/image
 import { format } from 'date-fns';
 
 interface PrintableOrderReportProps {
@@ -13,33 +12,14 @@ interface PrintableOrderReportProps {
   endDate: Date;
 }
 
-const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (url.startsWith('https://') || url.startsWith('http://')) return url;
-  if (url.startsWith('gs://')) {
-    try {
-      const noPrefix = url.substring(5);
-      const parts = noPrefix.split('/');
-      const bucket = parts.shift();
-      if (!bucket) return undefined;
-      const objectPath = parts.join('/');
-      if (!objectPath) return undefined;
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    } catch (error) {
-      console.error("Error transforming gs:// URL:", url, error);
-      return undefined;
-    }
-  }
-  return url;
-};
-
 export const PrintableOrderReport: React.FC<PrintableOrderReportProps> = ({ orders, companySettings, startDate, endDate }) => {
   const formatDateDisplay = (dateString: string | undefined) => {
     if (!dateString) return 'N/A';
     return format(new Date(dateString), "MM/dd/yyyy");
   };
 
-  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
+  // Using local /public/logo.png
+  const logoUrl = "/logo.png";
   const totalOrderAmount = orders.reduce((sum, ord) => sum + ord.total, 0);
   const numberOfOrders = orders.length;
 
@@ -47,10 +27,10 @@ export const PrintableOrderReport: React.FC<PrintableOrderReportProps> = ({ orde
     <div className="print-only p-8 bg-white text-black font-sans text-xs">
       <header className="grid grid-cols-2 gap-8 mb-6">
         <div>
-          {logoHttpUrl && (
+          {logoUrl && (
             <div className="mb-2" style={{ width: '96px' }}>
               <img
-                src={logoHttpUrl}
+                src={logoUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
                 style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                 data-ai-hint="company logo"
