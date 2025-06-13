@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { Invoice, CompanySettings } from '@/types';
-import Image from 'next/image'; // Import next/image
+// import Image from 'next/image'; // No longer using next/image
 
 interface PrintableInvoiceProps {
   invoice: Invoice | null;
@@ -36,7 +36,7 @@ const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
     }
   }
   console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url; // Fallback for unrecognized formats
+  return url;
 };
 
 export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, companySettings }) => {
@@ -57,13 +57,12 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, com
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
           {logoHttpUrl && (
-            <div className="mb-4 w-32 h-auto relative"> {/* Adjust width as needed */}
-              <Image 
-                src={logoHttpUrl} 
+             <div className="mb-4" style={{ width: '128px' }}>
+              <img
+                src={logoHttpUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
-                width={128} 
-                height={64} 
-                style={{ objectFit: 'contain' }}
+                style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                data-ai-hint="company logo"
               />
             </div>
           )}

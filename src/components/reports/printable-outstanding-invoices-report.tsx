@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { CompanySettings, CustomerInvoiceDetail } from '@/types';
-import Image from 'next/image';
+// import Image from 'next/image'; // No longer using next/image
 import { format } from 'date-fns';
 
 interface PrintableOutstandingInvoicesReportProps {
@@ -64,13 +64,11 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
       <header className="grid grid-cols-2 gap-8 mb-6">
         <div>
           {logoHttpUrl && (
-            <div className="mb-2 w-24 h-auto relative">
-              <Image 
-                src={logoHttpUrl} 
+            <div className="mb-2" style={{ width: '96px' }}>
+              <img
+                src={logoHttpUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
-                width={96} 
-                height={48} 
-                style={{ objectFit: 'contain' }}
+                style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                 data-ai-hint="company logo"
               />
             </div>
@@ -130,7 +128,7 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
           </section>
         );
       })}
-      
+
       {reportData.length === 0 && (
          <p className="text-center text-gray-500 py-4">No outstanding invoices found for the selected criteria.</p>
       )}

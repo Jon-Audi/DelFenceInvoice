@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { Order, CompanySettings } from '@/types';
-import Image from 'next/image';
+// import Image from 'next/image'; // No longer using next/image
 
 interface PrintableOrderPackingSlipProps {
   order: Order | null;
@@ -17,9 +17,9 @@ const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
   }
   if (url.startsWith('gs://')) {
     try {
-      const noPrefix = url.substring(5); 
+      const noPrefix = url.substring(5);
       const parts = noPrefix.split('/');
-      const bucket = parts.shift(); 
+      const bucket = parts.shift();
       if (!bucket) {
           console.error("Invalid gs:// URL structure, missing bucket:", url);
           return undefined;
@@ -36,7 +36,7 @@ const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
     }
   }
   console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url; 
+  return url;
 };
 
 export const PrintableOrderPackingSlip: React.FC<PrintableOrderPackingSlipProps> = ({ order, companySettings }) => {
@@ -57,13 +57,12 @@ export const PrintableOrderPackingSlip: React.FC<PrintableOrderPackingSlipProps>
       <div className="grid grid-cols-2 gap-8 mb-10">
         <div>
           {logoHttpUrl && (
-            <div className="mb-4 w-32 h-auto relative">
-               <Image 
-                src={logoHttpUrl} 
+             <div className="mb-4" style={{ width: '128px' }}>
+               <img
+                src={logoHttpUrl}
                 alt={`${companySettings.companyName || 'Company'} Logo`}
-                width={128} 
-                height={64} 
-                style={{ objectFit: 'contain' }}
+                style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                data-ai-hint="company logo"
               />
             </div>
           )}
