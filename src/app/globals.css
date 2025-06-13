@@ -109,64 +109,55 @@
 }
 
 @media print {
-  html, body {
-    background: white !important;
-    color: black !important;
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    box-sizing: border-box !important;
-  }
-
-  /* Hide all direct children of body by default */
-  body > * {
-    display: none !important;
+  body * {
     visibility: hidden !important;
   }
 
-  /* Make only the print-only-container and its children visible and block */
-  .print-only-container {
-    display: block !important;
+  .print-only-container, .print-only-container * {
     visibility: visible !important;
-    position: static !important; /* Ensure it's in normal flow */
+    box-sizing: border-box !important; /* Apply to all print elements */
+  }
+
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  .print-only-container {
+    position: absolute !important; /* This was kept for content visibility */
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
-    padding: 0.5in !important; /* This acts as the page margins */
+    padding: 0 !important; /* Container itself has no padding */
     background-color: white !important;
     color: black !important;
-    font-size: 10pt !important;
-    box-sizing: border-box !important;
-    page-break-after: auto !important;
+    z-index: 9999 !important;
   }
 
-  .print-only-container * {
-    visibility: visible !important;
-    color-adjust: exact !important;
-    box-sizing: border-box !important;
-  }
-
-  .print-only { /* The direct child of the container */
+  .print-only { /* This is the direct child of .print-only-container inside PrintableEstimate */
     display: block !important;
     width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
-    padding: 0 !important; /* Padding is on the container */
+    padding: 0.5in !important; /* Page margins applied here */
     background-color: white !important;
     color: black !important;
     font-family: Arial, sans-serif !important;
+    font-size: 10pt !important;
     page-break-after: auto !important;
   }
   
   .print-only > *:last-child {
-    page-break-after: auto !important;
+    page-break-after: auto !important; /* Helps prevent blank page after last content block */
   }
 
-  /* Table specific styles for printing */
   .print-only table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -177,9 +168,9 @@
   .print-only th,
   .print-only td {
     border: 1px solid #ccc !important;
-    padding: 5px !important;
+    padding: 6px !important;
     color: black !important;
-    page-break-inside: avoid !important;
+    page-break-inside: avoid !important; /* Try to keep table rows from breaking */
     word-wrap: break-word;
   }
   .print-only th {
@@ -194,7 +185,6 @@
     page-break-inside: avoid !important;
   }
 
-  /* Elements that should absolutely not be printed, even if inside .print-only-container by mistake */
   .no-print, .no-print * {
     display: none !important;
     visibility: hidden !important;
@@ -202,6 +192,6 @@
 
   @page {
     size: auto;
-    margin: 0; /* Margins are handled by .print-only-container padding */
+    margin: 0; /* Margins handled by .print-only padding */
   }
 }
