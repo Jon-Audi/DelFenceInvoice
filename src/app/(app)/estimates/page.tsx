@@ -54,11 +54,10 @@ import type { Estimate, Product, Customer, CompanySettings, EmailContact } from 
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
-import { PrintableEstimate } from '@/components/estimates/printable-estimate';
+// Import the new PrintEstimateButton and PrintableEstimate (default export)
+import PrintableEstimate, { PrintEstimateButton } from '@/components/estimates/printable-estimate';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
-
-const COMPANY_SETTINGS_DOC_ID = "main";
 
 type SortableEstimateKeys = 'estimateNumber' | 'customerName' | 'poNumber' | 'date' | 'total' | 'status' | 'validUntil';
 
@@ -87,13 +86,8 @@ export default function EstimatesPage() {
   const [isClient, setIsClient] = useState(false);
   const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
 
-  const [estimateForPrinting, setEstimateForPrinting] = useState<Estimate | null>(null);
-  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
-  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableEstimateKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
-
 
   const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -112,7 +106,6 @@ export default function EstimatesPage() {
       setEstimates(fetchedEstimates); 
       setIsLoadingEstimates(false);
     }, (error) => {
-      
       toast({ title: "Error", description: "Could not fetch estimates.", variant: "destructive" });
       setIsLoadingEstimates(false);
     });
@@ -129,7 +122,6 @@ export default function EstimatesPage() {
       setCustomers(fetchedCustomers);
       setIsLoadingCustomers(false);
     }, (error) => {
-      
       toast({ title: "Error", description: "Could not fetch customers for estimates.", variant: "destructive" });
       setIsLoadingCustomers(false);
     });
@@ -146,7 +138,6 @@ export default function EstimatesPage() {
       setProducts(fetchedProducts);
       setIsLoadingProducts(false);
     }, (error) => {
-      
       toast({ title: "Error", description: "Could not fetch products for estimates.", variant: "destructive" });
       setIsLoadingProducts(false);
     });
@@ -172,10 +163,8 @@ export default function EstimatesPage() {
     }
   }, [products]);
 
-
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
     const { id, ...estimateDataFromDialog } = estimateToSave;
-
     const basePayload: any = {
       estimateNumber: estimateDataFromDialog.estimateNumber,
       customerId: estimateDataFromDialog.customerId,
@@ -192,7 +181,6 @@ export default function EstimatesPage() {
       if (id && estimates.some(e => e.id === id)) { 
         const estimateRef = doc(db, 'estimates', id);
         const updatePayload = { ...basePayload };
-
         updatePayload.poNumber = (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') 
                                   ? estimateDataFromDialog.poNumber.trim() 
                                   : deleteField();
@@ -203,30 +191,18 @@ export default function EstimatesPage() {
         updatePayload.internalNotes = (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') 
                                       ? estimateDataFromDialog.internalNotes.trim() 
                                       : deleteField();
-        
         await setDoc(estimateRef, updatePayload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
       } else { 
         const addPayload = { ...basePayload };
-
-        if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') {
-          addPayload.poNumber = estimateDataFromDialog.poNumber.trim();
-        }
-        if (estimateDataFromDialog.validUntil) {
-          addPayload.validUntil = estimateDataFromDialog.validUntil;
-        }
-        if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') {
-          addPayload.notes = estimateDataFromDialog.notes.trim();
-        }
-        if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') {
-          addPayload.internalNotes = estimateDataFromDialog.internalNotes.trim();
-        }
-        
+        if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') addPayload.poNumber = estimateDataFromDialog.poNumber.trim();
+        if (estimateDataFromDialog.validUntil) addPayload.validUntil = estimateDataFromDialog.validUntil;
+        if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') addPayload.notes = estimateDataFromDialog.notes.trim();
+        if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') addPayload.internalNotes = estimateDataFromDialog.internalNotes.trim();
         const docRef = await addDoc(collection(db, 'estimates'), addPayload);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
-        
         toast({ title: "Error", description: `Could not save estimate to database. ${error.message}`, variant: "destructive" });
     }
   };
@@ -237,27 +213,16 @@ export default function EstimatesPage() {
       if (id && customers.some(c => c.id === id)) {
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, customerData, { merge: true });
-        toast({
-          title: "Customer Updated",
-          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
-        });
+        toast({ title: "Customer Updated", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.` });
         return id;
       } else {
         const dataToSave = { ...customerData };
         const docRef = await addDoc(collection(db, 'customers'), dataToSave);
-        toast({
-          title: "Customer Added",
-          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.`,
-        });
+        toast({ title: "Customer Added", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.` });
         return docRef.id;
       }
     } catch (error) {
-      
-      toast({
-        title: "Error",
-        description: "Could not save customer to database.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Could not save customer to database.", variant: "destructive" });
     }
   };
 
@@ -266,65 +231,10 @@ export default function EstimatesPage() {
       await deleteDoc(doc(db, 'estimates', estimateId));
       toast({ title: "Estimate Deleted", description: "The estimate has been removed." });
     } catch (error) {
-      
       toast({ title: "Error", description: "Could not delete estimate.", variant: "destructive" });
     }
     setEstimateToDelete(null);
   };
-
-  const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
-    setIsLoadingCompanySettings(true);
-    try {
-      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        return docSnap.data() as CompanySettings;
-      }
-      toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
-      return null;
-    } catch (error) {
-      
-      toast({ title: "Error", description: "Could not fetch company settings.", variant: "destructive" });
-      return null;
-    } finally {
-      setIsLoadingCompanySettings(false);
-    }
-  };
-
-  const handlePrintEstimate = async (estimate: Estimate) => {
-    const settings = await fetchCompanySettings();
-    if (settings) {
-      setCompanySettingsForPrinting(settings);
-      setEstimateForPrinting(estimate); 
-    } else {
-      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
-    }
-  };
-  
-  const handlePrinted = useCallback(() => {
-    setEstimateForPrinting(null);
-    setCompanySettingsForPrinting(null);
-  }, []);
-
-  useEffect(() => {
-    if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 250); // Standardized timeout
-
-      const afterPrintHandler = () => {
-        handlePrinted();
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-      window.addEventListener('afterprint', afterPrintHandler);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-    }
-  }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
-
 
   const handleGenerateEmail = async (estimate: Estimate) => {
     setSelectedEstimateForEmail(estimate);
@@ -332,21 +242,17 @@ export default function EstimatesPage() {
     setTargetCustomerForEmail(customer || null);
     setSelectedRecipientEmails([]);
     setAdditionalRecipientEmail('');
-
     setIsEmailModalOpen(true);
     setIsLoadingEmail(true);
     setEmailDraft(null);
     setEditableSubject('');
     setEditableBody('');
-
     try {
       const lineItemsDescription = estimate.lineItems.map(item =>
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n');
-
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (estimate.customerName || 'Valued Customer');
       const customerCompanyName = customer?.companyName;
-
       const estimateContent = `
         Estimate Number: ${estimate.estimateNumber}
         Date: ${new Date(estimate.date).toLocaleDateString()}
@@ -356,20 +262,16 @@ export default function EstimatesPage() {
         Items:
         ${lineItemsDescription || 'Details to be confirmed.'}
       `;
-
       const result = await estimateEmailDraft({
         customerName: customerDisplayName,
         companyName: customerCompanyName,
         estimateContent: estimateContent,
       });
-
       const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Solutions`;
       setEmailDraft({ subject: subject, body: result.emailDraft });
       setEditableSubject(subject);
       setEditableBody(result.emailDraft);
-
     } catch (error) {
-      
       toast({ title: "Error", description: "Failed to generate email draft.", variant: "destructive" });
       setEmailDraft({ subject: "Error", body: "Could not generate email content."});
       setEditableSubject("Error generating subject");
@@ -389,12 +291,10 @@ export default function EstimatesPage() {
         return;
       }
     }
-
     if (allRecipients.length === 0) {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
-
     toast({
       title: "Email Sent (Simulation)",
       description: `Email with subject "${editableSubject}" for estimate ${selectedEstimateForEmail?.estimateNumber} would be sent to: ${allRecipients.join(', ')}.`,
@@ -405,10 +305,9 @@ export default function EstimatesPage() {
 
   const formatDateForDisplay = (dateString: string | undefined) => {
     if (!dateString) return 'N/A';
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0]; // Fallback for SSR or pre-hydration
+    if (!isClient) return new Date(dateString).toISOString().split('T')[0];
     return new Date(dateString).toLocaleDateString();
   };
-
 
   const handleConvertToOrder = (estimate: Estimate) => {
     localStorage.setItem('estimateToConvert_order', JSON.stringify(estimate));
@@ -458,9 +357,7 @@ export default function EstimatesPage() {
       sortableItems.sort((a, b) => {
         const valA = a[sortConfig.key as keyof Estimate];
         const valB = b[sortConfig.key as keyof Estimate];
-
         let comparison = 0;
-
         if (valA === null || valA === undefined) comparison = 1;
         else if (valB === null || valB === undefined) comparison = -1;
         else if (sortConfig.key === 'date' || sortConfig.key === 'validUntil') {
@@ -482,7 +379,6 @@ export default function EstimatesPage() {
     }
     return null;
   };
-
 
   if (isLoadingEstimates || isLoadingCustomers || isLoadingProducts) {
     return (
@@ -549,63 +445,84 @@ export default function EstimatesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedAndFilteredEstimates.map((estimate) => (
-                <TableRow key={estimate.id}>
-                  <TableCell>{estimate.estimateNumber}</TableCell>
-                  <TableCell>{estimate.customerName}</TableCell>
-                  <TableCell>{estimate.poNumber || 'N/A'}</TableCell>
-                  <TableCell>{formatDateForDisplay(estimate.date)}</TableCell>
-                  <TableCell className="text-right">${estimate.total.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Icon name="MoreHorizontal" className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleViewItems(estimate)}>
-                          <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
-                        </DropdownMenuItem>
-                        <EstimateDialog
-                          estimate={estimate}
-                          triggerButton={
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                              <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                          }
-                          onSave={handleSaveEstimate}
-                          onSaveCustomer={handleSaveCustomer}
-                          products={products}
-                          customers={customers}
-                          productCategories={stableProductCategories}
-                        />
-                        <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
-                          <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handlePrintEstimate(estimate)}>
-                           <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Estimate
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleConvertToOrder(estimate)}>
-                          <Icon name="ShoppingCart" className="mr-2 h-4 w-4" /> Convert to Order
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleConvertToInvoice(estimate)}>
-                          <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          onSelect={() => setEstimateToDelete(estimate)}
-                        >
-                          <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sortedAndFilteredEstimates.map((estimate) => {
+                // Prepare data for the PrintEstimateButton
+                const estimateDataForPrint = {
+                  estimateNumber: estimate.estimateNumber,
+                  date: formatDateForDisplay(estimate.date),
+                  poNumber: estimate.poNumber || '', // Ensure it's a string
+                  customerName: estimate.customerName || 'N/A',
+                  items: estimate.lineItems.map(li => ({
+                    description: li.productName + (li.isReturn ? " (Return)" : ""),
+                    quantity: li.quantity,
+                    unitPrice: li.unitPrice,
+                    total: li.total,
+                  })),
+                  subtotal: estimate.subtotal,
+                  total: estimate.total,
+                };
+                // Store a reference to the PrintEstimateButton's print logic
+                const printButtonRef = React.createRef<HTMLButtonElement>();
+
+                return (
+                  <TableRow key={estimate.id}>
+                    <TableCell>{estimate.estimateNumber}</TableCell>
+                    <TableCell>{estimate.customerName}</TableCell>
+                    <TableCell>{estimate.poNumber || 'N/A'}</TableCell>
+                    <TableCell>{formatDateForDisplay(estimate.date)}</TableCell>
+                    <TableCell className="text-right">${estimate.total.toFixed(2)}</TableCell>
+                    <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
+                    <TableCell>
+                      <PrintEstimateButton estimateData={estimateDataForPrint} ref={printButtonRef} />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Icon name="MoreHorizontal" className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewItems(estimate)}>
+                            <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
+                          </DropdownMenuItem>
+                          <EstimateDialog
+                            estimate={estimate}
+                            triggerButton={
+                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                            }
+                            onSave={handleSaveEstimate}
+                            onSaveCustomer={handleSaveCustomer}
+                            products={products}
+                            customers={customers}
+                            productCategories={stableProductCategories}
+                          />
+                          <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
+                            <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => printButtonRef.current?.click()}>
+                             <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Estimate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleConvertToOrder(estimate)}>
+                            <Icon name="ShoppingCart" className="mr-2 h-4 w-4" /> Convert to Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleConvertToInvoice(estimate)}>
+                            <Icon name="FileDigit" className="mr-2 h-4 w-4" /> Convert to Invoice
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onSelect={() => setEstimateToDelete(estimate)}
+                          >
+                            <Icon name="Trash2" className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
            {sortedAndFilteredEstimates.length === 0 && (
@@ -706,21 +623,10 @@ export default function EstimatesPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+      
+      {/* The old print-only-container div and its content are removed from here,
+          as PrintableEstimate now handles its own print structure. */}
 
-      <div className="print-only-container">
-        {(estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableEstimate
-            estimate={estimateForPrinting}
-            companySettings={companySettingsForPrinting}
-          />
-        )}
-      </div>
-       {(isLoadingCompanySettings && estimateForPrinting) && ( 
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing printable estimate...</p>
-        </div>
-      )}
       {estimateForViewingItems && (
         <LineItemsViewerDialog
           isOpen={isLineItemsViewerOpen}
@@ -737,6 +643,3 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-
-    

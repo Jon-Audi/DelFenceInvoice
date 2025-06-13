@@ -1,154 +1,162 @@
 
 "use client";
 
-import React from 'react';
-import type { Estimate, CompanySettings } from '@/types';
-// import Image from 'next/image'; // No longer using next/image
+import React, { useRef } from 'react';
 
+// Define the props for PrintableEstimate based on your usage
 interface PrintableEstimateProps {
-  estimate: Estimate | null;
-  companySettings: CompanySettings | null;
+  estimateNumber?: string;
+  date?: string;
+  poNumber?: string;
+  customerName?: string;
+  items?: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  subtotal?: number;
+  total?: number;
 }
 
-const transformGsUrlToHttps = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (url.startsWith('https://') || url.startsWith('http://')) {
-    return url;
-  }
-  if (url.startsWith('gs://')) {
-    try {
-      const noPrefix = url.substring(5); // Remove "gs://"
-      const parts = noPrefix.split('/');
-      const bucket = parts.shift(); // Get the first part as bucket
-      if (!bucket) {
-          console.error("Invalid gs:// URL structure, missing bucket:", url);
-          return undefined;
-      }
-      const objectPath = parts.join('/');
-      if (!objectPath) {
-          console.error("Invalid gs:// URL structure, missing object path:", url);
-          return undefined;
-      }
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
-    } catch (error) {
-      console.error("Error transforming gs:// URL:", url, error);
-      return undefined;
-    }
-  }
-  console.warn("Logo URL is not a gs:// URI and not HTTP(S). Returning as is, may not work:", url);
-  return url;
-};
-
-
-export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, companySettings }) => {
-  if (!estimate || !companySettings) {
-    return null;
-  }
-
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const logoHttpUrl = transformGsUrlToHttps(companySettings.logoUrl);
-
+const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProps>(
+  ({ estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0 }, ref) => {
   return (
-    <div className="print-only p-8 bg-white text-black font-sans">
-      {/* Estimate Header */}
-      <div className="grid grid-cols-2 gap-8 mb-10">
-        <div>
-          {logoHttpUrl && (
-            <div className="mb-4" style={{ width: '128px' }}>
-              <img
-                src={logoHttpUrl}
-                alt={`${companySettings.companyName || 'Company'} Logo`}
-                style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
-                data-ai-hint="company logo"
-              />
-            </div>
-          )}
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">{companySettings.companyName || 'Your Company'}</h1>
-          <p className="text-sm">{companySettings.addressLine1 || ''}</p>
-          <p className="text-sm">{companySettings.addressLine2 || ''}</p>
-          <p className="text-sm">
-            {companySettings.city || ''}, {companySettings.state || ''} {companySettings.zipCode || ''}
+    <div ref={ref} className="print-only-container">
+      <div className="print-only p-8">
+        {/* Logo */}
+        <img
+          src="/logo.png" // Make sure this logo exists in your public folder
+          alt="Delaware Fence Solutions Logo"
+          className="mx-auto mb-4 h-20 object-contain"
+          data-ai-hint="company logo"
+        />
+
+        {/* Heading */}
+        <div className="text-center mb-4">
+          <h1 className="text-2xl font-bold">Delaware Fence Solutions</h1>
+          <p>1111 Greenbank Road, Wilmington, DE 19808</p>
+          <p>Phone: 302-610-8901 | Email: Info@DelawareFenceSolutions.com</p>
+          <p>
+            Website:
+            <a href="https://www.DelawareFenceSolutions.com" className="underline">
+              www.DelawareFenceSolutions.com
+            </a>
           </p>
-          <p className="text-sm">Phone: {companySettings.phone || ''}</p>
-          <p className="text-sm">Email: {companySettings.email || ''}</p>
-          {companySettings.website && <p className="text-sm">Website: {companySettings.website}</p>}
         </div>
-        <div className="text-right">
-          <h2 className="text-4xl font-bold text-gray-700 mb-2">ESTIMATE</h2>
-          <p className="text-md"><span className="font-semibold">Estimate #:</span> {estimate.estimateNumber}</p>
-          <p className="text-md"><span className="font-semibold">Date:</span> {formatDate(estimate.date)}</p>
-          {estimate.validUntil && <p className="text-md"><span className="font-semibold">Valid Until:</span> {formatDate(estimate.validUntil)}</p>}
-          {estimate.poNumber && <p className="text-md"><span className="font-semibold">P.O. #:</span> {estimate.poNumber}</p>}
+
+        {/* Estimate Info */}
+        <div className="mb-4">
+          <p><strong>Estimate #:</strong> {estimateNumber}</p>
+          <p><strong>Date:</strong> {date}</p>
+          {poNumber && <p><strong>P.O. #:</strong> {poNumber}</p>}
+          <p><strong>Estimate For:</strong> {customerName}</p>
         </div>
-      </div>
 
-      {/* Customer Information */}
-      <div className="mb-8 p-4 border border-gray-300 rounded-md">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Estimate For:</h3>
-        <p className="font-medium text-gray-800">{estimate.customerName || 'N/A Customer'}</p>
-      </div>
-
-      {/* Line Items Table */}
-      <table className="w-full mb-8 border-collapse text-sm">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="text-left p-2 border border-gray-300 font-semibold text-gray-700">Item Description</th>
-            <th className="text-right p-2 border border-gray-300 font-semibold text-gray-700">Quantity</th>
-            <th className="text-right p-2 border border-gray-300 font-semibold text-gray-700">Unit Price</th>
-            <th className="text-right p-2 border border-gray-300 font-semibold text-gray-700">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {estimate.lineItems.map((item) => (
-            <tr key={item.id}>
-              <td className="p-2 border border-gray-300">{item.productName}{item.isReturn ? " (Return)" : ""}</td>
-              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-${item.quantity}` : item.quantity}</td>
-              <td className="text-right p-2 border border-gray-300">${item.unitPrice.toFixed(2)}</td>
-              <td className="text-right p-2 border border-gray-300">{item.isReturn ? `-$${(item.quantity * item.unitPrice).toFixed(2)}` : `$${item.total.toFixed(2)}`}</td>
+        {/* Table */}
+        <table className="table-auto border-collapse w-full text-sm mb-4">
+          <thead>
+            <tr>
+              <th className="border bg-gray-200 px-2 py-1 text-left">Item Description</th>
+              <th className="border bg-gray-200 px-2 py-1 text-right">Quantity</th>
+              <th className="border bg-gray-200 px-2 py-1 text-right">Unit Price</th>
+              <th className="border bg-gray-200 px-2 py-1 text-right">Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item, index) => (
+              <tr key={index}>
+                <td className="border px-2 py-1">{item.description}</td>
+                <td className="border px-2 py-1 text-right">{item.quantity}</td>
+                <td className="border px-2 py-1 text-right">${item.unitPrice.toFixed(2)}</td>
+                <td className="border px-2 py-1 text-right">${item.total.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="border px-2 py-1 text-right font-bold" colSpan={3}>Subtotal:</td>
+              <td className="border px-2 py-1 text-right font-bold">${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td className="border px-2 py-1 text-right font-bold" colSpan={3}>Total:</td>
+              <td className="border px-2 py-1 text-right font-bold">${total.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
 
-      {/* Totals Section */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="col-span-2"></div>
-        <div className="col-span-1 space-y-2">
-          <div className="flex justify-between">
-            <span className="font-semibold text-gray-700">Subtotal:</span>
-            <span className="text-gray-800">${estimate.subtotal.toFixed(2)}</span>
-          </div>
-          {estimate.taxAmount && estimate.taxAmount !== 0 && ( // Show if not zero
-            <div className="flex justify-between">
-              <span className="font-semibold text-gray-700">Tax:</span>
-              <span className="text-gray-800">${estimate.taxAmount.toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-xl font-bold border-t border-gray-400 pt-2 mt-2">
-            <span className="text-gray-800">Total:</span>
-            <span className="text-gray-800">${estimate.total.toFixed(2)}</span>
-          </div>
+        {/* Footer */}
+        <div className="text-center">
+          <p>Thank you for your consideration!</p>
+          <p className="italic">Delaware Fence Solutions</p>
         </div>
-      </div>
-
-      {/* Notes Section */}
-      {estimate.notes && (
-        <div className="mb-8 p-4 border border-gray-200 rounded-md bg-gray-50 text-sm">
-          <h4 className="font-semibold text-gray-700">Notes:</h4>
-          <p className="text-gray-600 whitespace-pre-line">{estimate.notes}</p>
-        </div>
-      )}
-
-      {/* Footer (Optional) */}
-      <div className="text-center text-xs text-gray-500 pt-8 border-t border-gray-300">
-        <p>Thank you for your consideration!</p>
-        <p>{companySettings.companyName}</p>
       </div>
     </div>
   );
+});
+
+PrintableEstimate.displayName = "PrintableEstimate";
+
+
+interface PrintEstimateButtonProps {
+  estimateData: PrintableEstimateProps;
+  // Tailwind CSS file path relative to the new window's document root
+  // This path might need adjustment based on how files are served or if using a CDN for production
+  tailwindCssPath?: string; 
+}
+
+export const PrintEstimateButton: React.FC<PrintEstimateButtonProps> = ({ estimateData, tailwindCssPath = "/globals.css" }) => {
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printContents = printRef.current.innerHTML;
+      const win = window.open('', '_blank', 'height=800,width=800'); // Added dimensions for popup
+
+      if (win) {
+        win.document.write('<html><head><title>Print Estimate</title>');
+        // Attempt to link to the main app's globals.css if served, or use CDN as fallback
+        // For development, this might be tricky due to how Next.js serves assets.
+        // A CDN link for Tailwind is more reliable for this new window approach.
+        // Using a known CDN for Tailwind v2 (as per your previous globals.css comments)
+        win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+        // Add a basic print style to ensure visibility, similar to what the main globals.css was doing.
+        win.document.write(`
+          <style>
+            @media print {
+              body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .print-only-container { margin: 0; padding: 0; }
+              .print-only { padding: 0.5in; } /* Or your desired padding */
+            }
+          </style>
+        `);
+        win.document.write('</head><body>');
+        win.document.write(printContents);
+        win.document.write('</body></html>');
+        win.document.close();
+        
+        // Delay print to allow content and styles to load
+        setTimeout(() => {
+          win.focus(); // Ensure the new window is focused
+          win.print();
+          win.close();
+        }, 750); // Increased delay slightly
+      } else {
+        alert("Popup blocked. Please allow popups for this site to print.");
+      }
+    }
+  };
+
+  return (
+    <>
+      <div style={{ display: 'none' }}> {/* Use inline style for absolute hiding */}
+        <PrintableEstimate ref={printRef} {...estimateData} />
+      </div>
+      {/* The button will be rendered by the parent, this component just provides logic */}
+      {/* This is a conceptual button placement, the actual button is in the DropdownMenuItem */}
+      <button onClick={handlePrint} className="hidden">Print Logic Holder</button>
+    </>
+  );
 };
 
+export default PrintableEstimate;

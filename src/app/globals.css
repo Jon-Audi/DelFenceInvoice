@@ -43,7 +43,7 @@
 
     /* Sidebar specific vars for dark theme */
     --sidebar-background: 0 0% 15%; /* Slightly lighter than main dark background */
-    --sidebar-foreground: 0 0% 80%;
+    --sidebar-foreground: 0 0% 80%; 
     --sidebar-primary: 120 25% 65%;
     --sidebar-primary-foreground: 0 0% 10%;
     --sidebar-accent: 0 0% 25%;
@@ -80,15 +80,15 @@
     --border: 0 0% 35%;
     --input: 0 0% 35%;
     --ring: 120 25% 65%; /* Muted Green for ring */
-
+    
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 0 0% 15%;
-    --sidebar-foreground: 0 0% 80%;
+    --sidebar-background: 0 0% 15%; 
+    --sidebar-foreground: 0 0% 80%; 
     --sidebar-primary: 120 25% 65%;
     --sidebar-primary-foreground: 0 0% 10%;
     --sidebar-accent: 0 0% 25%;
@@ -108,90 +108,40 @@
   }
 }
 
+/* 
+  Print styles for the main application page if printed directly.
+  These are less critical if the primary print method is via a new window
+  which links its own Tailwind CSS.
+*/
 @media print {
   body * {
-    visibility: hidden !important;
-  }
-
-  .print-only-container, .print-only-container * {
-    visibility: visible !important;
-    box-sizing: border-box !important; /* Apply to all print elements */
-  }
-
-  html, body {
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    background: white !important;
-    color: black !important;
-  }
-
-  .print-only-container {
-    position: absolute !important; /* This was kept for content visibility */
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important; /* Container itself has no padding */
-    background-color: white !important;
-    color: black !important;
-    z-index: 9999 !important;
-  }
-
-  .print-only { /* This is the direct child of .print-only-container inside PrintableEstimate */
-    display: block !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0.5in !important; /* Page margins applied here */
-    background-color: white !important;
-    color: black !important;
-    font-family: Arial, sans-serif !important;
-    font-size: 10pt !important;
-    page-break-after: auto !important;
+    visibility: hidden !important; /* Hide everything on the main page */
   }
   
-  .print-only > *:last-child {
-    page-break-after: auto !important; /* Helps prevent blank page after last content block */
+  /* 
+    The .print-only-container and .print-only classes are now expected
+    to be *inside* the component being printed (e.g., PrintableEstimate.tsx).
+    The new window print method will handle its own styling primarily.
+    These rules are a fallback or for very simple direct prints.
+  */
+  .print-only-container, .print-only-container * {
+    visibility: visible !important;
   }
-
-  .print-only table {
+  .print-only-container {
+    position: static !important; /* Ensure it's in flow for direct print */
     width: 100% !important;
-    border-collapse: collapse !important;
-    margin-top: 0.5rem !important;
-    margin-bottom: 0.5rem !important;
-    page-break-inside: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  .print-only th,
-  .print-only td {
-    border: 1px solid #ccc !important;
-    padding: 6px !important;
-    color: black !important;
-    page-break-inside: avoid !important; /* Try to keep table rows from breaking */
-    word-wrap: break-word;
-  }
-  .print-only th {
-    background-color: #f0f0f0 !important;
-    font-weight: bold !important;
-  }
-
-  .print-only img {
-    max-width: 100% !important;
-    height: auto !important;
-    object-fit: contain !important;
-    page-break-inside: avoid !important;
-  }
-
-  .no-print, .no-print * {
-    display: none !important;
-    visibility: hidden !important;
+  .print-only {
+     padding: 0.5in !important; /* Basic page margin */
+     font-size: 10pt !important;
+     color: black !important;
+     background: white !important;
   }
 
   @page {
     size: auto;
-    margin: 0; /* Margins handled by .print-only padding */
+    margin: 0;
   }
 }
