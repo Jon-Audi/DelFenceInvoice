@@ -114,61 +114,89 @@
 }
 
 @media print {
-  /* Reset basic elements for printing */
+  /* Force light theme CSS variables for printing */
+  :root {
+    --background: 0 0% 100% !important; /* white */
+    --foreground: 0 0% 0% !important;   /* black */
+
+    --card: 0 0% 100% !important; /* white */
+    --card-foreground: 0 0% 0% !important; /* black */
+
+    --popover: 0 0% 100% !important; /* white */
+    --popover-foreground: 0 0% 0% !important; /* black */
+
+    /* Primary can be a darker color for print if it's used for accents/borders */
+    --primary: 0 0% 20% !important; /* Dark gray for print primary accents */
+    --primary-foreground: 0 0% 0% !important; /* Black text (if primary is light bg), or white if primary is dark bg */
+
+    --secondary: 0 0% 95% !important; /* Very light gray for secondary backgrounds */
+    --secondary-foreground: 0 0% 0% !important; /* Black text */
+
+    --muted: 0 0% 95% !important; /* Very light gray for muted backgrounds */
+    --muted-foreground: 0 0% 20% !important; /* Darker gray text for muted */
+
+    --accent: 0 0% 90% !important; /* Even lighter gray for accents */
+    --accent-foreground: 0 0% 0% !important; /* Black text */
+
+    --destructive: 0 80% 50% !important; /* A visible red, e.g., for negative numbers if needed */
+    --destructive-foreground: 0 0% 100% !important; /* White text on destructive */
+
+    --border: 0 0% 60% !important; /* Medium gray border */
+    --input: 0 0% 90% !important; /* Light gray input background (though inputs usually not printed) */
+    --ring: 0 0% 40% !important; /* Darker gray ring */
+  }
+
   html, body {
     width: 100% !important;
     height: auto !important;
     overflow: visible !important;
-    background: white !important;
-    color: black !important;
+    background: white !important; /* Explicit white background */
+    color: black !important;       /* Explicit black text */
     margin: 0 !important;
     padding: 0 !important;
     font-family: Arial, sans-serif !important; /* Basic print font */
     font-size: 10pt !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
+    position: static !important;
   }
 
   /* Hide EVERYTHING on the page initially */
-  body > * {
+  body > *:not(.print-only-container) {
     display: none !important;
     visibility: hidden !important;
   }
 
-  /* Make ONLY the print container and its children visible */
-  .print-only-container,
-  .print-only-container * {
-    display: revert !important; /* Allows elements like table, tr, td to take their natural display type */
+  .print-only-container {
+    display: block !important;
     visibility: visible !important;
-    position: static !important; /* Override any absolute/fixed positioning */
-    background: transparent !important; /* Children should have transparent backgrounds by default */
-    color: black !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .print-only-container * {
+    visibility: visible !important;
+    background: transparent !important; /* Children should have transparent backgrounds by default for print */
+    color: black !important; /* Ensure all text within is black */
     box-shadow: none !important;
     text-shadow: none !important;
-    border-color: #ccc !important; /* Ensure borders are visible if they exist */
+    border-color: #ccc !important; /* Light gray for borders within content */
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* Style the main print container itself */
-  .print-only-container {
-    display: block !important; /* Explicitly block */
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important; /* No padding on the outer container */
-    background: white !important; /* White background for the container itself */
-  }
-
-  /* Style the actual printable content root (the direct child of .print-only-container) */
   .print-only {
     display: block !important;
-    width: 100% !important; /* Or a fixed width like '8.5in' */
+    width: 100% !important;
     height: auto !important;
-    margin: 0 auto !important; /* Centering if fixed width */
-    padding: 0.5in !important; /* This creates your page margins */
+    margin: 0 auto !important;
+    padding: 0.5in !important; /* Page margins */
     box-sizing: border-box !important;
-    background: white !important; /* Ensure the content area is white */
+    background: white !important;
   }
 
   .print-only img {
@@ -188,19 +216,22 @@
   .print-only th,
   .print-only td {
     border: 1px solid #ccc !important;
-    padding: 4px !important;
+    padding: 6px !important;
     page-break-inside: avoid !important;
     word-wrap: break-word !important;
     overflow-wrap: break-word !important;
   }
 
   .print-only th {
-    background-color: #f0f0f0 !important;
+    background-color: #f0f0f0 !important; /* Light gray for table headers */
     font-weight: bold !important;
+    color: black !important;
   }
 
   .print-only h1, .print-only h2, .print-only h3, .print-only h4, .print-only p, .print-only ul, .print-only ol {
     page-break-inside: avoid !important;
+    color: black !important;
+    background: transparent !important;
   }
 
   .no-print {
@@ -208,8 +239,7 @@
   }
 
   @page {
-    size: auto; /* Or letter, A4 etc. */
-    margin: 0; /* Margins are handled by .print-only padding */
+    size: auto;
+    margin: 0; /* Margins handled by .print-only padding */
   }
 }
-    
