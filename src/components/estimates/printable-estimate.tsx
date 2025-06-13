@@ -5,6 +5,7 @@ import React from 'react';
 
 // Define the props for PrintableEstimate
 interface PrintableEstimateProps {
+  logoUrl?: string; // Expecting an absolute URL
   estimateNumber?: string;
   date?: string;
   poNumber?: string;
@@ -17,22 +18,24 @@ interface PrintableEstimateProps {
   }>;
   subtotal?: number;
   total?: number;
-  logoUrl?: string; // Added logoUrl prop
 }
 
 const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProps>(
-  ({ estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0, logoUrl }, ref) => {
+  ({ logoUrl, estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0 }, ref) => {
   return (
+    // This div is what will have its innerHTML taken
     <div ref={ref} className="print-only-container">
-      <div className="print-only p-8">
+      <div className="print-only p-8"> {/* Added p-8 here for padding */}
         {/* Logo */}
         {logoUrl && (
-          <img
-            src={logoUrl} // Use the logoUrl prop
-            alt="Delaware Fence Solutions Logo"
-            className="mx-auto mb-4 h-20 object-contain"
-            data-ai-hint="company logo"
-          />
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}> {/* Wrapper div with inline style for centering */}
+            <img
+              src={logoUrl} // Using the absolute logoUrl
+              alt="Delaware Fence Solutions Logo"
+              style={{ display: 'inline-block', height: '5rem', width: 'auto', objectFit: 'contain' }} // Inline styles for size and display
+              data-ai-hint="company logo"
+            />
+          </div>
         )}
 
         {/* Heading */}
