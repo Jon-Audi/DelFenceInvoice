@@ -110,41 +110,53 @@
 
 @media print {
   html, body {
-    width: auto !important;
     height: auto !important;
-    overflow: visible !important;
-    background: white !important;
-    color: black !important;
+    overflow: visible !important; /* Changed from hidden to visible to avoid clipping issues */
     margin: 0 !important;
     padding: 0 !important;
+    background: white !important; /* Ensure body/html background is explicitly white for print */
+    color: black !important; /* Ensure default text color is black */
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* Hide everything except the print container and its children */
-  body > *:not(.print-only-container) {
-    display: none !important;
+  /* Hide everything in the body by default for printing */
+  body * {
+    visibility: hidden !important;
   }
 
+  /* Make the print-only-container and all its children visible */
+  .print-only-container, .print-only-container * {
+    visibility: visible !important;
+  }
+
+  /* Position the print-only-container at the top-left for printing */
   .print-only-container {
-    display: block !important; /* Changed from absolute */
-    position: static !important; /* Ensure it's in normal flow */
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important; /* Reset min-height that might come from screen styles */
+    /* height: auto !important; Removed to let content dictate height with absolute positioning */
     margin: 0 !important;
     padding: 0.5in !important; /* This acts as the page margin */
     background-color: white !important;
     color: black !important;
     font-size: 10pt !important;
-    page-break-after: auto !important; /* Explicitly set */
+    z-index: 9999 !important; /* Ensure it's on top */
   }
 
-  .print-only-container * { /* Ensure all children are visible and flow normally */
-    visibility: visible !important;
-    display: revert !important; /* Allows children to use their natural display type like table-row, flex, etc. */
-    position: static !important; /* Override any screen positioning */
-    float: none !important;
+  /* Styles for the actual content block inside the container */
+  .print-only {
+    display: block !important; /* Ensure it's a block element */
+    font-family: Arial, sans-serif !important;
+    width: 100% !important;
+    height: auto !important; /* Allow content to define its height */
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* General styling for elements within the print-only section */
+  .print-only *, .print-only *::before, .print-only *::after {
     background-color: transparent !important;
     color: black !important;
     text-shadow: none !important;
@@ -152,17 +164,6 @@
     border-color: #ccc !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
-    page-break-inside: avoid !important; /* Try to avoid breaking elements like table rows */
-  }
-
-  .print-only {
-    width: 100% !important;
-    height: auto !important;
-    display: block !important;
-    background-color: white !important;
-    color: black !important;
-    font-family: Arial, sans-serif !important;
-    page-break-after: auto !important;
   }
 
   /* Table specific styles for printing */
@@ -171,28 +172,27 @@
     border-collapse: collapse !important;
     margin-top: 0.5rem !important;
     margin-bottom: 0.5rem !important;
-    page-break-inside: auto !important; /* Allow tables to break if necessary */
+    page-break-inside: auto !important; /* Allow long tables to break across pages */
   }
   .print-only th,
   .print-only td {
     border: 1px solid #ccc !important;
-    padding: 4px !important; /* Slightly reduced padding */
+    padding: 6px !important;
     color: black !important;
-    page-break-inside: avoid !important; /* Important for table rows/cells */
+    page-break-inside: avoid !important; /* Try to keep individual rows/cells from breaking */
   }
   .print-only th {
     background-color: #f0f0f0 !important;
     font-weight: bold !important;
   }
 
-  /* No-print elements should definitely be hidden */
   .no-print, .no-print * {
     display: none !important;
     visibility: hidden !important;
   }
 
   @page {
-    size: auto;
+    size: auto; /* Or 'letter', 'A4' etc. */
     margin: 0; /* Margins are handled by .print-only-container padding */
   }
 }
