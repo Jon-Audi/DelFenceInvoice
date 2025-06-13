@@ -19,8 +19,7 @@ export const PrintableOrderPackingSlip: React.FC<PrintableOrderPackingSlipProps>
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Using local /public/logo.png
-  const logoUrl = "/logo.png";
+  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
 
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
@@ -86,3 +85,4 @@ export const PrintableOrderPackingSlip: React.FC<PrintableOrderPackingSlipProps>
     </div>
   );
 };
+

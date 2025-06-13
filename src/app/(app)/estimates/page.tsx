@@ -91,7 +91,7 @@ export default function EstimatesPage() {
   const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
 
-  const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null); // Use any for flexible props
+  const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
 
@@ -397,7 +397,7 @@ export default function EstimatesPage() {
         })),
         subtotal: estimate.subtotal,
         total: estimate.total,
-        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/logo.png` : "/logo.png",
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
       };
     setEstimateToPrint(estimateDataForPrint);
 
@@ -407,23 +407,27 @@ export default function EstimatesPage() {
         const win = window.open('', '_blank');
         if (win) {
           win.document.write('<html><head><title>Print Estimate</title>');
+          // Link to Tailwind CDN for styling in the new window
           win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+          // Include a basic print-specific style to ensure the container takes up the page
+          win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } </style>');
           win.document.write('</head><body>');
           win.document.write(printContents);
           win.document.write('</body></html>');
           win.document.close();
-          win.focus();
-          setTimeout(() => {
+          win.focus(); // Ensure the new window has focus
+          setTimeout(() => { // Further timeout to ensure content rendering before print
             win.print();
             win.close();
-          }, 750);
+          }, 750); // Increased timeout slightly
         } else {
           toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
         }
       } else {
         toast({ title: "Print Error", description: "Printable content not found. Ref is null.", variant: "destructive" });
       }
-    }, 100);
+      setEstimateToPrint(null); // Clear after attempting to print
+    }, 100); // Small delay to allow state update and re-render of hidden component
   };
 
 
@@ -675,3 +679,5 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    

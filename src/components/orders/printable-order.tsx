@@ -20,8 +20,7 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
     return includeTime ? date.toLocaleString() : date.toLocaleDateString();
   };
 
-  // Using local /public/logo.png
-  const logoUrl = "/logo.png";
+  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
 
   return (
     <div className="print-only p-8 bg-white text-black font-sans">
@@ -156,3 +155,4 @@ export const PrintableOrder: React.FC<PrintableOrderProps> = ({ order, companySe
     </div>
   );
 };
+

@@ -18,8 +18,7 @@ export const PrintableSalesReport: React.FC<PrintableSalesReportProps> = ({ invo
     return format(new Date(dateString), "MM/dd/yyyy");
   };
 
-  // Using local /public/logo.png
-  const logoUrl = "/logo.png";
+  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
   const totalSalesAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
   const numberOfInvoices = invoices.length;
 
@@ -99,3 +98,4 @@ export const PrintableSalesReport: React.FC<PrintableSalesReportProps> = ({ invo
     </div>
   );
 };
+

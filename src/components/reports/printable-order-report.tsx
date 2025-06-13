@@ -18,8 +18,7 @@ export const PrintableOrderReport: React.FC<PrintableOrderReportProps> = ({ orde
     return format(new Date(dateString), "MM/dd/yyyy");
   };
 
-  // Using local /public/logo.png
-  const logoUrl = "/logo.png";
+  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
   const totalOrderAmount = orders.reduce((sum, ord) => sum + ord.total, 0);
   const numberOfOrders = orders.length;
 
@@ -101,3 +100,4 @@ export const PrintableOrderReport: React.FC<PrintableOrderReportProps> = ({ orde
     </div>
   );
 };
+

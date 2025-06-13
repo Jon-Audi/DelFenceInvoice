@@ -12,8 +12,7 @@ interface PrintableOutstandingInvoicesReportProps {
 }
 
 export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingInvoicesReportProps> = ({ reportData, companySettings, reportTitle }) => {
-  // Using local /public/logo.png
-  const logoUrl = "/logo.png";
+  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
   const reportGeneratedDate = format(new Date(), "MM/dd/yyyy HH:mm");
 
   const groupedInvoices = reportData.reduce((acc, invoice) => {
@@ -120,3 +119,4 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
     </div>
   );
 };
+
