@@ -295,7 +295,7 @@ export default function EstimatesPage() {
     const settings = await fetchCompanySettings();
     if (settings) {
       setCompanySettingsForPrinting(settings);
-      setEstimateForPrinting(estimate);
+      setEstimateForPrinting(estimate); // This will trigger the useEffect below
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
@@ -308,17 +308,18 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
+      const timer = setTimeout(() => {
+        window.print();
+      }, 150); // Delay before printing
+
       const afterPrintHandler = () => {
         handlePrinted();
         window.removeEventListener('afterprint', afterPrintHandler);
       };
       window.addEventListener('afterprint', afterPrintHandler);
+
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('afterprint', afterPrintHandler);
       };
     }
