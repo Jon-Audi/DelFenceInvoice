@@ -18,7 +18,7 @@ export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupe
     );
   }
 
-  const logoUrl = "/Logo.png"; // Use capitalized "Logo.png"
+  const logoUrl = "/Logo.png";
   const currentDate = new Date().toLocaleDateString();
 
   return (
@@ -86,4 +86,3 @@ export const PrintablePriceSheet: React.FC<PrintablePriceSheetProps> = ({ groupe
     </div>
   );
 };
-
