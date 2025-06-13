@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
@@ -15,28 +14,22 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const applyTheme = (theme: Theme): "light" | "dark" => {
   let currentTheme: "light" | "dark";
-  if (typeof window === "undefined") { // Handle SSR case
-    currentTheme = "light"; // Default to light for SSR or if window is not available
-  } else if (theme === "system") {
+  if (theme === "system") {
     currentTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } else {
     currentTheme = theme;
   }
 
   if (typeof window !== "undefined") {
-    const isPrinting = window.matchMedia('print').matches;
-    if (!isPrinting) { // Only apply theme classes if NOT printing
-      document.documentElement.classList.remove("light", "dark");
-      document.documentElement.classList.add(currentTheme);
-    }
-    // If printing, we rely on the @media print CSS in globals.css to set colors.
+    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.classList.add(currentTheme);
   }
   return currentTheme;
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "system";
+    if (typeof window === "undefined") return "system"; // Default for SSR
     return (localStorage.getItem("theme") as Theme) || "system";
   });
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
@@ -48,7 +41,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Listener for system theme changes
   useEffect(() => {
-    if (theme !== "system" || typeof window === "undefined") return;
+    if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
@@ -69,11 +62,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Set initial theme on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedTheme = (localStorage.getItem("theme") as Theme) || "system";
-      setThemeState(storedTheme);
-      setResolvedTheme(applyTheme(storedTheme));
-    }
+    const storedTheme = (localStorage.getItem("theme") as Theme) || "system";
+    setThemeState(storedTheme);
+    setResolvedTheme(applyTheme(storedTheme));
   }, []);
 
   return (
@@ -90,4 +81,3 @@ export const useTheme = (): ThemeContextType => {
   }
   return context;
 };
-
