@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -42,7 +43,7 @@
 
     /* Sidebar specific vars for dark theme */
     --sidebar-background: 0 0% 15%; /* Slightly lighter than main dark background */
-    --sidebar-foreground: 0 0% 80%;
+    --sidebar-foreground: 0 0% 80%; 
     --sidebar-primary: 120 25% 65%;
     --sidebar-primary-foreground: 0 0% 10%;
     --sidebar-accent: 0 0% 25%;
@@ -79,15 +80,15 @@
     --border: 0 0% 35%;
     --input: 0 0% 35%;
     --ring: 120 25% 65%; /* Muted Green for ring */
-
+    
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 0 0% 15%;
-    --sidebar-foreground: 0 0% 80%;
+    --sidebar-background: 0 0% 15%; 
+    --sidebar-foreground: 0 0% 80%; 
     --sidebar-primary: 120 25% 65%;
     --sidebar-primary-foreground: 0 0% 10%;
     --sidebar-accent: 0 0% 25%;
@@ -128,16 +129,17 @@
   }
 
   .print-only-container {
-    position: static !important; /* Changed from absolute */
-    display: block !important;
+    position: absolute !important; /* This was part of the working-with-extra-pages version */
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    height: auto !important;
+    height: auto !important; /* Let content define height */
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important; /* Padding will be on .print-only */
     visibility: visible !important;
-    z-index: auto !important; /* Not needed with static positioning */
-    background: white !important; /* Ensure container itself has white background */
+    z-index: auto !important;
+    background: white !important;
     page-break-before: auto !important;
     page-break-after: auto !important;
   }
@@ -145,24 +147,26 @@
   .print-only-container * {
     visibility: visible !important;
     color-adjust: exact !important;
+    box-sizing: border-box !important;
   }
 
   .print-only {
     display: block !important;
-    width: 100% !important; /* Should fill the container */
+    width: 100% !important;
     height: auto !important;
+    min-height: 0 !important; /* Crucial for shrinking */
     margin: 0 !important;
     padding: 0.5in !important; /* This acts as the page margins */
     background-color: white !important;
     color: black !important;
     font-family: Arial, sans-serif !important;
     font-size: 10pt !important;
-    page-break-before: auto !important;
-    page-break-after: auto !important; /* Let children decide this */
+    page-break-after: auto !important; /* Allow browser to decide */
+    box-sizing: border-box !important;
   }
 
   .print-only > *:last-child {
-    page-break-after: auto !important; /* Or 'avoid' if it's a small footer, 'always' if you want to ensure it doesn't cause an extra page if it's tiny */
+    page-break-after: auto !important; 
   }
 
   .print-only table {
@@ -176,10 +180,10 @@
   .print-only th,
   .print-only td {
     border: 1px solid #ccc !important;
-    padding: 5px !important; /* Slightly reduced padding */
+    padding: 5px !important;
     color: black !important;
     page-break-inside: avoid !important;
-    word-wrap: break-word; /* Help with long unbroken strings */
+    word-wrap: break-word; 
   }
 
   .print-only th {
@@ -204,3 +208,4 @@
     margin: 0; /* Margins are handled by .print-only padding */
   }
 }
+    
