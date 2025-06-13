@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -54,8 +54,7 @@ import type { Estimate, Product, Customer, CompanySettings, EmailContact } from 
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
-// Import the new PrintEstimateButton and PrintableEstimate (default export)
-import PrintableEstimate, { PrintEstimateButton } from '@/components/estimates/printable-estimate';
+import PrintableEstimate from '@/components/estimates/printable-estimate'; // Default import
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
 
@@ -92,6 +91,11 @@ export default function EstimatesPage() {
   const [estimateForViewingItems, setEstimateForViewingItems] = useState<Estimate | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
 
+  // State and ref for the new printing mechanism
+  const [estimateToPrint, setEstimateToPrint] = useState<Estimate | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -103,7 +107,7 @@ export default function EstimatesPage() {
       snapshot.forEach((docSnap) => {
         fetchedEstimates.push({ ...docSnap.data() as Omit<Estimate, 'id'>, id: docSnap.id });
       });
-      setEstimates(fetchedEstimates); 
+      setEstimates(fetchedEstimates);
       setIsLoadingEstimates(false);
     }, (error) => {
       toast({ title: "Error", description: "Could not fetch estimates.", variant: "destructive" });
@@ -178,22 +182,22 @@ export default function EstimatesPage() {
     };
 
     try {
-      if (id && estimates.some(e => e.id === id)) { 
+      if (id && estimates.some(e => e.id === id)) {
         const estimateRef = doc(db, 'estimates', id);
         const updatePayload = { ...basePayload };
-        updatePayload.poNumber = (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') 
-                                  ? estimateDataFromDialog.poNumber.trim() 
+        updatePayload.poNumber = (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '')
+                                  ? estimateDataFromDialog.poNumber.trim()
                                   : deleteField();
         updatePayload.validUntil = estimateDataFromDialog.validUntil ? estimateDataFromDialog.validUntil : deleteField();
-        updatePayload.notes = (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') 
-                               ? estimateDataFromDialog.notes.trim() 
+        updatePayload.notes = (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '')
+                               ? estimateDataFromDialog.notes.trim()
                                : deleteField();
-        updatePayload.internalNotes = (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') 
-                                      ? estimateDataFromDialog.internalNotes.trim() 
+        updatePayload.internalNotes = (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '')
+                                      ? estimateDataFromDialog.internalNotes.trim()
                                       : deleteField();
         await setDoc(estimateRef, updatePayload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
-      } else { 
+      } else {
         const addPayload = { ...basePayload };
         if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') addPayload.poNumber = estimateDataFromDialog.poNumber.trim();
         if (estimateDataFromDialog.validUntil) addPayload.validUntil = estimateDataFromDialog.validUntil;
@@ -380,6 +384,39 @@ export default function EstimatesPage() {
     return null;
   };
 
+  const handlePrepareAndPrint = (estimate: Estimate) => {
+    setEstimateToPrint(estimate);
+    // Use a timeout to allow React to re-render the hidden component with new data
+    setTimeout(() => {
+      if (printRef.current) {
+        const printContents = printRef.current.innerHTML;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write('<html><head><title>Print Estimate</title>');
+          // Link to Tailwind CSS via CDN for the new window
+          win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+          // Add any other essential global styles or print-specific CSS links here if needed
+          win.document.write('</head><body>');
+          win.document.write(printContents);
+          win.document.write('</body></html>');
+          win.document.close();
+          win.focus();
+          setTimeout(() => {
+            win.print();
+            win.close();
+          }, 750); // Delay to ensure content and styles load
+        } else {
+          toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
+        }
+      } else {
+        toast({ title: "Print Error", description: "Printable content not found. Ref is null.", variant: "destructive" });
+      }
+      // Optionally clear estimateToPrint after a delay or based on window close, though immediate clearing is also fine
+      // setEstimateToPrint(null);
+    }, 100); // Short timeout for React to update the hidden component
+  };
+
+
   if (isLoadingEstimates || isLoadingCustomers || isLoadingProducts) {
     return (
       <PageHeader title="Estimates" description="Loading estimates database...">
@@ -446,24 +483,6 @@ export default function EstimatesPage() {
             </TableHeader>
             <TableBody>
               {sortedAndFilteredEstimates.map((estimate) => {
-                // Prepare data for the PrintEstimateButton
-                const estimateDataForPrint = {
-                  estimateNumber: estimate.estimateNumber,
-                  date: formatDateForDisplay(estimate.date),
-                  poNumber: estimate.poNumber || '', // Ensure it's a string
-                  customerName: estimate.customerName || 'N/A',
-                  items: estimate.lineItems.map(li => ({
-                    description: li.productName + (li.isReturn ? " (Return)" : ""),
-                    quantity: li.quantity,
-                    unitPrice: li.unitPrice,
-                    total: li.total,
-                  })),
-                  subtotal: estimate.subtotal,
-                  total: estimate.total,
-                };
-                // Store a reference to the PrintEstimateButton's print logic
-                const printButtonRef = React.createRef<HTMLButtonElement>();
-
                 return (
                   <TableRow key={estimate.id}>
                     <TableCell>{estimate.estimateNumber}</TableCell>
@@ -473,7 +492,6 @@ export default function EstimatesPage() {
                     <TableCell className="text-right">${estimate.total.toFixed(2)}</TableCell>
                     <TableCell><Badge variant={estimate.status === 'Sent' || estimate.status === 'Accepted' ? 'default' : 'outline'}>{estimate.status}</Badge></TableCell>
                     <TableCell>
-                      <PrintEstimateButton estimateData={estimateDataForPrint} ref={printButtonRef} />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -500,7 +518,7 @@ export default function EstimatesPage() {
                           <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                             <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => printButtonRef.current?.click()}>
+                          <DropdownMenuItem onClick={() => handlePrepareAndPrint(estimate)}>
                              <Icon name="Printer" className="mr-2 h-4 w-4" /> Print Estimate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -559,7 +577,7 @@ export default function EstimatesPage() {
                             id={`email-contact-${contact.id}`}
                             checked={selectedRecipientEmails.includes(contact.email)}
                             onCheckedChange={(checked) => {
-                              setSelectedRecipientEmails(prev => 
+                              setSelectedRecipientEmails(prev =>
                                 checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
                               );
                             }}
@@ -575,9 +593,9 @@ export default function EstimatesPage() {
                   )}
                   <FormFieldWrapper>
                     <Label htmlFor="additionalEmail">Or add another email:</Label>
-                    <Input 
-                      id="additionalEmail" 
-                      type="email" 
+                    <Input
+                      id="additionalEmail"
+                      type="email"
                       placeholder="another@example.com"
                       value={additionalRecipientEmail}
                       onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
@@ -623,9 +641,27 @@ export default function EstimatesPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
-      
-      {/* The old print-only-container div and its content are removed from here,
-          as PrintableEstimate now handles its own print structure. */}
+
+      {/* Hidden PrintableEstimate component, updated by estimateToPrint state */}
+      {estimateToPrint && (
+        <div style={{ display: 'none' }}>
+          <PrintableEstimate
+            ref={printRef}
+            estimateNumber={estimateToPrint.estimateNumber}
+            date={formatDateForDisplay(estimateToPrint.date)}
+            poNumber={estimateToPrint.poNumber || ''}
+            customerName={estimateToPrint.customerName || 'N/A'}
+            items={estimateToPrint.lineItems.map(li => ({
+              description: li.productName + (li.isReturn ? " (Return)" : ""),
+              quantity: li.quantity,
+              unitPrice: li.unitPrice,
+              total: li.total,
+            }))}
+            subtotal={estimateToPrint.subtotal}
+            total={estimateToPrint.total}
+          />
+        </div>
+      )}
 
       {estimateForViewingItems && (
         <LineItemsViewerDialog

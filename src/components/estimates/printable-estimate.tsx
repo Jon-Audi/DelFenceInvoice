@@ -1,9 +1,9 @@
 
 "use client";
 
-import React, { useRef } from 'react';
+import React from 'react';
 
-// Define the props for PrintableEstimate based on your usage
+// Define the props for PrintableEstimate
 interface PrintableEstimateProps {
   estimateNumber?: string;
   date?: string;
@@ -26,7 +26,7 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
       <div className="print-only p-8">
         {/* Logo */}
         <img
-          src="/logo.png" // Make sure this logo exists in your public folder
+          src="/logo.png" // Assumes logo.png is in the public folder
           alt="Delaware Fence Solutions Logo"
           className="mx-auto mb-4 h-20 object-contain"
           data-ai-hint="company logo"
@@ -97,66 +97,5 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
 
 PrintableEstimate.displayName = "PrintableEstimate";
 
-
-interface PrintEstimateButtonProps {
-  estimateData: PrintableEstimateProps;
-  // Tailwind CSS file path relative to the new window's document root
-  // This path might need adjustment based on how files are served or if using a CDN for production
-  tailwindCssPath?: string; 
-}
-
-export const PrintEstimateButton: React.FC<PrintEstimateButtonProps> = ({ estimateData, tailwindCssPath = "/globals.css" }) => {
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = () => {
-    if (printRef.current) {
-      const printContents = printRef.current.innerHTML;
-      const win = window.open('', '_blank', 'height=800,width=800'); // Added dimensions for popup
-
-      if (win) {
-        win.document.write('<html><head><title>Print Estimate</title>');
-        // Attempt to link to the main app's globals.css if served, or use CDN as fallback
-        // For development, this might be tricky due to how Next.js serves assets.
-        // A CDN link for Tailwind is more reliable for this new window approach.
-        // Using a known CDN for Tailwind v2 (as per your previous globals.css comments)
-        win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
-        // Add a basic print style to ensure visibility, similar to what the main globals.css was doing.
-        win.document.write(`
-          <style>
-            @media print {
-              body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .print-only-container { margin: 0; padding: 0; }
-              .print-only { padding: 0.5in; } /* Or your desired padding */
-            }
-          </style>
-        `);
-        win.document.write('</head><body>');
-        win.document.write(printContents);
-        win.document.write('</body></html>');
-        win.document.close();
-        
-        // Delay print to allow content and styles to load
-        setTimeout(() => {
-          win.focus(); // Ensure the new window is focused
-          win.print();
-          win.close();
-        }, 750); // Increased delay slightly
-      } else {
-        alert("Popup blocked. Please allow popups for this site to print.");
-      }
-    }
-  };
-
-  return (
-    <>
-      <div style={{ display: 'none' }}> {/* Use inline style for absolute hiding */}
-        <PrintableEstimate ref={printRef} {...estimateData} />
-      </div>
-      {/* The button will be rendered by the parent, this component just provides logic */}
-      {/* This is a conceptual button placement, the actual button is in the DropdownMenuItem */}
-      <button onClick={handlePrint} className="hidden">Print Logic Holder</button>
-    </>
-  );
-};
-
+// Remove PrintEstimateButton component from here; its logic moves to EstimatesPage.tsx
 export default PrintableEstimate;
