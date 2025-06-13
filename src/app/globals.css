@@ -108,6 +108,10 @@
   }
 }
 
+.print-only-container {
+  display: none; /* Hidden for screen by default */
+}
+
 @media print {
   /* Hide all direct children of body except for our print container */
   body > *:not(.print-only-container) {
@@ -124,44 +128,41 @@
   }
 
   .print-only-container {
-    display: block !important;
+    display: block !important; /* Make visible for print */
     visibility: visible !important;
-    position: static !important; /* Ensure it's in normal flow */
+    position: static !important; 
     width: 100% !important;
     margin: 0 !important; 
-    padding: 0 !important; /* Container itself has no padding */
-    background: white !important; /* Ensure container background is white */
+    padding: 0 !important; 
+    background: white !important; 
     color: black !important;
   }
 
-  /* All descendants of print-only-container should be visible */
   .print-only-container * {
     visibility: visible !important;
-    background-color: transparent !important; /* Default to transparent BG for children */
-    color: black !important; /* Ensure text color for children */
+    background-color: transparent !important;
+    color: black !important;
     text-shadow: none !important;
     box-shadow: none !important;
-    border-color: #ccc !important; /* Light border for tables etc. */
-    -webkit-print-color-adjust: exact !important; /* Ensure colors/backgrounds print if set explicitly */
+    border-color: #ccc !important;
+    -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* This class is applied to the root div of the actual printable component */
   .print-only {
     display: block !important;
     width: 100% !important;
     height: auto !important;
     margin: 0 auto !important;
     padding: 0.5in !important; /* This acts as the page margin */
-    background-color: white !important; /* Component background */
-    color: black !important; /* Component text color */
+    background-color: white !important;
+    color: black !important;
     font-family: Arial, sans-serif !important;
     font-size: 10pt !important;
-    box-sizing: border-box !important; /* Important for padding and width */
+    box-sizing: border-box !important;
   }
 
-  /* Table specific styles for printing */
-  .print-only-container table { /* Target tables within print-only-container */
+  .print-only-container table {
     width: 100% !important;
     border-collapse: collapse !important;
     margin-top: 0.5rem !important;
@@ -169,16 +170,15 @@
   }
   .print-only-container th, .print-only-container td {
     border: 1px solid #ccc !important;
-    padding: 4px !important; /* Slightly reduced padding for print */
+    padding: 3px !important; /* Slightly reduced padding */
     page-break-inside: avoid !important;
-    word-wrap: break-word; /* Help prevent wide content from breaking layout */
+    word-wrap: break-word;
   }
   .print-only-container th {
-    background-color: #f0f0f0 !important; /* Light gray for table headers */
+    background-color: #f0f0f0 !important;
     font-weight: bold !important;
   }
   
-  /* Ensure Tailwind's responsive hidden classes don't interfere */
   .print-only-container .hidden, .print-only-container .invisible { 
     display: revert !important; 
     visibility: visible !important; 
@@ -186,13 +186,11 @@
   .print-only-container .opacity-0 { 
     opacity: 1 !important; 
   }
-  /* Ensure flex and grid work as expected if used within printable content */
   .print-only-container .flex { display: flex !important; }
   .print-only-container .grid { display: grid !important; }
 
-
   @page {
-    size: auto; /* Or 'letter', 'A4', etc. */
-    margin: 0; /* Margins are controlled by .print-only padding */
+    size: auto; 
+    margin: 0; 
   }
 }

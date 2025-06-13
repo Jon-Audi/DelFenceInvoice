@@ -189,25 +189,24 @@ export default function ReportsPage() {
   const handleReportPrinted = useCallback(() => {
     setIsPrinting(false);
     setCompanySettings(null);
-  }, [setIsPrinting, setCompanySettings]);
+  }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handleReportPrinted();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (isPrinting && companySettings && generatedReportData && generatedReportData.length > 0) {
-      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(doPrint);
+        requestAnimationFrame(() => {
+          window.print();
+        });
       });
+      const afterPrintHandler = () => {
+        handleReportPrinted();
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
+      window.addEventListener('afterprint', afterPrintHandler);
+      return () => {
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
     }
-
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [isPrinting, companySettings, generatedReportData, handleReportPrinted]);
 
   const customerForSummary = reportType === 'customerBalances' && selectedCustomerId !== 'all' 

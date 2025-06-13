@@ -289,21 +289,21 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrinted();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(doPrint);
+        requestAnimationFrame(() => {
+          window.print();
+        });
       });
+      const afterPrintHandler = () => {
+        handlePrinted();
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
+      window.addEventListener('afterprint', afterPrintHandler);
+      return () => {
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [orderForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
 
   const handlePrintOrderPackingSlip = async (order: Order) => {
@@ -324,21 +324,21 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrintedPackingSlip();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
-        window.addEventListener('afterprint', afterPrintHandler);
         requestAnimationFrame(() => {
-            requestAnimationFrame(doPrint);
+            requestAnimationFrame(() => {
+                window.print();
+            });
         });
+        const afterPrintHandler = () => {
+          handlePrintedPackingSlip();
+          window.removeEventListener('afterprint', afterPrintHandler);
+        };
+        window.addEventListener('afterprint', afterPrintHandler);
+        return () => {
+          window.removeEventListener('afterprint', afterPrintHandler);
+        };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [orderForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings, handlePrintedPackingSlip]);
 
   const handleGenerateEmail = async (order: Order) => {

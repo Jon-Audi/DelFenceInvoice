@@ -364,21 +364,21 @@ export default function InvoicesPage() {
   }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrinted();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(doPrint);
+        requestAnimationFrame(() => {
+          window.print();
+        });
       });
+      const afterPrintHandler = () => {
+        handlePrinted();
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
+      window.addEventListener('afterprint', afterPrintHandler);
+      return () => {
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
 
 
@@ -400,20 +400,21 @@ export default function InvoicesPage() {
   }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrintedPackingSlip();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
     if (invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
-        window.addEventListener('afterprint', afterPrintHandler);
         requestAnimationFrame(() => {
-            requestAnimationFrame(doPrint);
+            requestAnimationFrame(() => {
+                window.print();
+            });
         });
+        const afterPrintHandler = () => {
+          handlePrintedPackingSlip();
+          window.removeEventListener('afterprint', afterPrintHandler);
+        };
+        window.addEventListener('afterprint', afterPrintHandler);
+        return () => {
+          window.removeEventListener('afterprint', afterPrintHandler);
+        };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [invoiceForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings, handlePrintedPackingSlip]);
 
 

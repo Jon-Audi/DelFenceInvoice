@@ -307,21 +307,21 @@ export default function EstimatesPage() {
   }, []);
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrinted();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (estimateForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(doPrint);
+        requestAnimationFrame(() => {
+          window.print();
+        });
       });
+      const afterPrintHandler = () => {
+        handlePrinted();
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
+      window.addEventListener('afterprint', afterPrintHandler);
+      return () => {
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [estimateForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
 
 

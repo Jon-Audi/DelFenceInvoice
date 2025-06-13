@@ -518,21 +518,21 @@ export default function ProductsPage() {
 
 
   useEffect(() => {
-    const doPrint = () => window.print();
-    const afterPrintHandler = () => {
-      handlePrintedPriceSheet();
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
-
     if (productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      window.addEventListener('afterprint', afterPrintHandler);
       requestAnimationFrame(() => {
-        requestAnimationFrame(doPrint);
+        requestAnimationFrame(() => {
+          window.print();
+        });
       });
+      const afterPrintHandler = () => {
+        handlePrintedPriceSheet();
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
+      window.addEventListener('afterprint', afterPrintHandler);
+      return () => {
+        window.removeEventListener('afterprint', afterPrintHandler);
+      };
     }
-    return () => {
-      window.removeEventListener('afterprint', afterPrintHandler);
-    };
   }, [productsForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrintedPriceSheet]);
 
 
