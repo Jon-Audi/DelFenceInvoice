@@ -104,6 +104,5 @@ export const PrintableSalesReport = React.forwardRef<HTMLDivElement, PrintableSa
 );
 
 PrintableSalesReport.displayName = "PrintableSalesReport";
-export { PrintableSalesReport };
-
+// Removed redundant: export { PrintableSalesReport };
     
