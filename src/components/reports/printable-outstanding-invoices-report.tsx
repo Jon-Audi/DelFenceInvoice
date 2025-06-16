@@ -125,6 +125,4 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
   }
 );
 PrintableOutstandingInvoicesReport.displayName = "PrintableOutstandingInvoicesReport";
-export { PrintableOutstandingInvoicesReport };
-
-    
+// Removed the duplicate: export { PrintableOutstandingInvoicesReport };

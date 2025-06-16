@@ -13,7 +13,7 @@ interface PrintableOrderReportProps {
   logoUrl?: string;
 }
 
-export const PrintableOrderReport = React.forwardRef<HTMLDivElement, PrintableOrderReportProps>(
+const PrintableOrderReport = React.forwardRef<HTMLDivElement, PrintableOrderReportProps>(
   ({ orders, companySettings, startDate, endDate, logoUrl }, ref) => {
     const formatDateDisplay = (dateString: string | undefined) => {
       if (!dateString) return 'N/A';
@@ -106,6 +106,5 @@ export const PrintableOrderReport = React.forwardRef<HTMLDivElement, PrintableOr
 );
 
 PrintableOrderReport.displayName = "PrintableOrderReport";
-export { PrintableOrderReport };
-
+export default PrintableOrderReport; // Keep only the default export
     
