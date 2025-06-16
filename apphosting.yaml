@@ -49,6 +49,10 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: GOOGLE_API_KEY
+    secret: YOUR_GOOGLE_API_KEY_SECRET_NAME # Replace with your secret name in Secret Manager
+    availability:
+      - RUNTIME
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
   # - variable: MESSAGE
@@ -60,6 +64,4 @@ env:
   # Grant access to secrets in Cloud Secret Manager.
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
   # - variable: RECAPTCHA_SECRET_KEY # Example for your reCAPTCHA secret key
-  #   secret: yourRecaptchaSecretKeyNameInSecretManager # Replace with the name of your secret in Secret Manager
-  #   availability:
-  #     - RUNTIME # Typically only needed at runtime for backend verification
+  #   secret: yourRecaptchaSecret
