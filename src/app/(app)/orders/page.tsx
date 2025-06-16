@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
-
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function OrdersPage() {
@@ -64,19 +63,17 @@ export default function OrdersPage() {
   const [isConvertingOrder, setIsConvertingOrder] = useState(false);
   const [conversionOrderData, setConversionOrderData] = useState<OrderFormData | null>(null);
 
-  const [orderForPrinting, setOrderForPrinting] = useState<Order | null>(null);
-  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
-  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
-
-  const [orderForPackingSlipPrinting, setOrderForPackingSlipPrinting] = useState<Order | null>(null);
-  const [companySettingsForPackingSlip, setCompanySettingsForPackingSlip] = useState<CompanySettings | null>(null);
-  const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableOrderKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   const [orderForViewingItems, setOrderForViewingItems] = useState<Order | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
+
+  const printRef = useRef<HTMLDivElement>(null);
+  const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
+  const [packingSlipToPrint, setPackingSlipToPrint] = useState<any | null>(null);
+  const [companySettingsForPrint, setCompanySettingsForPrint] = useState<CompanySettings | null>(null);
+
 
   useEffect(() => {
     setIsClient(true);
@@ -88,16 +85,16 @@ export default function OrdersPage() {
         const newOrderData: OrderFormData = {
           orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
-          date: new Date(), 
-          status: 'Ordered', 
-          orderState: 'Open', 
+          date: new Date(),
+          status: 'Ordered',
+          orderState: 'Open',
           poNumber: estimateToConvert.poNumber || '',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: crypto.randomUUID(), 
+            id: crypto.randomUUID(),
             productId: li.productId,
-            productName: li.productName, 
+            productName: li.productName,
             quantity: li.quantity,
-            unitPrice: li.unitPrice,     
+            unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
           })),
@@ -116,7 +113,7 @@ export default function OrdersPage() {
         toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
       }
     }
-  }, [toast]); 
+  }, [toast]);
 
   useEffect(() => {
     if (conversionOrderData && !isLoadingProducts && !isLoadingCustomers) {
@@ -271,77 +268,74 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePrintOrder = async (order: Order) => {
-    setIsLoadingCompanySettings(true);
+  const handlePrepareAndPrintOrder = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-      setCompanySettingsForPrinting(settings);
-      setOrderForPrinting(order);
+      setOrderToPrint({
+        order: order,
+        companySettings: settings,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      });
+      setPackingSlipToPrint(null); // Clear other print type
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Order</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { win.print(); win.close(); }, 750);
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+          }
+        }
+        setOrderToPrint(null); // Clear after printing
+      }, 100);
     } else {
-      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+      toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
     }
-    setIsLoadingCompanySettings(false);
   };
 
-  const handlePrinted = useCallback(() => {
-    setOrderForPrinting(null);
-    setCompanySettingsForPrinting(null);
-  }, []);
-
-  useEffect(() => {
-    if (orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 250); // Standardized timeout
-
-      const afterPrintHandler = () => {
-        handlePrinted();
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-      window.addEventListener('afterprint', afterPrintHandler);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-    }
-  }, [orderForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
-
-  const handlePrintOrderPackingSlip = async (order: Order) => {
-    setIsLoadingPackingSlipCompanySettings(true);
+  const handlePrepareAndPrintOrderPackingSlip = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-        setCompanySettingsForPackingSlip(settings);
-        setOrderForPackingSlipPrinting(order);
+      setPackingSlipToPrint({
+        order: order,
+        companySettings: settings,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      });
+      setOrderToPrint(null); // Clear other print type
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Packing Slip</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { win.print(); win.close(); }, 750);
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+          }
+        }
+        setPackingSlipToPrint(null); // Clear after printing
+      }, 100);
     } else {
-        toast({ title: "Cannot Print Packing Slip", description: "Company settings are required.", variant: "destructive" });
+      toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
     }
-    setIsLoadingPackingSlipCompanySettings(false);
   };
 
-  const handlePrintedPackingSlip = useCallback(() => {
-    setOrderForPackingSlipPrinting(null);
-    setCompanySettingsForPackingSlip(null);
-  }, []);
-
-  useEffect(() => {
-    if (orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
-        const timer = setTimeout(() => {
-          window.print();
-        }, 250); // Standardized timeout
-        
-        const afterPrintHandler = () => {
-          handlePrintedPackingSlip();
-          window.removeEventListener('afterprint', afterPrintHandler);
-        };
-        window.addEventListener('afterprint', afterPrintHandler);
-
-        return () => {
-          clearTimeout(timer);
-          window.removeEventListener('afterprint', afterPrintHandler);
-        };
-    }
-  }, [orderForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings, handlePrintedPackingSlip]);
 
   const handleGenerateEmail = async (order: Order) => {
     setSelectedOrderForEmail(order);
@@ -371,7 +365,7 @@ export default function OrdersPage() {
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
         orderTotal: order.total,
-        companyName: "Delaware Fence Solutions",
+        companyName: (await fetchCompanySettings())?.companyName || "Delaware Fence Solutions",
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -548,8 +542,8 @@ export default function OrdersPage() {
             onSave={handleSaveOrder}
             onDelete={handleDeleteOrder}
             onGenerateEmail={handleGenerateEmail}
-            onPrint={handlePrintOrder}
-            onPrintPackingSlip={handlePrintOrderPackingSlip}
+            onPrint={handlePrepareAndPrintOrder}
+            onPrintPackingSlip={handlePrepareAndPrintOrderPackingSlip}
             formatDate={formatDateForDisplay}
             customers={customers}
             products={products}
@@ -639,33 +633,12 @@ export default function OrdersPage() {
           </DialogContent>
         </Dialog>
       )}
-
-      <div className="print-only-container">
-        {(orderForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableOrder
-            order={orderForPrinting}
-            companySettings={companySettingsForPrinting}
-          />
-        )}
-        {(orderForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) && (
-            <PrintableOrderPackingSlip
-                order={orderForPackingSlipPrinting}
-                companySettings={companySettingsForPackingSlip}
-            />
-        )}
+      
+      <div style={{ display: 'none' }}>
+        {orderToPrint && <PrintableOrder ref={printRef} {...orderToPrint} />}
+        {packingSlipToPrint && <PrintableOrderPackingSlip ref={printRef} {...packingSlipToPrint} />}
       </div>
-       {(isLoadingCompanySettings && orderForPrinting) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing printable order...</p>
-        </div>
-      )}
-      {(isLoadingPackingSlipCompanySettings && orderForPackingSlipPrinting) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing printable packing slip...</p>
-        </div>
-      )}
+
       {orderForViewingItems && (
         <LineItemsViewerDialog
           isOpen={isLineItemsViewerOpen}
@@ -682,6 +655,3 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-
-    

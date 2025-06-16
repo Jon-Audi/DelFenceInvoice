@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -37,8 +37,8 @@ import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type SortableInvoiceKeys = 
-  'invoiceNumber' | 'customerName' | 'poNumber' | 'date' | 'dueDate' | 
+type SortableInvoiceKeys =
+  'invoiceNumber' | 'customerName' | 'poNumber' | 'date' | 'dueDate' |
   'total' | 'amountPaid' | 'balanceDue' | 'status';
 
 export default function InvoicesPage() {
@@ -68,13 +68,11 @@ export default function InvoicesPage() {
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
   const [conversionInvoiceData, setConversionInvoiceData] = useState<InvoiceFormData | null>(null);
 
-  const [invoiceForPrinting, setInvoiceForPrinting] = useState<Invoice | null>(null);
-  const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
-  const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
+  const printRef = React.useRef<HTMLDivElement>(null);
+  const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
+  const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
+  const [companySettingsForPrint, setCompanySettingsForPrint] = useState<CompanySettings | null>(null);
 
-  const [invoiceForPackingSlipPrinting, setInvoiceForPackingSlipPrinting] = useState<Invoice | null>(null);
-  const [companySettingsForPackingSlip, setCompanySettingsForPackingSlip] = useState<CompanySettings | null>(null);
-  const [isLoadingPackingSlipCompanySettings, setIsLoadingPackingSlipCompanySettings] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -84,7 +82,7 @@ export default function InvoicesPage() {
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
 
   useEffect(() => {
-    setIsClient(true); 
+    setIsClient(true);
   }, []);
 
   useEffect(() => {
@@ -101,9 +99,9 @@ export default function InvoicesPage() {
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Draft',
-          poNumber: estimateToConvert.poNumber || '', 
+          poNumber: estimateToConvert.poNumber || '',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id, 
+            id: li.id,
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -132,9 +130,9 @@ export default function InvoicesPage() {
           customerId: orderToConvert.customerId,
           date: new Date(),
           status: 'Draft',
-          poNumber: orderToConvert.poNumber || '', 
+          poNumber: orderToConvert.poNumber || '',
           lineItems: orderToConvert.lineItems.map(li => ({
-            id: li.id, 
+            id: li.id,
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -267,24 +265,24 @@ export default function InvoicesPage() {
 
 
     try {
-      if (id && invoices.some(i => i.id === id)) { 
+      if (id && invoices.some(i => i.id === id)) {
         const invoiceRef = doc(db, 'invoices', id);
         const updatePayload = { ...basePayload };
 
-        updatePayload.poNumber = (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') 
-                                  ? invoiceDataFromDialog.poNumber.trim() 
+        updatePayload.poNumber = (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '')
+                                  ? invoiceDataFromDialog.poNumber.trim()
                                   : deleteField();
         updatePayload.dueDate = invoiceDataFromDialog.dueDate ? invoiceDataFromDialog.dueDate : deleteField();
-        updatePayload.paymentTerms = (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') 
-                                     ? invoiceDataFromDialog.paymentTerms.trim() 
+        updatePayload.paymentTerms = (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '')
+                                     ? invoiceDataFromDialog.paymentTerms.trim()
                                      : deleteField();
-        updatePayload.notes = (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') 
-                               ? invoiceDataFromDialog.notes.trim() 
+        updatePayload.notes = (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '')
+                               ? invoiceDataFromDialog.notes.trim()
                                : deleteField();
-        
+
         await setDoc(invoiceRef, updatePayload, { merge: true });
         toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
-      } else { 
+      } else {
         const addPayload = { ...basePayload };
 
         if (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') {
@@ -299,7 +297,7 @@ export default function InvoicesPage() {
         if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
           addPayload.notes = invoiceDataFromDialog.notes.trim();
         }
-        
+
         const docRef = await addDoc(collection(db, 'invoices'), addPayload);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
       }
@@ -335,6 +333,7 @@ export default function InvoicesPage() {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
+        setCompanySettingsForPrint(docSnap.data() as CompanySettings);
         return docSnap.data() as CompanySettings;
       }
       toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
@@ -346,78 +345,73 @@ export default function InvoicesPage() {
     }
   };
 
-  const handlePrintInvoice = async (invoice: Invoice) => {
-    setIsLoadingCompanySettings(true);
+ const handlePrepareAndPrintInvoice = async (invoice: Invoice) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-      setCompanySettingsForPrinting(settings);
-      setInvoiceForPrinting(invoice);
+      setInvoiceToPrint({
+        invoice: invoice,
+        companySettings: settings,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      });
+      setPackingSlipToPrintForInvoice(null);
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Invoice</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { win.print(); win.close(); }, 750);
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+          }
+        }
+        setInvoiceToPrint(null);
+      }, 100);
     } else {
-      toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+      toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
     }
-    setIsLoadingCompanySettings(false);
   };
 
-  const handlePrinted = useCallback(() => {
-    setInvoiceForPrinting(null);
-    setCompanySettingsForPrinting(null);
-  }, []);
-
-  useEffect(() => {
-    if (invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 250); // Standardized timeout
-
-      const afterPrintHandler = () => {
-        handlePrinted();
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-      window.addEventListener('afterprint', afterPrintHandler);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-    }
-  }, [invoiceForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrinted]);
-
-
-  const handlePrintInvoicePackingSlip = async (invoice: Invoice) => {
-    setIsLoadingPackingSlipCompanySettings(true);
+  const handlePrepareAndPrintInvoicePackingSlip = async (invoice: Invoice) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-        setCompanySettingsForPackingSlip(settings);
-        setInvoiceForPackingSlipPrinting(invoice);
+      setPackingSlipToPrintForInvoice({
+        invoice: invoice,
+        companySettings: settings,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      });
+      setInvoiceToPrint(null);
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Packing Slip</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { win.print(); win.close(); }, 750);
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+          }
+        }
+        setPackingSlipToPrintForInvoice(null);
+      }, 100);
     } else {
-        toast({ title: "Cannot Print Packing Slip", description: "Company settings are required.", variant: "destructive" });
+      toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
     }
-    setIsLoadingPackingSlipCompanySettings(false);
   };
-
-  const handlePrintedPackingSlip = useCallback(() => {
-    setInvoiceForPackingSlipPrinting(null);
-    setCompanySettingsForPackingSlip(null);
-  }, []);
-
-  useEffect(() => {
-    if (invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) {
-        const timer = setTimeout(() => {
-          window.print();
-        }, 250); // Standardized timeout
-        
-        const afterPrintHandler = () => {
-          handlePrintedPackingSlip();
-          window.removeEventListener('afterprint', afterPrintHandler);
-        };
-        window.addEventListener('afterprint', afterPrintHandler);
-
-        return () => {
-          clearTimeout(timer);
-          window.removeEventListener('afterprint', afterPrintHandler);
-        };
-    }
-  }, [invoiceForPackingSlipPrinting, companySettingsForPackingSlip, isLoadingPackingSlipCompanySettings, handlePrintedPackingSlip]);
 
 
   const handleGenerateEmail = async (invoice: Invoice) => {
@@ -440,7 +434,7 @@ export default function InvoicesPage() {
       const invoiceItemsDescription = invoice.lineItems.map(item =>
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n') || 'Services/Products as per invoice.';
-      
+
       const companyNameForDisplay = (await fetchCompanySettings())?.companyName || "Delaware Fence Solutions";
 
 
@@ -484,7 +478,7 @@ export default function InvoicesPage() {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
-    
+
     toast({
       title: "Email Sent (Simulation)",
       description: `Email with subject "${editableSubject}" for invoice ${selectedInvoiceForEmail?.invoiceNumber} would be sent to: ${allRecipients.join(', ')}.`,
@@ -548,7 +542,7 @@ export default function InvoicesPage() {
     }
     return sortableItems;
   }, [invoices, searchTerm, sortConfig]);
-  
+
   const renderSortArrow = (columnKey: SortableInvoiceKeys) => {
     if (sortConfig.key === columnKey) {
       return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
@@ -616,13 +610,13 @@ export default function InvoicesPage() {
             onSave={handleSaveInvoice}
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
-            onPrint={handlePrintInvoice}
-            onPrintPackingSlip={handlePrintInvoicePackingSlip}
+            onPrint={handlePrepareAndPrintInvoice}
+            onPrintPackingSlip={handlePrepareAndPrintInvoicePackingSlip}
             formatDate={formatDate}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
-            onViewItems={handleViewItems} 
+            onViewItems={handleViewItems}
             sortConfig={sortConfig}
             requestSort={requestSort}
             renderSortArrow={renderSortArrow}
@@ -661,7 +655,7 @@ export default function InvoicesPage() {
                             id={`email-contact-invoice-${contact.id}`}
                             checked={selectedRecipientEmails.includes(contact.email)}
                             onCheckedChange={(checked) => {
-                              setSelectedRecipientEmails(prev => 
+                              setSelectedRecipientEmails(prev =>
                                 checked ? [...prev, contact.email] : prev.filter(e => e !== contact.email)
                               );
                             }}
@@ -677,9 +671,9 @@ export default function InvoicesPage() {
                   )}
                   <FormFieldWrapper>
                     <Label htmlFor="additionalEmailInvoice">Or add another email:</Label>
-                    <Input 
-                      id="additionalEmailInvoice" 
-                      type="email" 
+                    <Input
+                      id="additionalEmailInvoice"
+                      type="email"
                       placeholder="another@example.com"
                       value={additionalRecipientEmail}
                       onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
@@ -707,32 +701,11 @@ export default function InvoicesPage() {
         </Dialog>
       )}
 
-      <div className="print-only-container">
-        {(invoiceForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
-          <PrintableInvoice
-            invoice={invoiceForPrinting}
-            companySettings={companySettingsForPrinting}
-          />
-        )}
-        {(invoiceForPackingSlipPrinting && companySettingsForPackingSlip && !isLoadingPackingSlipCompanySettings) && (
-            <PrintableInvoicePackingSlip
-                invoice={invoiceForPackingSlipPrinting}
-                companySettings={companySettingsForPackingSlip}
-            />
-        )}
+      <div style={{ display: 'none' }}>
+        {invoiceToPrint && <PrintableInvoice ref={printRef} {...invoiceToPrint} />}
+        {packingSlipToPrintForInvoice && <PrintableInvoicePackingSlip ref={printRef} {...packingSlipToPrintForInvoice} />}
       </div>
-       {(isLoadingCompanySettings && invoiceForPrinting) && ( 
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing printable invoice...</p>
-        </div>
-      )}
-      {(isLoadingPackingSlipCompanySettings && invoiceForPackingSlipPrinting) && ( 
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing printable packing slip...</p>
-        </div>
-      )}
+
       {invoiceForViewingItems && (
         <LineItemsViewerDialog
           isOpen={isLineItemsViewerOpen}
@@ -749,6 +722,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-
-    
