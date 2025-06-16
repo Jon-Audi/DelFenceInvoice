@@ -119,4 +119,3 @@ export const PrintableOutstandingInvoicesReport: React.FC<PrintableOutstandingIn
     </div>
   );
 };
-
