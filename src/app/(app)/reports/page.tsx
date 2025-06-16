@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -25,6 +25,16 @@ const COMPANY_SETTINGS_DOC_ID = "main";
 
 type ReportType = 'sales' | 'orders' | 'customerBalances';
 
+interface ReportToPrintData {
+  reportType: ReportType;
+  data: Invoice[] | Order[] | CustomerInvoiceDetail[];
+  companySettings: CompanySettings;
+  logoUrl: string;
+  reportTitle?: string; // For outstanding invoices report
+  startDate?: Date;     // For sales and order reports
+  endDate?: Date;       // For sales and order reports
+}
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('sales');
   const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
@@ -33,10 +43,11 @@ export default function ReportsPage() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
   const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | null>(null);
-  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  
   const [isLoading, setIsLoading] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [reportTitleForPrint, setReportTitleForPrint] = useState('');
+  const [reportToPrintData, setReportToPrintData] = useState<ReportToPrintData | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [reportTitleForSummary, setReportTitleForSummary] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -140,7 +151,7 @@ export default function ReportsPage() {
       }
 
       setGeneratedReportData(data);
-      setReportTitleForPrint(currentReportTitle);
+      setReportTitleForSummary(currentReportTitle);
       if (data.length === 0) {
         toast({ title: "No Data", description: "No records found for the selected criteria.", variant: "default" });
       } else {
@@ -175,40 +186,56 @@ export default function ReportsPage() {
       toast({ title: "No Report Data", description: "Please generate a report first.", variant: "default" });
       return;
     }
-    setIsLoading(true); 
+    setIsLoading(true);
     const settings = await fetchCompanySettings();
     if (settings) {
-      setCompanySettings(settings);
-      setIsPrinting(true); 
+      const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
+      
+      const dataForPrint: ReportToPrintData = {
+        reportType: reportType,
+        data: generatedReportData,
+        companySettings: settings,
+        logoUrl: absoluteLogoUrl,
+        reportTitle: reportTitleForSummary, // This is already set by handleGenerateReport
+        startDate: reportType !== 'customerBalances' ? startDate : undefined,
+        endDate: reportType !== 'customerBalances' ? endDate : undefined,
+      };
+      setReportToPrintData(dataForPrint);
+
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Report</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; font-size: 10pt !important; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } } .print-only table { page-break-inside: auto; } .print-only tr { page-break-inside: avoid; page-break-after: auto; } .print-only thead { display: table-header-group; } .print-only tfoot { display: table-footer-group; }</style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { 
+              win.print(); 
+              win.close();
+              setReportToPrintData(null); // Clear after printing
+            }, 750);
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+            setReportToPrintData(null);
+          }
+        } else {
+          toast({ title: "Print Error", description: "Printable content ref not found.", variant: "destructive" });
+          setReportToPrintData(null);
+        }
+        setIsLoading(false);
+      }, 100);
+
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
-
-  const handleReportPrinted = useCallback(() => {
-    setIsPrinting(false);
-    setCompanySettings(null); // Clear settings after printing
-  }, []);
-
-  useEffect(() => {
-    if (isPrinting && companySettings && generatedReportData && generatedReportData.length > 0) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 250); // Standardized timeout
-
-      const afterPrintHandler = () => {
-        handleReportPrinted();
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-      window.addEventListener('afterprint', afterPrintHandler);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-    }
-  }, [isPrinting, companySettings, generatedReportData, handleReportPrinted]);
 
   const customerForSummary = reportType === 'customerBalances' && selectedCustomerId !== 'all' 
     ? customers.find(c => c.id === selectedCustomerId) 
@@ -319,25 +346,12 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {generatedReportData && !isPrinting && (
+      {generatedReportData && !reportToPrintData && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Generated Report Summary</CardTitle>
+            <CardTitle>{reportTitleForSummary || 'Generated Report Summary'}</CardTitle>
           </CardHeader>
           <CardContent>
-             <p>Report Type: <span className="font-semibold capitalize">
-                {reportType === 'sales' && 'Sales'}
-                {reportType === 'orders' && 'Orders'}
-                {reportType === 'customerBalances' && 
-                  (selectedCustomerId === 'all' 
-                    ? 'Outstanding Invoices (All Customers)' 
-                    : `Outstanding Invoices for ${customerForSummary?.companyName || `${customerForSummary?.firstName} ${customerForSummary?.lastName}` || ''}`)
-                }
-              </span>
-            </p>
-            {reportType !== 'customerBalances' && (
-              <p>Date Range: {startDate ? format(startDate, "PPP") : 'N/A'} - {endDate ? format(endDate, "PPP") : 'N/A'}</p>
-            )}
             <p>Records Found: <span className="font-semibold">{generatedReportData.length}</span></p>
             {reportType === 'customerBalances' && (
               <p>Total Outstanding: <span className="font-semibold">
@@ -358,38 +372,40 @@ export default function ReportsPage() {
         </Card>
       )}
 
-      <div className="print-only-container">
-        {isPrinting && companySettings && generatedReportData && (
-          <>
-            {reportType === 'sales' && (
-              <PrintableSalesReport 
-                invoices={generatedReportData as Invoice[]} 
-                companySettings={companySettings}
-                startDate={startDate!}
-                endDate={endDate!}
-              />
-            )}
-            {reportType === 'orders' && (
-              <PrintableOrderReport 
-                orders={generatedReportData as Order[]} 
-                companySettings={companySettings}
-                startDate={startDate!}
-                endDate={endDate!}
-              />
-            )}
-            {reportType === 'customerBalances' && (
-              <PrintableOutstandingInvoicesReport
-                reportData={generatedReportData as CustomerInvoiceDetail[]}
-                companySettings={companySettings}
-                reportTitle={reportTitleForPrint}
-              />
-            )}
-          </>
+      {/* Hidden div for printing */}
+      <div style={{ display: 'none' }}>
+        {reportToPrintData && reportToPrintData.reportType === 'sales' && (
+          <PrintableSalesReport
+            ref={printRef}
+            invoices={reportToPrintData.data as Invoice[]}
+            companySettings={reportToPrintData.companySettings}
+            startDate={reportToPrintData.startDate!}
+            endDate={reportToPrintData.endDate!}
+            logoUrl={reportToPrintData.logoUrl}
+          />
+        )}
+        {reportToPrintData && reportToPrintData.reportType === 'orders' && (
+          <PrintableOrderReport
+            ref={printRef}
+            orders={reportToPrintData.data as Order[]}
+            companySettings={reportToPrintData.companySettings}
+            startDate={reportToPrintData.startDate!}
+            endDate={reportToPrintData.endDate!}
+            logoUrl={reportToPrintData.logoUrl}
+          />
+        )}
+        {reportToPrintData && reportToPrintData.reportType === 'customerBalances' && (
+          <PrintableOutstandingInvoicesReport
+            ref={printRef}
+            reportData={reportToPrintData.data as CustomerInvoiceDetail[]}
+            companySettings={reportToPrintData.companySettings}
+            reportTitle={reportToPrintData.reportTitle!}
+            logoUrl={reportToPrintData.logoUrl}
+          />
         )}
       </div>
     </>
   );
 }
-
 
     
