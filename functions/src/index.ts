@@ -4,10 +4,10 @@ import type {
   Request,
   Response, // Added trailing comma here
 } from "express"; // Keep type for express based functions
-import * as functions from "firebase-functions";
 import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
 import {MailerSend, Recipient, EmailParams} from "mailersend";
+import * as functions from "firebase-functions";
 
 initializeApp();
 
@@ -47,7 +47,6 @@ export const logout = functions.https.onRequest(
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
   async (data: EmailPayload) => {
-    // Retrieve secrets/config within function execution
     const mailersendApiKey =
       functions.config().mailersend?.apikey ||
       process.env.MAILERSEND_API_KEY;
@@ -61,10 +60,10 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       "Delaware Fence Pro"; // Fallback
 
     if (!mailersendApiKey) {
-      console.error("MailerSend API key is not configured.");
+      console.error("MailerSend API key missing.");
       throw new functions.https.HttpsError(
         "internal",
-        "Email service is not configured correctly (API key missing)."
+        "Email service not configured (API key)."
       );
     }
 
@@ -79,7 +78,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
     if (!to || !Array.isArray(to) || to.length === 0) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        "Recipient email(s) (to) are required as an array."
+        "Recipient email(s) are required."
       );
     }
     if (!subject) {
@@ -132,13 +131,13 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = (response.headers as any)[messageIdHeader] || "N/A";
       }
 
-      console.log("Email sent successfully via MailerSend:", messageId);
+      console.log("Email sent via MailerSend:", messageId);
       return {
         success: true,
         message: "Email sent successfully.",
         messageId,
       };
-    } catch (error: unknown) { // Type error as unknown first
+    } catch (error: unknown) {
       let errorMessage = "Failed to send email via MailerSend.";
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -149,11 +148,11 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
         console.error(
-          "Error sending email via MailerSend (body):",
+          "MailerSend API Error:",
           mailerSendError.body.errors || mailerSendError.body
         );
       } else {
-        console.error("Error sending email via MailerSend:", error);
+        console.error("Error sending MailerSend email:", error);
       }
 
       const finalErrorMessage = `Failed to send email: ${errorMessage}`;
