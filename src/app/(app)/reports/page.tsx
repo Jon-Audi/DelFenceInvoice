@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -18,7 +17,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
-import { PrintableOrderReport } from '@/components/reports/printable-order-report';
+import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
 import { cn } from '@/lib/utils';
 
