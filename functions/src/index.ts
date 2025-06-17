@@ -1,3 +1,4 @@
+
 // src/functions/src/index.ts
 import type {
   Request,
@@ -8,11 +9,11 @@ import {getAuth} from "firebase-admin/auth";
 // Import https from v1 for onCall functions
 import {https as httpsV1} from "firebase-functions/v1";
 // Import CallableContext specifically for v1 HTTPS functions
-// import type {CallableContext} from "firebase-functions/v1/https"; // No longer needed
+// import type {CallableContext} from "firebase-functions/v1/https"; // Removed
 
 initializeApp();
 
-// Removed EmailPayload interface as it's no longer used by a function in this file
+// Removed EmailPayload interface as it's no longer used
 
 export const sessionLogin = httpsV1.onRequest(
   async (req: Request, res: Response) => {
@@ -39,7 +40,7 @@ export const logout = httpsV1.onRequest(
   }
 );
 
-// sendEmailWithMailerSend function has been removed as email sending
-// will now be handled by the Trigger Email Firebase Extension.
-// Client-side code will write to a Firestore collection (e.g., 'emails')
-// to trigger email sending via the extension.
+// sendEmailWithMailerSend function removed.
+// Email sending is now handled by the Trigger Email Firebase Extension.
+// Client-side code writes to Firestore to trigger the extension.
+// The 'emails' collection is monitored by the extension.

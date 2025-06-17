@@ -93,7 +93,7 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
 
         {/* Footer */}
         <div className="text-center">
-          <p>Thank you for your consideration!</p>
+          <p>Prices Subject to Change at anytime. Thank you for your consideration!</p>
           <p className="italic">Delaware Fence Solutions</p>
         </div>
       </div>
