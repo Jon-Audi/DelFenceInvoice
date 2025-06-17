@@ -8,6 +8,8 @@ import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
 import {MailerSend, Recipient, EmailParams} from "mailersend";
 import * as functions from "firebase-functions";
+// Import CallableContext specifically for v1 HTTPS functions
+import type { CallableContext } from "firebase-functions/v1/https";
 
 initializeApp();
 
@@ -46,9 +48,9 @@ export const logout = functions.https.onRequest(
 
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
-  async (data: EmailPayload, context: functions.https.CallableContext) => {
-    // context is available here if needed, e.g., for checking auth
-    // const uid = context.auth?.uid;
+  async (data: EmailPayload, _context: CallableContext) => {
+    // _context is available here if needed, e.g., for checking auth
+    // const uid = _context.auth?.uid;
 
     const mailersendApiKey =
       functions.config().mailersend?.apikey ||
@@ -130,7 +132,6 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
         // Plain object access
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messageId = (response.headers as any)[messageIdHeader] || "N/A";
       }
 
@@ -146,7 +147,6 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         errorMessage = error.message;
       }
       // MailerSend specific error handling structure
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mailerSendError = error as any;
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
