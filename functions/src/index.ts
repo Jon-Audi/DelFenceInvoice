@@ -46,7 +46,10 @@ export const logout = functions.https.onRequest(
 
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
-  async (data: EmailPayload) => {
+  async (data: EmailPayload, context: functions.https.CallableContext) => {
+    // context is available here if needed, e.g., for checking auth
+    // const uid = context.auth?.uid;
+
     const mailersendApiKey =
       functions.config().mailersend?.apikey ||
       process.env.MAILERSEND_API_KEY;
@@ -111,8 +114,8 @@ export const sendEmailWithMailerSend = functions.https.onCall(
     }
 
     if (bcc && Array.isArray(bcc) && bcc.length > 0) {
-      const bccRecipients = bcc.map((email: string) => new Recipient(email, ""));
-      emailParams.setBcc(bccRecipients);
+      const bccRecipient = bcc.map((email: string) => new Recipient(email, ""));
+      emailParams.setBcc(bccRecipient);
     }
 
     try {
