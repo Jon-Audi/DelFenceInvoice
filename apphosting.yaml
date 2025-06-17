@@ -1,5 +1,11 @@
 # Settings for Backend (on Cloud Run).
 # See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+runConfig:
+  # cpu: 1 # Example: 1, 2, 4 (max for App Hosting is 4 vCPUs)
+  memoryMiB: 512 # Example: 512, 1024, 2048 (max for App Hosting is 8192 MiB)
+  maxInstances: 2 # Example: 1-100
+  minInstances: 0 # Example: 0-100 (0 for scaling to zero)
+  concurrency: 80 # Example: 1-1000
 
 # Environment variables and secrets.
 env:
@@ -59,3 +65,11 @@ env:
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
   # - variable: RECAPTCHA_SECRET_KEY # Example for your reCAPTCHA secret key
   #   secret: yourRecaptchaSecret
+
+# Settings for the build process.
+# buildConfig:
+#   # Configure environment variables available during build.
+#   # See https://firebase.google.com/docs/app-hosting/configure#build-env-vars
+#   env:
+#     - variable: BUILD_MESSAGE
+#       value: Hello build!
