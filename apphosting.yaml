@@ -50,7 +50,7 @@ env:
       - BUILD
       - RUNTIME
   - variable: GOOGLE_API_KEY
-    secret: Delfenceinvkey # This now explicitly uses Delfenceinvkey
+    secret: Firebase-Delfenceinvkey # Updated to the correct secret name
     availability:
       - RUNTIME
   # Configure environment variables.
