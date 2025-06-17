@@ -1,11 +1,13 @@
 
+// src/functions/src/index.ts
 import type {
   Request,
   Response, // Added trailing comma here
 } from "express"; // Keep type for express based functions
-import {MailerSend, Recipient, EmailParams} from "mailersend";
+import * as functions from "firebase-functions";
 import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
+import {MailerSend, Recipient, EmailParams} from "mailersend";
 
 initializeApp();
 
@@ -45,6 +47,7 @@ export const logout = functions.https.onRequest(
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
   async (data: EmailPayload) => {
+    // Retrieve secrets/config within function execution
     const mailersendApiKey =
       functions.config().mailersend?.apikey ||
       process.env.MAILERSEND_API_KEY;
@@ -118,20 +121,29 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       const messageIdHeader = "x-message-id";
       let messageId = "N/A";
 
+      // MailerSend response.headers might not be a simple object.
+      // It can be an instance of Headers or a plain object.
       if (response.headers && typeof response.headers.get === "function") {
+        // Likely a Headers object
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
+        // Plain object access
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messageId = (response.headers as any)[messageIdHeader] || "N/A";
       }
 
       console.log("Email sent successfully via MailerSend:", messageId);
-      return {success: true, message: "Email sent successfully.", messageId};
-    } catch (error: unknown) {
+      return {
+        success: true,
+        message: "Email sent successfully.",
+        messageId,
+      };
+    } catch (error: unknown) { // Type error as unknown first
       let errorMessage = "Failed to send email via MailerSend.";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
+      // MailerSend specific error handling structure
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mailerSendError = error as any;
       if (mailerSendError.body && mailerSendError.body.message) {
