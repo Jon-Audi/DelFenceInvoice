@@ -1,7 +1,7 @@
 
 import type {
   Request,
-  Response
+  Response, // Added trailing comma here
 } from "express"; // Keep type for express based functions
 import {MailerSend, Recipient, EmailParams} from "mailersend";
 import * as functions from "firebase-functions";
@@ -54,7 +54,13 @@ export const sendEmailWithMailerSend = functions.https.onCall(async (data) => {
     );
   }
 
-  const {to, subject, htmlBody, cc, bcc} = data;
+  const {
+    to,
+    subject,
+    htmlBody,
+    cc,
+    bcc,
+  } = data;
 
   if (!to || !Array.isArray(to) || to.length === 0) {
     throw new functions.https.HttpsError(
