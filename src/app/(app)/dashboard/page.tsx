@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -18,10 +18,14 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [orderCount, setOrderCount] = useState<number | null>(null);
   const [isLoadingOrderCount, setIsLoadingOrderCount] = useState(true);
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
+  const [isLoadingCustomerCount, setIsLoadingCustomerCount] = useState(true);
+  const [activeEstimateCount, setActiveEstimateCount] = useState<number | null>(null);
+  const [isLoadingActiveEstimateCount, setIsLoadingActiveEstimateCount] = useState(true);
 
   useEffect(() => {
     setIsLoadingOrderCount(true);
-    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
       setOrderCount(snapshot.size);
       setIsLoadingOrderCount(false);
     }, (error) => {
@@ -33,7 +37,41 @@ export default function DashboardPage() {
       });
       setIsLoadingOrderCount(false);
     });
-    return () => unsubscribe();
+
+    setIsLoadingCustomerCount(true);
+    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      setCustomerCount(snapshot.size);
+      setIsLoadingCustomerCount(false);
+    }, (error) => {
+      console.error("Error fetching customer count:", error);
+      toast({
+        title: "Error",
+        description: "Could not fetch customer count.",
+        variant: "destructive",
+      });
+      setIsLoadingCustomerCount(false);
+    });
+
+    setIsLoadingActiveEstimateCount(true);
+    const activeEstimatesQuery = query(collection(db, 'estimates'), where('status', 'in', ['Draft', 'Sent']));
+    const unsubscribeActiveEstimates = onSnapshot(activeEstimatesQuery, (snapshot) => {
+      setActiveEstimateCount(snapshot.size);
+      setIsLoadingActiveEstimateCount(false);
+    }, (error) => {
+      console.error("Error fetching active estimate count:", error);
+      toast({
+        title: "Error",
+        description: "Could not fetch active estimate count.",
+        variant: "destructive",
+      });
+      setIsLoadingActiveEstimateCount(false);
+    });
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeCustomers();
+      unsubscribeActiveEstimates();
+    };
   }, [toast]);
 
   return (
@@ -57,30 +95,37 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        {/* Add more stat cards here if needed, e.g., Total Customers, Revenue (requires more complex logic) */}
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
             <Icon name="Users" className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Placeholder for customer count - implement similar to orderCount if needed */}
-            <Skeleton className="h-8 w-1/2" /> 
+            {isLoadingCustomerCount ? (
+              <Skeleton className="h-8 w-1/2" />
+            ) : (
+              <div className="text-2xl font-bold">{customerCount ?? 'N/A'}</div>
+            )}
             <p className="text-xs text-muted-foreground">
               All registered customers.
             </p>
           </CardContent>
         </Card>
+
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Estimates</CardTitle>
             <Icon name="FileText" className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Placeholder for estimate count */}
-            <Skeleton className="h-8 w-1/2" /> 
+             {isLoadingActiveEstimateCount ? (
+              <Skeleton className="h-8 w-1/2" />
+            ) : (
+              <div className="text-2xl font-bold">{activeEstimateCount ?? 'N/A'}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Estimates awaiting action.
+              Estimates in 'Draft' or 'Sent' status.
             </p>
           </CardContent>
         </Card>
