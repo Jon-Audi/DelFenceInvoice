@@ -4,7 +4,6 @@ import type {
   Response, // Added trailing comma here
 } from "express"; // Keep type for express based functions
 import {MailerSend, Recipient, EmailParams} from "mailersend";
-import * as functions from "firebase-functions";
 import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
 
@@ -45,15 +44,18 @@ export const logout = functions.https.onRequest(
 
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
-  async (data: EmailPayload /*, context: functions.https.CallableContext */) => {
-    const mailersendApiKey = functions.config().mailersend?.apikey ||
+  async (data: EmailPayload) => {
+    const mailersendApiKey =
+      functions.config().mailersend?.apikey ||
       process.env.MAILERSEND_API_KEY;
-    const mailersendFromEmail = functions.config().mailersend?.fromemail ||
-                               process.env.MAILERSEND_FROM_EMAIL ||
-                               "noreply@yourdomain.com"; // Fallback
-    const mailersendFromName = functions.config().mailersend?.fromname ||
-                              process.env.MAILERSEND_FROM_NAME ||
-                              "Delaware Fence Pro"; // Fallback
+    const mailersendFromEmail =
+      functions.config().mailersend?.fromemail ||
+      process.env.MAILERSEND_FROM_EMAIL ||
+      "noreply@yourdomain.com"; // Fallback
+    const mailersendFromName =
+      functions.config().mailersend?.fromname ||
+      process.env.MAILERSEND_FROM_NAME ||
+      "Delaware Fence Pro"; // Fallback
 
     if (!mailersendApiKey) {
       console.error("MailerSend API key is not configured.");
@@ -116,13 +118,9 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       const messageIdHeader = "x-message-id";
       let messageId = "N/A";
 
-      // MailerSend response.headers might not be a simple object.
-      // It can be an instance of Headers or a plain object.
       if (response.headers && typeof response.headers.get === "function") {
-        // Likely a Headers object (Fetch API standard)
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
-        // Plain object access
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messageId = (response.headers as any)[messageIdHeader] || "N/A";
       }
@@ -147,9 +145,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       }
 
       const finalErrorMessage = `Failed to send email: ${errorMessage}`;
-      throw new functions.https.HttpsError(
-        "internal",
-        finalErrorMessage
-      );
+      throw new functions.https.HttpsError("internal", finalErrorMessage);
     }
-  });
+  }
+);
