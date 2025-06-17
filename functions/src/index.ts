@@ -49,9 +49,6 @@ export const logout = functions.https.onRequest(
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
   async (data: EmailPayload, _context: CallableContext) => {
-    // _context is available here if needed, e.g., for checking auth
-    // const uid = _context.auth?.uid;
-
     const mailersendApiKey =
       functions.config().mailersend?.apikey ||
       process.env.MAILERSEND_API_KEY;
@@ -133,7 +130,8 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       } else if (response.headers && response.headers[messageIdHeader]) {
         // Plain object access
         // Type assertion for plain object access if necessary and known structure
-        messageId = (response.headers as Record<string, string>)[messageIdHeader] || "N/A";
+        const headers = response.headers as Record<string, string>;
+        messageId = headers[messageIdHeader] || "N/A";
       }
 
       console.log("Email sent via MailerSend:", messageId);
@@ -149,13 +147,13 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       }
       // MailerSend specific error handling structure
       // Check if error has a 'body' property and if that body has 'message'
-      const mailerSendError = error as { body?: { message?: string, errors?: unknown } };
+      const mailerSendError = error as {
+        body?: { message?: string, errors?: unknown }
+      };
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
-        console.error(
-          "MailerSend API Error:",
-          mailerSendError.body.errors || mailerSendError.body
-        );
+        const errorDetails = mailerSendError.body.errors || mailerSendError.body;
+        console.error("MailerSend API Error:", errorDetails);
       } else {
         console.error("Error sending MailerSend email:", error);
       }
