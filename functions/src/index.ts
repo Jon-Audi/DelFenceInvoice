@@ -45,9 +45,9 @@ export const logout = functions.https.onRequest(
 
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(
-  async (data: EmailPayload /* context: functions.https.CallableContext */) => {
+  async (data: EmailPayload /*, context: functions.https.CallableContext */) => {
     const mailersendApiKey = functions.config().mailersend?.apikey ||
-                            process.env.MAILERSEND_API_KEY;
+      process.env.MAILERSEND_API_KEY;
     const mailersendFromEmail = functions.config().mailersend?.fromemail ||
                                process.env.MAILERSEND_FROM_EMAIL ||
                                "noreply@yourdomain.com"; // Fallback
@@ -116,9 +116,13 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       const messageIdHeader = "x-message-id";
       let messageId = "N/A";
 
+      // MailerSend response.headers might not be a simple object.
+      // It can be an instance of Headers or a plain object.
       if (response.headers && typeof response.headers.get === "function") {
+        // Likely a Headers object (Fetch API standard)
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
+        // Plain object access
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messageId = (response.headers as any)[messageIdHeader] || "N/A";
       }
@@ -142,10 +146,10 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         console.error("Error sending email via MailerSend:", error);
       }
 
+      const finalErrorMessage = `Failed to send email: ${errorMessage}`;
       throw new functions.https.HttpsError(
         "internal",
-        `Failed to send email: ${errorMessage}`
+        finalErrorMessage
       );
     }
   });
-
