@@ -34,7 +34,7 @@ import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+// Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -73,8 +73,8 @@ export default function InvoicesPage() {
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
   
-  const functionsInstance = getFunctions();
-  const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
+  // Removed Firebase Functions instance: const functionsInstance = getFunctions();
+  // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
 
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -466,43 +466,53 @@ export default function InvoicesPage() {
   };
 
   const handleSendEmail = async () => {
-    const allRecipients: string[] = [...selectedRecipientEmails];
+    if (!selectedInvoiceForEmail || !editableSubject || !editableBody) {
+        toast({ title: "Error", description: "Email content or invoice details missing.", variant: "destructive"});
+        return;
+    }
+
+    const finalRecipients: { email: string; name: string }[] = [];
+    if (targetCustomerForEmail && targetCustomerForEmail.emailContacts) {
+        selectedRecipientEmails.forEach(selEmail => {
+            const contact = targetCustomerForEmail.emailContacts.find(ec => ec.email === selEmail);
+            if (contact) {
+                finalRecipients.push({ email: contact.email, name: contact.name || '' });
+            }
+        });
+    }
     if (additionalRecipientEmail.trim() !== "") {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
-        allRecipients.push(additionalRecipientEmail.trim());
+          if (!finalRecipients.some(r => r.email === additionalRecipientEmail.trim())) {
+              finalRecipients.push({ email: additionalRecipientEmail.trim(), name: '' });
+          }
       } else {
         toast({ title: "Invalid Email", description: "The additional email address is not valid.", variant: "destructive" });
         return;
       }
     }
 
-    if (allRecipients.length === 0) {
+    if (finalRecipients.length === 0) {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
     
-    if (!editableBody || !editableSubject || !selectedInvoiceForEmail) {
-        toast({ title: "Error", description: "Email content or invoice details missing.", variant: "destructive"});
-        return;
-    }
-
     setIsLoadingEmail(true);
     try {
-      await sendEmailFunction({
-        to: allRecipients,
+      await addDoc(collection(db, 'emails'), {
+        to: finalRecipients,
         subject: editableSubject,
-        htmlBody: editableBody,
+        html: editableBody,
       });
       toast({
-        title: "Email Sent",
-        description: `Email for invoice ${selectedInvoiceForEmail.invoiceNumber} sent successfully.`,
+        title: "Email Queued",
+        description: `Email for invoice ${selectedInvoiceForEmail.invoiceNumber} has been queued for sending.`,
       });
       setIsEmailModalOpen(false);
     } catch (error: any) {
-      console.error("Error sending email:", error);
+      console.error("Error queueing email:", error);
       toast({
-        title: "Email Send Failed",
-        description: error.message || "Could not send the email. Check function logs and MailerSend configuration.",
+        title: "Email Queue Failed",
+        description: error.message || "Could not queue the email. Check Firestore permissions and console.",
         variant: "destructive",
         duration: 7000,
       });
