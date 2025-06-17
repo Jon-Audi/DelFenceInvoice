@@ -9,7 +9,7 @@ import {getAuth} from "firebase-admin/auth";
 import {MailerSend, Recipient, EmailParams} from "mailersend";
 import * as functions from "firebase-functions";
 // Import CallableContext specifically for v1 HTTPS functions
-import type { CallableContext } from "firebase-functions/v1/https";
+import type {CallableContext} from "firebase-functions/v1/https";
 
 initializeApp();
 
@@ -132,7 +132,8 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
         // Plain object access
-        messageId = (response.headers as any)[messageIdHeader] || "N/A";
+        // Type assertion for plain object access if necessary and known structure
+        messageId = (response.headers as Record<string, string>)[messageIdHeader] || "N/A";
       }
 
       console.log("Email sent via MailerSend:", messageId);
@@ -141,13 +142,14 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         message: "Email sent successfully.",
         messageId,
       };
-    } catch (error: unknown) {
+    } catch (error: unknown) { // Typed error as unknown
       let errorMessage = "Failed to send email via MailerSend.";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
       // MailerSend specific error handling structure
-      const mailerSendError = error as any;
+      // Check if error has a 'body' property and if that body has 'message'
+      const mailerSendError = error as { body?: { message?: string, errors?: unknown } };
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
         console.error(
