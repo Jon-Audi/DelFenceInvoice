@@ -34,6 +34,7 @@ import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -71,7 +72,9 @@ export default function InvoicesPage() {
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
-  const [companySettingsForPrint, setCompanySettingsForPrint] = useState<CompanySettings | null>(null);
+  
+  const functionsInstance = getFunctions();
+  const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
 
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -333,7 +336,6 @@ export default function InvoicesPage() {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setCompanySettingsForPrint(docSnap.data() as CompanySettings);
         return docSnap.data() as CompanySettings;
       }
       toast({ title: "Company Settings Not Found", description: "Please configure company settings for printing.", variant: "default" });
@@ -435,7 +437,7 @@ export default function InvoicesPage() {
         `- ${item.productName} (Qty: ${item.quantity}, Unit Price: $${item.unitPrice.toFixed(2)}, Total: $${item.total.toFixed(2)})`
       ).join('\n') || 'Services/Products as per invoice.';
 
-      const companyNameForDisplay = (await fetchCompanySettings())?.companyName || "Delaware Fence Solutions";
+      const companyNameForDisplay = (await fetchCompanySettings())?.companyName || "Delaware Fence Pro";
 
 
       const result = await generateInvoiceEmailDraft({
@@ -463,7 +465,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     const allRecipients: string[] = [...selectedRecipientEmails];
     if (additionalRecipientEmail.trim() !== "") {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
@@ -478,13 +480,35 @@ export default function InvoicesPage() {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
+    
+    if (!editableBody || !editableSubject || !selectedInvoiceForEmail) {
+        toast({ title: "Error", description: "Email content or invoice details missing.", variant: "destructive"});
+        return;
+    }
 
-    toast({
-      title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for invoice ${selectedInvoiceForEmail?.invoiceNumber} would be sent to: ${allRecipients.join(', ')}.`,
-      duration: 7000,
-    });
-    setIsEmailModalOpen(false);
+    setIsLoadingEmail(true);
+    try {
+      await sendEmailFunction({
+        to: allRecipients,
+        subject: editableSubject,
+        htmlBody: editableBody,
+      });
+      toast({
+        title: "Email Sent",
+        description: `Email for invoice ${selectedInvoiceForEmail.invoiceNumber} sent successfully.`,
+      });
+      setIsEmailModalOpen(false);
+    } catch (error: any) {
+      console.error("Error sending email:", error);
+      toast({
+        title: "Email Send Failed",
+        description: error.message || "Could not send the email. Check function logs and MailerSend configuration.",
+        variant: "destructive",
+        duration: 7000,
+      });
+    } finally {
+      setIsLoadingEmail(false);
+    }
   };
 
   const handleViewItems = (invoiceToView: Invoice) => {
@@ -638,7 +662,7 @@ export default function InvoicesPage() {
                 Review and send the email to {selectedInvoiceForEmail.customerName}.
               </DialogDescription>
             </DialogHeader>
-            {isLoadingEmail ? (
+            {isLoadingEmail && !emailDraft ? (
               <div className="flex flex-col justify-center items-center h-60 space-y-2">
                  <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                  <p>Loading email draft...</p>
@@ -694,7 +718,8 @@ export default function InvoicesPage() {
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
               <Button type="button" onClick={handleSendEmail} disabled={isLoadingEmail || !emailDraft}>
-                <Icon name="Send" className="mr-2 h-4 w-4" /> Send Email
+                {isLoadingEmail && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Send Email
               </Button>
             </DialogFooter>
           </DialogContent>

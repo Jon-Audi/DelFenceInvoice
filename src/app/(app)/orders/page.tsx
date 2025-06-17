@@ -33,6 +33,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -72,7 +73,9 @@ export default function OrdersPage() {
   const printRef = useRef<HTMLDivElement>(null);
   const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
   const [packingSlipToPrint, setPackingSlipToPrint] = useState<any | null>(null);
-  const [companySettingsForPrint, setCompanySettingsForPrint] = useState<CompanySettings | null>(null);
+  
+  const functionsInstance = getFunctions();
+  const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
 
 
   useEffect(() => {
@@ -276,7 +279,7 @@ export default function OrdersPage() {
         companySettings: settings,
         logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
       });
-      setPackingSlipToPrint(null); // Clear other print type
+      setPackingSlipToPrint(null); 
       setTimeout(() => {
         if (printRef.current) {
           const printContents = printRef.current.innerHTML;
@@ -295,7 +298,7 @@ export default function OrdersPage() {
             toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
           }
         }
-        setOrderToPrint(null); // Clear after printing
+        setOrderToPrint(null); 
       }, 100);
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
@@ -310,7 +313,7 @@ export default function OrdersPage() {
         companySettings: settings,
         logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
       });
-      setOrderToPrint(null); // Clear other print type
+      setOrderToPrint(null); 
       setTimeout(() => {
         if (printRef.current) {
           const printContents = printRef.current.innerHTML;
@@ -329,7 +332,7 @@ export default function OrdersPage() {
             toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
           }
         }
-        setPackingSlipToPrint(null); // Clear after printing
+        setPackingSlipToPrint(null); 
       }, 100);
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
@@ -356,7 +359,7 @@ export default function OrdersPage() {
       ).join('\n') || 'Items as per order.';
 
       const customerDisplayName = customer ? (customer.companyName || `${customer.firstName} ${customer.lastName}`) : (order.customerName || 'Valued Customer');
-      const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || 'customer@example.com';
+      const customerEmail = customer?.emailContacts.find(ec => ec.type === 'Main Contact')?.email || customer?.emailContacts[0]?.email ||'customer@example.com';
 
       const result = await generateOrderEmailDraft({
         customerName: customerDisplayName,
@@ -365,7 +368,7 @@ export default function OrdersPage() {
         orderDate: new Date(order.date).toLocaleDateString(),
         orderItems: orderItemsDescription,
         orderTotal: order.total,
-        companyName: (await fetchCompanySettings())?.companyName || "Delaware Fence Solutions",
+        companyName: (await fetchCompanySettings())?.companyName || "Delaware Fence Pro",
       });
 
       setEmailDraft({ subject: result.subject, body: result.body });
@@ -383,7 +386,7 @@ export default function OrdersPage() {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     const allRecipients: string[] = [...selectedRecipientEmails];
     if (additionalRecipientEmail.trim() !== "") {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
@@ -398,13 +401,35 @@ export default function OrdersPage() {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
+    
+    if (!editableBody || !editableSubject || !selectedOrderForEmail) {
+        toast({ title: "Error", description: "Email content or order details missing.", variant: "destructive"});
+        return;
+    }
 
-    toast({
-      title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for order ${selectedOrderForEmail?.orderNumber} would be sent to: ${allRecipients.join(', ')}.`,
-      duration: 7000,
-    });
-    setIsEmailModalOpen(false);
+    setIsLoadingEmail(true);
+    try {
+      await sendEmailFunction({
+        to: allRecipients,
+        subject: editableSubject,
+        htmlBody: editableBody, 
+      });
+      toast({
+        title: "Email Sent",
+        description: `Email for order ${selectedOrderForEmail.orderNumber} sent successfully.`,
+      });
+      setIsEmailModalOpen(false);
+    } catch (error: any) {
+      console.error("Error sending email:", error);
+      toast({
+        title: "Email Send Failed",
+        description: error.message || "Could not send the email. Check function logs and MailerSend configuration.",
+        variant: "destructive",
+        duration: 7000,
+      });
+    } finally {
+      setIsLoadingEmail(false);
+    }
   };
 
   const formatDateForDisplay = (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => {
@@ -571,7 +596,7 @@ export default function OrdersPage() {
                 Review and send the email to {selectedOrderForEmail.customerName}.
               </DialogDescription>
             </DialogHeader>
-            {isLoadingEmail ? (
+            {isLoadingEmail && !emailDraft ? ( 
               <div className="flex flex-col justify-center items-center h-60 space-y-2">
                  <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                  <p>Loading email draft...</p>
@@ -627,7 +652,8 @@ export default function OrdersPage() {
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
               <Button type="button" onClick={handleSendEmail} disabled={isLoadingEmail || !emailDraft}>
-                <Icon name="Send" className="mr-2 h-4 w-4" /> Send Email
+                {isLoadingEmail && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Send Email
               </Button>
             </DialogFooter>
           </DialogContent>

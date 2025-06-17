@@ -57,6 +57,7 @@ import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteF
 import PrintableEstimate from '@/components/estimates/printable-estimate';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 type SortableEstimateKeys = 'estimateNumber' | 'customerName' | 'poNumber' | 'date' | 'total' | 'status' | 'validUntil';
 
@@ -79,7 +80,7 @@ export default function EstimatesPage() {
   const [editableSubject, setEditableSubject] = useState<string>('');
   const [editableBody, setEditableBody] = useState<string>('');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false); // Used for AI draft generation and actual send
   const { toast } = useToast();
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
@@ -93,6 +94,9 @@ export default function EstimatesPage() {
 
   const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const functionsInstance = getFunctions();
+  const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
 
 
   useEffect(() => {
@@ -270,7 +274,7 @@ export default function EstimatesPage() {
         companyName: customerCompanyName,
         estimateContent: estimateContent,
       });
-      const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Solutions`;
+      const subject = `Estimate ${estimate.estimateNumber} from Delaware Fence Pro`;
       setEmailDraft({ subject: subject, body: result.emailDraft });
       setEditableSubject(subject);
       setEditableBody(result.emailDraft);
@@ -284,7 +288,7 @@ export default function EstimatesPage() {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     const allRecipients: string[] = [...selectedRecipientEmails];
     if (additionalRecipientEmail.trim() !== "") {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
@@ -298,12 +302,35 @@ export default function EstimatesPage() {
       toast({ title: "No Recipients", description: "Please select or add at least one email recipient.", variant: "destructive" });
       return;
     }
-    toast({
-      title: "Email Sent (Simulation)",
-      description: `Email with subject "${editableSubject}" for estimate ${selectedEstimateForEmail?.estimateNumber} would be sent to: ${allRecipients.join(', ')}.`,
-      duration: 7000,
-    });
-    setIsEmailModalOpen(false);
+
+    if (!editableBody || !editableSubject || !selectedEstimateForEmail) {
+        toast({ title: "Error", description: "Email content or estimate details missing.", variant: "destructive"});
+        return;
+    }
+    
+    setIsLoadingEmail(true);
+    try {
+      await sendEmailFunction({
+        to: allRecipients,
+        subject: editableSubject,
+        htmlBody: editableBody,
+      });
+      toast({
+        title: "Email Sent",
+        description: `Email for estimate ${selectedEstimateForEmail.estimateNumber} sent successfully.`,
+      });
+      setIsEmailModalOpen(false);
+    } catch (error: any) {
+      console.error("Error sending email:", error);
+      toast({
+        title: "Email Send Failed",
+        description: error.message || "Could not send the email. Check function logs and MailerSend configuration.",
+        variant: "destructive",
+        duration: 7000,
+      });
+    } finally {
+      setIsLoadingEmail(false);
+    }
   };
 
   const formatDateForDisplay = (dateString: string | undefined) => {
@@ -407,27 +434,25 @@ export default function EstimatesPage() {
         const win = window.open('', '_blank');
         if (win) {
           win.document.write('<html><head><title>Print Estimate</title>');
-          // Link to Tailwind CDN for styling in the new window
           win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
-          // Include a basic print-specific style to ensure the container takes up the page
           win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } </style>');
           win.document.write('</head><body>');
           win.document.write(printContents);
           win.document.write('</body></html>');
           win.document.close();
-          win.focus(); // Ensure the new window has focus
-          setTimeout(() => { // Further timeout to ensure content rendering before print
+          win.focus(); 
+          setTimeout(() => { 
             win.print();
             win.close();
-          }, 750); // Increased timeout slightly
+          }, 750); 
         } else {
           toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
         }
       } else {
         toast({ title: "Print Error", description: "Printable content not found. Ref is null.", variant: "destructive" });
       }
-      setEstimateToPrint(null); // Clear after attempting to print
-    }, 100); // Small delay to allow state update and re-render of hidden component
+      setEstimateToPrint(null); 
+    }, 100); 
   };
 
 
@@ -574,7 +599,7 @@ export default function EstimatesPage() {
                 Review and send the email to {selectedEstimateForEmail.customerName}.
               </DialogDescription>
             </DialogHeader>
-            {isLoadingEmail ? (
+            {isLoadingEmail && !emailDraft ? ( // Show this loader only when generating AI draft
               <div className="flex flex-col justify-center items-center h-60 space-y-2">
                 <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
                 <p>Loading email draft...</p>
@@ -630,7 +655,8 @@ export default function EstimatesPage() {
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
               <Button type="button" onClick={handleSendEmail} disabled={isLoadingEmail || !emailDraft}>
-                <Icon name="Send" className="mr-2 h-4 w-4" /> Send Email
+                {isLoadingEmail && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Send Email
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -656,7 +682,6 @@ export default function EstimatesPage() {
         </AlertDialog>
       )}
 
-      {/* Hidden PrintableEstimate component, updated by estimateToPrint state */}
       {estimateToPrint && (
         <div style={{ display: 'none' }}>
           <PrintableEstimate ref={printRef} {...estimateToPrint} />
