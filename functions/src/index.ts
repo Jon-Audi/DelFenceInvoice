@@ -2,7 +2,7 @@
 // src/functions/src/index.ts
 import type {
   Request,
-  Response, // Added trailing comma here
+  Response, // Keep trailing comma
 } from "express"; // Keep type for express based functions
 import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
@@ -101,8 +101,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
     const recipients = to.map((email: string) => new Recipient(email, ""));
 
     const emailParams = new EmailParams()
-      .setFrom(mailersendFromEmail)
-      .setFromName(mailersendFromName)
+      .setFrom({email: mailersendFromEmail, name: mailersendFromName})
       .setRecipients(recipients)
       .setSubject(subject)
       .setHtml(htmlBody);
@@ -133,7 +132,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = headers[messageIdHeader] || "N/A";
       }
 
-      console.log("Email sent, ID:", messageId);
+      console.log("Email sent successfully, ID:", messageId);
       return {
         success: true,
         message: "Email sent successfully.",
@@ -144,16 +143,19 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       if (error instanceof Error) {
         errorMessage = error.message;
       }
+
+      // Type assertion for MailerSend specific error structure
       const mailerSendError = error as {
         body?: { message?: string, errors?: unknown }
       };
+
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
         const errorDetails =
           mailerSendError.body.errors || mailerSendError.body;
-        console.error("API Error:", errorDetails);
+        console.error("MailerSend API Error:", errorDetails);
       } else {
-        console.error("Send Error:", error);
+        console.error("Unknown Send Error:", error);
       }
 
       const prefix = "Email dispatch error: ";
