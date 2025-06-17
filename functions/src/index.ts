@@ -129,36 +129,40 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = response.headers.get(messageIdHeader) || "N/A";
       } else if (response.headers && response.headers[messageIdHeader]) {
         // Plain object access
-        // Type assertion for plain object access if necessary and known structure
         const headers = response.headers as Record<string, string>;
         messageId = headers[messageIdHeader] || "N/A";
       }
 
-      console.log("Email sent via MailerSend:", messageId);
+      console.log("Email sent, ID:", messageId);
       return {
         success: true,
         message: "Email sent successfully.",
         messageId,
       };
-    } catch (error: unknown) { // Typed error as unknown
-      let errorMessage = "Failed to send email via MailerSend.";
+    } catch (error: unknown) {
+      let errorMessage = "Email send failed via MailerSend.";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
-      // MailerSend specific error handling structure
-      // Check if error has a 'body' property and if that body has 'message'
       const mailerSendError = error as {
         body?: { message?: string, errors?: unknown }
       };
       if (mailerSendError.body && mailerSendError.body.message) {
         errorMessage = mailerSendError.body.message;
-        const errorDetails = mailerSendError.body.errors || mailerSendError.body;
-        console.error("MailerSend API Error:", errorDetails);
+        const errorDetails =
+          mailerSendError.body.errors || mailerSendError.body;
+        console.error("API Error:", errorDetails);
       } else {
-        console.error("Error sending MailerSend email:", error);
+        console.error("Send Error:", error);
       }
 
-      const finalErrorMessage = `Failed to send email: ${errorMessage}`;
+      const prefix = "Email dispatch error: ";
+      // Ensure truncatedMsg + prefix is well within limits
+      const maxLen = 60 - prefix.length;
+      const truncatedMsg = errorMessage.substring(0, maxLen) +
+        (errorMessage.length > maxLen ? "..." : "");
+      const finalErrorMessage = `${prefix}${truncatedMsg}`;
+
       throw new functions.https.HttpsError("internal", finalErrorMessage);
     }
   }
