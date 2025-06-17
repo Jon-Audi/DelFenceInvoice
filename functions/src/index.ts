@@ -5,7 +5,7 @@ import type {
 } from "express"; // Keep type for express based functions
 import {MailerSend, Recipient, EmailParams} from "mailersend";
 import * as functions from "firebase-functions";
-import *import {initializeApp} from "firebase-admin/app";
+import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
 
 initializeApp();
@@ -148,3 +148,4 @@ export const sendEmailWithMailerSend = functions.https.onCall(
       );
     }
   });
+
