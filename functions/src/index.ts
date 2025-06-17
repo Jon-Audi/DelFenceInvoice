@@ -1,8 +1,11 @@
 
+import type {
+  Request,
+  Response
+} from "express"; // Keep type for express based functions
+import {MailerSend, Recipient, EmailParams} from "mailersend";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import type {Request, Response} from "express"; // Keep type for express based functions
-import { MailerSend, Recipient, EmailParams } from "mailersend";
 
 admin.initializeApp();
 
@@ -33,8 +36,7 @@ export const logout = functions.https.onRequest(
 
 // HTTPS Callable function for sending email
 export const sendEmailWithMailerSend = functions.https.onCall(async (data) => {
-  // It's good practice to retrieve secrets/config within the function execution
-  // rather than at global scope for cold start efficiency and security.
+  // Retrieve secrets/config within function execution
   const mailersendApiKey = functions.config().mailersend?.apikey ||
                            process.env.MAILERSEND_API_KEY;
   const mailersendFromEmail = functions.config().mailersend?.fromemail ||
@@ -46,7 +48,6 @@ export const sendEmailWithMailerSend = functions.https.onCall(async (data) => {
 
   if (!mailersendApiKey) {
     console.error("MailerSend API key is not configured.");
-    // Consistently throw HttpsError for callable functions
     throw new functions.https.HttpsError(
       "internal",
       "Email service is not configured correctly (API key missing)."
@@ -97,33 +98,43 @@ export const sendEmailWithMailerSend = functions.https.onCall(async (data) => {
 
   try {
     const response = await mailerSendInstance.email.send(emailParams);
-    // MailerSend response.headers might not always be present as expected.
-    const messageId = response.headers && response.headers["x-message-id"] ?
-                      response.headers["x-message-id"] : "N/A";
+    const messageIdHeader = "x-message-id";
+    let messageId = "N/A";
+
+    // MailerSend response.headers might not be a simple object.
+    // It can be an instance of Headers or a plain object.
+    if (response.headers && typeof response.headers.get === "function") {
+      // Likely a Headers object (Fetch API standard)
+      messageId = response.headers.get(messageIdHeader) || "N/A";
+    } else if (response.headers && response.headers[messageIdHeader]) {
+      // Plain object access
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messageId = (response.headers as any)[messageIdHeader] || "N/A";
+    }
+
     console.log("Email sent successfully via MailerSend:", messageId);
     return {success: true, message: "Email sent successfully.", messageId};
   } catch (error: unknown) { // Type error as unknown first
     let errorMessage = "Failed to send email via MailerSend.";
     if (error instanceof Error) {
-        errorMessage = error.message;
+      errorMessage = error.message;
     }
     // MailerSend specific error handling structure
-    // The MailerSend SDK might throw errors with a 'body' property
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mailerSendError = error as any;
     if (mailerSendError.body && mailerSendError.body.message) {
-        errorMessage = mailerSendError.body.message;
-        console.error(
-          "Error sending email via MailerSend (body):",
-          mailerSendError.body.errors || mailerSendError.body
-        );
+      errorMessage = mailerSendError.body.message;
+      console.error(
+        "Error sending email via MailerSend (body):",
+        mailerSendError.body.errors || mailerSendError.body
+      );
     } else {
-        console.error("Error sending email via MailerSend:", error);
+      console.error("Error sending email via MailerSend:", error);
     }
 
     throw new functions.https.HttpsError(
-        "internal",
-        `Failed to send email: ${errorMessage}`
+      "internal",
+      `Failed to send email: ${errorMessage}`
     );
   }
 });
