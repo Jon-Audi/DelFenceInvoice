@@ -2,12 +2,13 @@
 // src/functions/src/index.ts
 import type {
   Request,
-  Response, // Keep trailing comma
+  Response,
 } from "express"; // Keep type for express based functions
 import {initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
 import {MailerSend, Recipient, EmailParams} from "mailersend";
-import * as functions from "firebase-functions";
+// Import https from v1 for onCall functions
+import {https as httpsV1} from "firebase-functions/v1";
 // Import CallableContext specifically for v1 HTTPS functions
 import type {CallableContext} from "firebase-functions/v1/https";
 
@@ -21,7 +22,7 @@ interface EmailPayload {
   bcc?: string[];
 }
 
-export const sessionLogin = functions.https.onRequest(
+export const sessionLogin = httpsV1.onRequest(
   async (req: Request, res: Response) => {
     const idToken = req.body.idToken;
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
@@ -39,7 +40,7 @@ export const sessionLogin = functions.https.onRequest(
   }
 );
 
-export const logout = functions.https.onRequest(
+export const logout = httpsV1.onRequest(
   (req: Request, res: Response) => {
     res.clearCookie("session");
     res.status(200).send({status: "logged out"});
@@ -47,23 +48,23 @@ export const logout = functions.https.onRequest(
 );
 
 // HTTPS Callable function for sending email
-export const sendEmailWithMailerSend = functions.https.onCall(
+export const sendEmailWithMailerSend = httpsV1.onCall(
   async (data: EmailPayload, _context: CallableContext) => {
     const mailersendApiKey =
-      functions.config().mailersend?.apikey ||
-      process.env.MAILERSEND_API_KEY;
+      process.env.MAILERSEND_API_KEY ||
+      httpsV1.config().mailersend?.apikey; // Use httpsV1.config()
     const mailersendFromEmail =
-      functions.config().mailersend?.fromemail ||
       process.env.MAILERSEND_FROM_EMAIL ||
+      httpsV1.config().mailersend?.fromemail || // Use httpsV1.config()
       "noreply@yourdomain.com"; // Fallback
     const mailersendFromName =
-      functions.config().mailersend?.fromname ||
       process.env.MAILERSEND_FROM_NAME ||
+      httpsV1.config().mailersend?.fromname || // Use httpsV1.config()
       "Delaware Fence Pro"; // Fallback
 
     if (!mailersendApiKey) {
       console.error("MailerSend API key missing.");
-      throw new functions.https.HttpsError(
+      throw new httpsV1.HttpsError(
         "internal",
         "Email service not configured (API key)."
       );
@@ -78,19 +79,19 @@ export const sendEmailWithMailerSend = functions.https.onCall(
     } = data;
 
     if (!to || !Array.isArray(to) || to.length === 0) {
-      throw new functions.https.HttpsError(
+      throw new httpsV1.HttpsError(
         "invalid-argument",
         "Recipient email(s) are required."
       );
     }
     if (!subject) {
-      throw new functions.https.HttpsError(
+      throw new httpsV1.HttpsError(
         "invalid-argument",
         "Subject is required."
       );
     }
     if (!htmlBody) {
-      throw new functions.https.HttpsError(
+      throw new httpsV1.HttpsError(
         "invalid-argument",
         "HTML body is required."
       );
@@ -132,7 +133,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         messageId = headers[messageIdHeader] || "N/A";
       }
 
-      console.log("Email sent successfully, ID:", messageId);
+      console.log("Email sent, ID:", messageId);
       return {
         success: true,
         message: "Email sent successfully.",
@@ -165,7 +166,7 @@ export const sendEmailWithMailerSend = functions.https.onCall(
         (errorMessage.length > maxLen ? "..." : "");
       const finalErrorMessage = `${prefix}${truncatedMsg}`;
 
-      throw new functions.https.HttpsError("internal", finalErrorMessage);
+      throw new httpsV1.HttpsError("internal", finalErrorMessage);
     }
   }
 );
