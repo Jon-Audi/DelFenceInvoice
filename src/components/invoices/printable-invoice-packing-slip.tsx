@@ -36,7 +36,6 @@ const PrintableInvoicePackingSlip = React.forwardRef<HTMLDivElement, PrintableIn
                   />
                 </div>
               )}
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">{companySettings.companyName || 'Your Company'}</h1>
               <p className="text-sm">{companySettings.addressLine1 || ''}</p>
               <p className="text-sm">{companySettings.addressLine2 || ''}</p>
               <p className="text-sm">

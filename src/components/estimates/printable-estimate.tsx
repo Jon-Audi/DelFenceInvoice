@@ -40,7 +40,7 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
 
         {/* Heading */}
         <div className="text-center mb-4">
-          <h1 className="text-2xl font-bold">Delaware Fence Solutions</h1>
+          <h1 className="text-2xl font-bold"></h1>
           <p>1111 Greenbank Road, Wilmington, DE 19808</p>
           <p>Phone: 302-610-8901 | Email: Info@DelawareFenceSolutions.com</p>
           <p>

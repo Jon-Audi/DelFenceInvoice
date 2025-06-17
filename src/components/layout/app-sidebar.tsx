@@ -27,7 +27,7 @@ export function AppSidebar() {
         <Link href="/dashboard" className="flex items-center gap-2">
           <Icon name="PanelsTopLeft" className="h-8 w-8 text-primary" />
           <span className="font-bold text-lg group-data-[collapsible=icon]:hidden font-headline">
-            Delaware Fence Pro
+            DFS Invoicing
           </span>
         </Link>
       </SidebarHeader>

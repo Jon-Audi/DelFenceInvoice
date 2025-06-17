@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -28,6 +28,7 @@ export default function ProductsPage() {
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
 
   useEffect(() => {
@@ -484,12 +485,16 @@ export default function ProductsPage() {
     }
   };
 
-  const handlePrintPriceSheet = async (selectedCategories: string[]) => {
+  const handlePrintPriceSheetAction = async (selectedCategories: string[]) => {
     if (selectedCategories.length === 0) {
       toast({ title: "No Categories Selected", description: "Please select at least one category to print.", variant: "default" });
+      setIsSelectCategoriesDialogOpen(false);
       return;
     }
+    setIsLoadingCompanySettings(true);
     const settings = await fetchCompanySettings();
+    setIsLoadingCompanySettings(false);
+
     if (settings) {
       const filteredGroupedProducts = new Map<string, Product[]>();
       selectedCategories.forEach(categoryName => {
@@ -500,41 +505,51 @@ export default function ProductsPage() {
 
       if (filteredGroupedProducts.size === 0) {
         toast({ title: "No Products in Selected Categories", description: "No products found in the chosen categories to print.", variant: "default" });
+        setIsSelectCategoriesDialogOpen(false);
         return;
       }
 
       setCompanySettingsForPrinting(settings);
-      setProductsForPrinting(filteredGroupedProducts);
+      setProductsForPrinting(filteredGroupedProducts); // This will trigger the useEffect for printing
+
+      // New print logic will be handled by a useEffect watching productsForPrinting & companySettingsForPrinting
+      setTimeout(() => {
+        if (printRef.current) {
+          const printContents = printRef.current.innerHTML;
+          const win = window.open('', '_blank');
+          if (win) {
+            win.document.write('<html><head><title>Print Price Sheet</title>');
+            win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+            win.document.write('<style>body { margin: 0; font-size: 10pt !important; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } .print-only table { page-break-inside: auto; } .print-only tr { page-break-inside: avoid; page-break-after: auto; } .print-only thead { display: table-header-group; } } </style>');
+            win.document.write('</head><body>');
+            win.document.write(printContents);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(() => { 
+              win.print(); 
+              win.close(); 
+              // Reset states after print dialog is closed
+              setProductsForPrinting(null);
+              setCompanySettingsForPrinting(null);
+            }, 750); // Timeout for content to render in new window
+          } else {
+            toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
+            setProductsForPrinting(null);
+            setCompanySettingsForPrinting(null);
+          }
+        } else {
+          toast({ title: "Print Error", description: "Printable content not found.", variant: "destructive" });
+          setProductsForPrinting(null);
+          setCompanySettingsForPrinting(null);
+        }
+      }, 100); // Small delay for state to update and component to re-render before capturing innerHTML
+
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
     setIsSelectCategoriesDialogOpen(false); 
   };
-
-  const handlePrintedPriceSheet = useCallback(() => {
-    setProductsForPrinting(null);
-    setCompanySettingsForPrinting(null);
-  }, []);
-
-
-  useEffect(() => {
-    if (productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 250); // Standardized timeout
-      
-      const afterPrintHandler = () => {
-        handlePrintedPriceSheet();
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-      window.addEventListener('afterprint', afterPrintHandler);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('afterprint', afterPrintHandler);
-      };
-    }
-  }, [productsForPrinting, companySettingsForPrinting, isLoadingCompanySettings, handlePrintedPriceSheet]);
 
 
   if (isLoading && products.length === 0) { 
@@ -546,6 +561,8 @@ export default function ProductsPage() {
       </PageHeader>
     );
   }
+
+  const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
 
   return (
     <>
@@ -567,7 +584,7 @@ export default function ProductsPage() {
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
+          <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0 || isLoadingCompanySettings}>
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print Price Sheet
           </Button>
@@ -605,19 +622,24 @@ export default function ProductsPage() {
           isOpen={isSelectCategoriesDialogOpen}
           onOpenChange={setIsSelectCategoriesDialogOpen}
           allCategories={productCategories}
-          onSubmit={handlePrintPriceSheet}
+          onSubmit={handlePrintPriceSheetAction}
         />
       )}
 
-      <div className="print-only-container">
-        {(productsForPrinting && companySettingsForPrinting && !isLoadingCompanySettings) && (
+      {/* Hidden div for printing */}
+      <div style={{ display: 'none' }}>
+        {(productsForPrinting && companySettingsForPrinting) && (
           <PrintablePriceSheet
+            ref={printRef}
             groupedProducts={productsForPrinting}
             companySettings={companySettingsForPrinting}
+            logoUrl={absoluteLogoUrl}
           />
         )}
       </div>
-       {(isLoadingCompanySettings && productsForPrinting) && ( 
+
+       {(isLoadingCompanySettings && isSelectCategoriesDialogOpen) && ( 
+        // Simplified loading indicator for when print is initiated
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
             <p className="ml-2 text-white">Preparing price sheet...</p>
@@ -626,6 +648,3 @@ export default function ProductsPage() {
     </>
   );
 }
-
-
-    
