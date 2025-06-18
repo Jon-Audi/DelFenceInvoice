@@ -9,7 +9,7 @@ interface PrintableOutstandingInvoicesReportProps {
   reportData: CustomerInvoiceDetail[];
   companySettings: CompanySettings;
   reportTitle: string;
-  logoUrl?: string;
+  logoUrl?: string; // Added logoUrl to props
 }
 
 export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElement, PrintableOutstandingInvoicesReportProps>(
@@ -17,7 +17,7 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
     const reportGeneratedDate = format(new Date(), "MM/dd/yyyy HH:mm");
 
     const groupedInvoices = reportData.reduce((acc, invoice) => {
-      const customerKey = invoice.customerId || 'unknown_customer';
+      const customerKey = invoice.customerId || 'unknown_customer'; // Handle potential undefined customerId robustly
       if (!acc[customerKey]) {
         acc[customerKey] = {
           customerName: invoice.customerName || 'Unknown Customer',
@@ -38,9 +38,9 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
           <header className="grid grid-cols-2 gap-8 mb-6">
             <div>
               {logoUrl && (
-                 <div style={{ textAlign: 'left', marginBottom: '1rem', width: '128px' }}>
+                 <div style={{ textAlign: 'left', marginBottom: '1rem', width: '128px' }}> {/* Using inline style for simple image */}
                   <img
-                    src={logoUrl}
+                    src={logoUrl} // Assuming logoUrl is already a usable HTTP/HTTPS URL
                     alt={`${companySettings.companyName || 'Company'} Logo`}
                     style={{ display: 'block', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
                     data-ai-hint="company logo"
@@ -64,14 +64,16 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
 
           {Object.keys(groupedInvoices).map(customerId => {
             const group = groupedInvoices[customerId];
+            // Ensure customerId used for key is valid, fallback if necessary
+            const sectionKey = customerId || `customer-group-${Math.random().toString(36).substring(7)}`;
             return (
-              <section key={customerId} className="mb-6">
+              <section key={sectionKey} className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-700 mb-2 bg-gray-100 p-1.5 border border-gray-300 rounded-t-md">
                   Customer: {group.customerName}
                 </h3>
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="bg-gray-50">
+                    <tr > {/* No key needed for single thead tr */}
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">Invoice #</th>
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">PO #</th>
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">Inv. Date</th>
@@ -82,8 +84,10 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
                     </tr>
                   </thead>
                   <tbody>
-                    {group.invoices.map((invoice) => (
-                      <tr key={invoice.invoiceId}>
+                    {group.invoices.map((invoice, index) => (
+                      // Using invoice.invoiceId if available and unique, otherwise fallback to index for safety
+                      // It's crucial that invoice.invoiceId is unique and always a string
+                      <tr key={invoice.invoiceId || `invoice-row-${index}`}>
                         <td className="p-1.5 border border-gray-300">{invoice.invoiceNumber}</td>
                         <td className="p-1.5 border border-gray-300">{invoice.poNumber || 'N/A'}</td>
                         <td className="p-1.5 border border-gray-300">{format(new Date(invoice.invoiceDate), "MM/dd/yy")}</td>
@@ -93,7 +97,8 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
                         <td className="text-right p-1.5 border border-gray-300 font-semibold">${invoice.balanceDue.toFixed(2)}</td>
                       </tr>
                     ))}
-                    <tr key={`${customerId}-summary`} className="bg-gray-50">
+                    {/* Ensure summary row key is unique from invoice rows */}
+                    <tr key={`summary-${sectionKey}`} className="bg-gray-50">
                       <td colSpan={6} className="text-right p-1.5 border border-gray-300 font-bold">Customer Total Outstanding:</td>
                       <td className="text-right p-1.5 border border-gray-300 font-bold">${group.totalCustomerBalance.toFixed(2)}</td>
                     </tr>
@@ -102,7 +107,7 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
               </section>
             );
           })}
-
+          
           {reportData.length === 0 && (
              <p className="text-center text-gray-500 py-4">No outstanding invoices found for the selected criteria.</p>
           )}
@@ -115,7 +120,6 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
             </section>
           )}
 
-
           <footer className="text-center text-gray-500 pt-6 mt-6 border-t border-gray-300">
             <p>End of Report</p>
           </footer>
@@ -125,4 +129,3 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
   }
 );
 PrintableOutstandingInvoicesReport.displayName = "PrintableOutstandingInvoicesReport";
-// Removed the duplicate: export { PrintableOutstandingInvoicesReport };
