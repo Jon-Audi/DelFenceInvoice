@@ -2,7 +2,7 @@
   "indexes": [
     {
       "collectionGroup": "invoices",
-      "queryScope": "COLLECTION_GROUP",
+      "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "customerId", "order": "ASCENDING" },
         { "fieldPath": "balanceDue", "order": "ASCENDING" },
