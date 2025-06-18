@@ -73,7 +73,7 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
                 </h3>
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr > {/* No key needed for single thead tr */}
+                    <tr>
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">Invoice #</th>
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">PO #</th>
                       <th className="text-left p-1.5 border border-gray-300 font-semibold">Inv. Date</th>
@@ -85,8 +85,6 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
                   </thead>
                   <tbody>
                     {group.invoices.map((invoice, index) => (
-                      // Using invoice.invoiceId if available and unique, otherwise fallback to index for safety
-                      // It's crucial that invoice.invoiceId is unique and always a string
                       <tr key={invoice.invoiceId || `invoice-row-${index}`}>
                         <td className="p-1.5 border border-gray-300">{invoice.invoiceNumber}</td>
                         <td className="p-1.5 border border-gray-300">{invoice.poNumber || 'N/A'}</td>
@@ -97,7 +95,6 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
                         <td className="text-right p-1.5 border border-gray-300 font-semibold">${invoice.balanceDue.toFixed(2)}</td>
                       </tr>
                     ))}
-                    {/* Ensure summary row key is unique from invoice rows */}
                     <tr key={`summary-${sectionKey}`} className="bg-gray-50">
                       <td colSpan={6} className="text-right p-1.5 border border-gray-300 font-bold">Customer Total Outstanding:</td>
                       <td className="text-right p-1.5 border border-gray-300 font-bold">${group.totalCustomerBalance.toFixed(2)}</td>
@@ -129,3 +126,4 @@ export const PrintableOutstandingInvoicesReport = React.forwardRef<HTMLDivElemen
   }
 );
 PrintableOutstandingInvoicesReport.displayName = "PrintableOutstandingInvoicesReport";
+
