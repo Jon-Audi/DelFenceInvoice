@@ -141,7 +141,7 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: orderToConvert.payments || [], 
+          payments: orderToConvert.payments?.map(p => ({ ...p, date: p.date })) || [], // Ensure payments have string dates for InvoiceFormData
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -749,4 +749,6 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
     
+
