@@ -113,7 +113,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [], // Initialize payments as empty for estimate conversion
+          payments: [], 
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -141,7 +141,7 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: orderToConvert.payments || [], // Carry over payments from order
+          payments: orderToConvert.payments || [], 
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
