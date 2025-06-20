@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { PaymentReportItem, CompanySettings, Payment } from '@/types';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns'; // Added isValid import
 
 interface PrintablePaymentsReportProps {
   reportItems: PaymentReportItem[];
@@ -19,7 +19,7 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
     const formatDateDisplay = (dateString: string | undefined, includeTime = false) => {
       if (!dateString) return 'N/A';
       const date = new Date(dateString);
-      if (!isValid(date)) return 'Invalid Date';
+      if (!isValid(date)) return 'Invalid Date'; // Now isValid can be used
       return includeTime ? format(date, "MM/dd/yyyy HH:mm") : format(date, "MM/dd/yyyy");
     };
 
@@ -53,7 +53,7 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
             <div className="text-right">
               <h2 className="text-2xl font-bold text-gray-700">Payments Report</h2>
               <p className="font-semibold">Date Range (Document Dates):</p>
-              <p>{format(startDate, "MM/dd/yyyy")} - {format(endDate, "MM/dd/yyyy")}</p>
+              <p>{isValid(startDate) ? format(startDate, "MM/dd/yyyy") : "N/A"} - {isValid(endDate) ? format(endDate, "MM/dd/yyyy") : "N/A"}</p>
               <p className="mt-1">Generated: {format(new Date(), "MM/dd/yyyy HH:mm")}</p>
             </div>
           </header>
