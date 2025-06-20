@@ -1,8 +1,7 @@
-
 "use client";
 
 import React from 'react';
-import type { Invoice, Customer, Product, LineItem, Payment, DocumentStatus } from '@/types';
+import type { Invoice, Customer, Product, LineItem, Payment } from '@/types';
 import { InvoiceForm, type InvoiceFormData } from './invoice-form';
 import {
   Dialog,
@@ -22,7 +21,7 @@ interface InvoiceDialogProps {
   productCategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  initialData?: InvoiceFormData | null;
+  initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
 }
 
 export function InvoiceDialog({
@@ -47,11 +46,11 @@ export function InvoiceDialog({
     }
   }, [initialData, controlledIsOpen]);
 
-  const handleSubmit = (formData: InvoiceFormData) => {
-    const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const handleSubmit = (formDataFromForm: InvoiceFormData) => {
+    const selectedCustomer = customers.find(c => c.id === formDataFromForm.customerId);
     const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
-    const lineItems: LineItem[] = formData.lineItems.map((item) => {
+    const lineItems: LineItem[] = formDataFromForm.lineItems.map((item) => {
       const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
       const finalUnitPrice = parseFloat((typeof item.unitPrice === 'number' ? item.unitPrice : 0).toFixed(2));
       const quantity = item.quantity;
@@ -79,58 +78,46 @@ export function InvoiceDialog({
     });
 
     const currentSubtotal = parseFloat(lineItems.reduce((acc, item) => acc + item.total, 0).toFixed(2)); 
-    const currentTaxAmount = 0; // Assuming no tax for now, or would be calculated & rounded
+    const currentTaxAmount = 0; // Assuming no tax for now
     const currentTotal = parseFloat((currentSubtotal + currentTaxAmount).toFixed(2));
 
-    let existingPayments: Payment[] = invoice?.payments ? [...invoice.payments] : [];
-    
-    if (formData.newPaymentAmount && formData.newPaymentAmount > 0 && formData.newPaymentDate && formData.newPaymentMethod) {
-      const newPayment: Payment = {
-        id: crypto.randomUUID(),
-        date: formData.newPaymentDate.toISOString(),
-        amount: parseFloat(formData.newPaymentAmount.toFixed(2)),
-        method: formData.newPaymentMethod,
-        notes: formData.newPaymentNotes,
-      };
-      existingPayments.push(newPayment);
-    }
+    // Payments are now managed by InvoiceForm and passed in formDataFromForm.payments
+    // These payments have dates as ISO strings, matching the Payment type.
+    const finalPayments: Payment[] = formDataFromForm.payments || [];
 
-    const roundedTotalAmountPaid = parseFloat(existingPayments.reduce((acc, p) => acc + p.amount, 0).toFixed(2));
+    const roundedTotalAmountPaid = parseFloat(finalPayments.reduce((acc, p) => acc + p.amount, 0).toFixed(2));
     const roundedBalanceDue = parseFloat((currentTotal - roundedTotalAmountPaid).toFixed(2));
     const EPSILON = 0.005; // Half a cent
 
     let determinedStatus: Invoice['status'];
-
-    if (formData.status === 'Voided') {
+    if (formDataFromForm.status === 'Voided') {
       determinedStatus = 'Voided';
-    } else if (currentTotal > EPSILON && roundedBalanceDue <= EPSILON) { // Positive total, fully paid
+    } else if (currentTotal > EPSILON && roundedBalanceDue <= EPSILON) {
       determinedStatus = 'Paid';
-    } else if (currentTotal > EPSILON && roundedTotalAmountPaid > 0 && roundedBalanceDue > EPSILON) { // Positive total, some payment made, but still a balance
+    } else if (currentTotal > EPSILON && roundedTotalAmountPaid > 0 && roundedBalanceDue > EPSILON) {
       determinedStatus = 'Partially Paid';
-    } else if (currentTotal <= EPSILON && roundedBalanceDue <= EPSILON) { // Zero or negative total (e.g. credit memo), considered paid/closed if balance is zero
+    } else if (currentTotal <= EPSILON && roundedBalanceDue <= EPSILON) {
       determinedStatus = 'Paid'; 
     } else {
-      // Fallback to the status selected in the form if no payment-driven status applies
-      // This handles 'Draft', 'Sent', or an invoice with no payments yet, or a $0 invoice with no payments.
-      determinedStatus = formData.status;
+      determinedStatus = formDataFromForm.status;
     }
 
     const invoiceToSave: Invoice = {
-      id: invoice?.id || initialData?.id || crypto.randomUUID(),
-      invoiceNumber: formData.invoiceNumber,
-      customerId: formData.customerId,
+      id: invoice?.id || initialData?.id || formDataFromForm.id || crypto.randomUUID(),
+      invoiceNumber: formDataFromForm.invoiceNumber,
+      customerId: formDataFromForm.customerId,
       customerName: customerName,
-      date: formData.date.toISOString(),
-      dueDate: formData.dueDate?.toISOString(),
+      date: formDataFromForm.date.toISOString(),
+      dueDate: formDataFromForm.dueDate?.toISOString(),
       status: determinedStatus,
-      poNumber: formData.poNumber,
+      poNumber: formDataFromForm.poNumber,
       lineItems: lineItems,
       subtotal: currentSubtotal,
       taxAmount: currentTaxAmount,
       total: currentTotal,
-      paymentTerms: formData.paymentTerms,
-      notes: formData.notes,
-      payments: existingPayments,
+      paymentTerms: formDataFromForm.paymentTerms,
+      notes: formDataFromForm.notes,
+      payments: finalPayments, // Use the payments list from the form
       amountPaid: roundedTotalAmountPaid,
       balanceDue: roundedBalanceDue,
     };

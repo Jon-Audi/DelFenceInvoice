@@ -1,4 +1,3 @@
-
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -137,9 +136,9 @@ export interface Invoice extends BaseDocument {
   status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>;
   dueDate?: string;
   paymentTerms?: string;
-  payments?: Payment[];
-  amountPaid?: number;
-  balanceDue?: number;
+  payments: Payment[]; // Ensure payments is always an array, even if empty
+  amountPaid: number;   // Ensure amountPaid is always present
+  balanceDue: number;   // Ensure balanceDue is always present
 }
 
 export interface User {
@@ -194,3 +193,8 @@ export interface PaymentReportItem {
   payments: Payment[]; // Array of payments made for this document
   totalPaidForDocument: number;
 }
+
+// Ensure Invoice type in initialData for InvoiceForm expects Payment[] with string dates
+export type InvoiceForFormInitialData = Omit<Invoice, 'payments'> & {
+  payments?: (Omit<Payment, 'date'> & { date: string | Date })[];
+};
