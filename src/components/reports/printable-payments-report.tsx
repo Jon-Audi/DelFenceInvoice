@@ -3,7 +3,7 @@
 
 import React from 'react';
 import type { PaymentReportItem, CompanySettings, Payment } from '@/types';
-import { format, isValid } from 'date-fns'; // Added isValid import
+import { format, isValid } from 'date-fns';
 
 interface PrintablePaymentsReportProps {
   reportItems: PaymentReportItem[];
@@ -19,10 +19,11 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
     const formatDateDisplay = (dateString: string | undefined, includeTime = false) => {
       if (!dateString) return 'N/A';
       const date = new Date(dateString);
-      if (!isValid(date)) return 'Invalid Date'; // Now isValid can be used
+      if (!isValid(date)) return 'Invalid Date';
       return includeTime ? format(date, "MM/dd/yyyy HH:mm") : format(date, "MM/dd/yyyy");
     };
 
+    // Total is now sum of totalPaidForDocument from items, which already reflects payments in range
     const totalPaymentsCollected = reportItems.reduce((sum, item) => sum + item.totalPaidForDocument, 0);
     const numberOfDocumentsWithPayments = reportItems.length;
 
@@ -52,7 +53,7 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
             </div>
             <div className="text-right">
               <h2 className="text-2xl font-bold text-gray-700">Payments Report</h2>
-              <p className="font-semibold">Date Range (Document Dates):</p>
+              <p className="font-semibold">Payment Dates Range:</p> {/* Clarified title */}
               <p>{isValid(startDate) ? format(startDate, "MM/dd/yyyy") : "N/A"} - {isValid(endDate) ? format(endDate, "MM/dd/yyyy") : "N/A"}</p>
               <p className="mt-1">Generated: {format(new Date(), "MM/dd/yyyy HH:mm")}</p>
             </div>
@@ -61,8 +62,8 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
           <section className="mb-6 p-3 border border-gray-300 rounded">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Summary</h3>
             <div className="grid grid-cols-2 gap-4">
-              <p>Total Payments Collected: <span className="font-bold">${totalPaymentsCollected.toFixed(2)}</span></p>
-              <p>Documents with Payments: <span className="font-bold">{numberOfDocumentsWithPayments}</span></p>
+              <p>Total Payments Received (in range): <span className="font-bold">${totalPaymentsCollected.toFixed(2)}</span></p>
+              <p>Documents with Payments (in range): <span className="font-bold">{numberOfDocumentsWithPayments}</span></p>
             </div>
           </section>
 
@@ -73,9 +74,9 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
                 <div className="grid grid-cols-3 gap-2 mb-1 pb-1 border-b">
                   <div><strong>Type:</strong> {item.documentType}</div>
                   <div><strong>Doc #:</strong> {item.documentNumber}</div>
-                  <div><strong>Date:</strong> {formatDateDisplay(item.documentDate)}</div>
+                  <div><strong>Doc. Date:</strong> {formatDateDisplay(item.documentDate)}</div>
                   <div className="col-span-2"><strong>Customer:</strong> {item.customerName}</div>
-                  <div><strong>Doc Total:</strong> ${item.documentTotal.toFixed(2)}</div>
+                  <div><strong>Doc. Total:</strong> ${item.documentTotal.toFixed(2)}</div>
                 </div>
                 <table className="w-full text-xs">
                   <thead>
@@ -87,7 +88,7 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
                     </tr>
                   </thead>
                   <tbody>
-                    {item.payments.map((payment) => (
+                    {item.payments.map((payment) => ( // These are already filtered payments
                       <tr key={payment.id}>
                         <td className="p-1 border border-gray-300">{formatDateDisplay(payment.date, true)}</td>
                         <td className="p-1 border border-gray-300">{payment.method}</td>
@@ -96,7 +97,7 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
                       </tr>
                     ))}
                     <tr className="font-semibold bg-gray-50">
-                        <td colSpan={2} className="text-right p-1 border border-gray-300">Total Paid for Document:</td>
+                        <td colSpan={2} className="text-right p-1 border border-gray-300">Total Paid for Document (in range):</td>
                         <td className="text-right p-1 border border-gray-300">${item.totalPaidForDocument.toFixed(2)}</td>
                         <td className="p-1 border border-gray-300"></td>
                     </tr>
@@ -119,3 +120,4 @@ export const PrintablePaymentsReport = React.forwardRef<HTMLDivElement, Printabl
 );
 
 PrintablePaymentsReport.displayName = "PrintablePaymentsReport";
+

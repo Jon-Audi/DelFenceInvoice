@@ -69,7 +69,6 @@ export default function ReportsPage() {
       }
     };
     fetchCustomers();
-    // Set initial date range to 'This Month'
     handleDatePresetChange('thisMonth');
   }, [toast]);
 
@@ -94,7 +93,6 @@ export default function ReportsPage() {
         break;
       case 'custom':
       default:
-        // For custom, don't change dates here, let user pick
         return; 
     }
     setStartDate(newStart);
@@ -102,11 +100,11 @@ export default function ReportsPage() {
   };
 
   const handleGenerateReport = async () => {
-    if ((reportType !== 'customerBalances') && (!startDate || !endDate)) {
+    if (!startDate || !endDate) {
       toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
       return;
     }
-    if (reportType !== 'customerBalances' && endDate! < startDate!) {
+    if (endDate! < startDate!) {
       toast({ title: "Invalid Date Range", description: "End date cannot be before start date.", variant: "destructive" });
       return;
     }
@@ -114,29 +112,31 @@ export default function ReportsPage() {
     setIsLoading(true);
     setGeneratedReportData(null);
     let currentReportTitle = '';
+    // Ensure dates are set to the very beginning and end of the day for accurate range filtering
+    const rangeStart = new Date(startDate.setHours(0, 0, 0, 0));
+    const rangeEnd = new Date(endDate.setHours(23, 59, 59, 999));
+
 
     try {
       let data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] = [];
-      const startQueryDate = startDate ? Timestamp.fromDate(new Date(startDate.setHours(0, 0, 0, 0))) : null;
-      const endQueryDate = endDate ? Timestamp.fromDate(new Date(endDate.setHours(23, 59, 59, 999))) : null;
-
+      
       if (reportType === 'sales') {
-        currentReportTitle = `Sales Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
+        currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
-                        where('date', '>=', startQueryDate!.toDate().toISOString()), 
-                        where('date', '<=', endQueryDate!.toDate().toISOString()));
+                        where('date', '>=', rangeStart.toISOString()), 
+                        where('date', '<=', rangeEnd.toISOString()));
         const querySnapshot = await getDocs(q);
         const fetchedInvoices: Invoice[] = [];
         querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
         data = fetchedInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       } else if (reportType === 'orders') {
-        currentReportTitle = `Order Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
+        currentReportTitle = `Order Report (Order Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const ordersRef = collection(db, 'orders');
         const q = query(ordersRef, 
-                        where('date', '>=', startQueryDate!.toDate().toISOString()), 
-                        where('date', '<=', endQueryDate!.toDate().toISOString()));
+                        where('date', '>=', rangeStart.toISOString()), 
+                        where('date', '<=', rangeEnd.toISOString()));
         const querySnapshot = await getDocs(q);
         const fetchedOrders: Order[] = [];
         querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
@@ -177,58 +177,68 @@ export default function ReportsPage() {
           });
         });
         data = customerInvoiceDetails.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+      
       } else if (reportType === 'payments') {
-        currentReportTitle = `Payments Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
+        currentReportTitle = `Payments Report (Payment Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const paymentReportItems: PaymentReportItem[] = [];
 
-        // Fetch Invoices with payments
+        // Fetch Invoices: All potentially relevant (Paid or Partially Paid)
         const invoicesRef = collection(db, 'invoices');
-        const qInvoices = query(invoicesRef,
-                                where('status', 'in', ['Paid', 'Partially Paid']),
-                                where('date', '>=', startQueryDate!.toDate().toISOString()),
-                                where('date', '<=', endQueryDate!.toDate().toISOString()),
-                                orderBy('date', 'desc'));
+        const qInvoices = query(invoicesRef, where('status', 'in', ['Paid', 'Partially Paid']));
         const invoicesSnapshot = await getDocs(qInvoices);
+
         invoicesSnapshot.forEach(docSnap => {
           const invoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
           if (invoice.payments && invoice.payments.length > 0) {
-            paymentReportItems.push({
-              documentId: invoice.id,
-              documentNumber: invoice.invoiceNumber,
-              documentType: 'Invoice',
-              customerName: invoice.customerName || 'N/A',
-              documentDate: invoice.date,
-              documentTotal: invoice.total,
-              payments: invoice.payments,
-              totalPaidForDocument: invoice.amountPaid || 0,
+            const paymentsInDateRange = invoice.payments.filter(p => {
+              const paymentDate = new Date(p.date);
+              return paymentDate >= rangeStart && paymentDate <= rangeEnd;
             });
+
+            if (paymentsInDateRange.length > 0) {
+              paymentReportItems.push({
+                documentId: invoice.id,
+                documentNumber: invoice.invoiceNumber,
+                documentType: 'Invoice',
+                customerName: invoice.customerName || 'N/A',
+                documentDate: invoice.date,
+                documentTotal: invoice.total,
+                payments: paymentsInDateRange, // Only payments within the date range
+                totalPaidForDocument: paymentsInDateRange.reduce((sum, p) => sum + p.amount, 0),
+              });
+            }
           }
         });
 
-        // Fetch Orders with payments
+        // Fetch Orders: All orders (or optimize if possible, e.g., if orders have an 'amountPaid' field)
         const ordersRef = collection(db, 'orders');
-        const qOrders = query(ordersRef,
-                              where('date', '>=', startQueryDate!.toDate().toISOString()),
-                              where('date', '<=', endQueryDate!.toDate().toISOString()),
-                              orderBy('date', 'desc'));
+        // If orders store payment info similarly and you want to include them:
+        const qOrders = query(ordersRef, where('amountPaid', '>', 0)); // Example optimization: only fetch orders with some payment
         const ordersSnapshot = await getDocs(qOrders);
+
         ordersSnapshot.forEach(docSnap => {
           const order = { id: docSnap.id, ...docSnap.data() } as Order;
           if (order.payments && order.payments.length > 0) {
-             paymentReportItems.push({
-              documentId: order.id,
-              documentNumber: order.orderNumber,
-              documentType: 'Order',
-              customerName: order.customerName || 'N/A',
-              documentDate: order.date,
-              documentTotal: order.total,
-              payments: order.payments,
-              totalPaidForDocument: order.amountPaid || 0,
+            const paymentsInDateRange = order.payments.filter(p => {
+              const paymentDate = new Date(p.date);
+              return paymentDate >= rangeStart && paymentDate <= rangeEnd;
             });
+
+            if (paymentsInDateRange.length > 0) {
+              paymentReportItems.push({
+                documentId: order.id,
+                documentNumber: order.orderNumber,
+                documentType: 'Order',
+                customerName: order.customerName || 'N/A',
+                documentDate: order.date,
+                documentTotal: order.total,
+                payments: paymentsInDateRange, // Only payments within the date range
+                totalPaidForDocument: paymentsInDateRange.reduce((sum, p) => sum + p.amount, 0),
+              });
+            }
           }
         });
-        // Sort combined items by document date
-        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime());
+        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime()); // Sort by document date for now
       }
 
 
@@ -279,8 +289,8 @@ export default function ReportsPage() {
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
         reportTitle: reportTitleForSummary,
-        startDate: (reportType === 'sales' || reportType === 'orders' || reportType === 'payments') ? startDate : undefined,
-        endDate: (reportType === 'sales' || reportType === 'orders' || reportType === 'payments') ? endDate : undefined,
+        startDate: startDate, // Pass original startDate for display
+        endDate: endDate,   // Pass original endDate for display
       };
       setReportToPrintData(dataForPrint);
 
@@ -324,15 +334,16 @@ export default function ReportsPage() {
 
     if (reportType === 'payments') {
         const paymentItems = generatedReportData as PaymentReportItem[];
+        // The totalPaidForDocument in each item is already sum of payments *within the date range*
         const totalPaymentsReceived = paymentItems.reduce((sum, item) => sum + item.totalPaidForDocument, 0);
+        const distinctDocuments = new Set(paymentItems.map(item => item.documentId));
         return (
             <>
-              <p>Total Payments Received: <span className="font-semibold">${totalPaymentsReceived.toFixed(2)}</span></p>
-              <p>Number of Documents with Payments: <span className="font-semibold">{paymentItems.length}</span></p>
+              <p>Total Payments Received (in range): <span className="font-semibold">${totalPaymentsReceived.toFixed(2)}</span></p>
+              <p>Number of Documents with Payments (in range): <span className="font-semibold">{distinctDocuments.size}</span></p>
             </>
         );
     }
-    // ... existing summaries
     if (reportType === 'customerBalances') {
       return <p>Total Outstanding: <span className="font-semibold">${(generatedReportData as CustomerInvoiceDetail[]).reduce((sum, item) => sum + item.balanceDue, 0).toFixed(2)}</span></p>;
     }
@@ -357,11 +368,7 @@ export default function ReportsPage() {
             setReportType(value as ReportType);
             setGeneratedReportData(null); 
             setSelectedCustomerId('all');
-            if (value !== 'customerBalances') { // Reset to default preset if not customer balances
-                handleDatePresetChange('thisMonth');
-            } else {
-                setActiveDatePreset('custom'); // No presets for customer balances
-            }
+            handleDatePresetChange('thisMonth'); // Default to 'thisMonth' for all reports on tab change
           }}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="sales">Sales Report</TabsTrigger>
@@ -371,7 +378,7 @@ export default function ReportsPage() {
             </TabsList>
           </Tabs>
 
-          {reportType !== 'customerBalances' && (
+          {reportType !== 'customerBalances' && ( // Date presets for all except customer balances
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
@@ -425,7 +432,7 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                This report shows currently outstanding invoices (not Paid or Voided, with a balance due).
+                This report shows currently outstanding invoices (not Paid or Voided, with a balance due). Date range is not applicable.
               </p>
             </div>
           )}
@@ -475,3 +482,4 @@ export default function ReportsPage() {
     </>
   );
 }
+
