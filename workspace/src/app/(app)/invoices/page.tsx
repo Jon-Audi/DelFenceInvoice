@@ -66,7 +66,7 @@ export default function InvoicesPage() {
   const router = useRouter();
 
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
-  const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null>(null);
+  const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] } | null>(null);
 
 
   const printRef = React.useRef<HTMLDivElement>(null);
@@ -88,7 +88,7 @@ export default function InvoicesPage() {
   useEffect(() => {
     const pendingEstimateRaw = localStorage.getItem('estimateToConvert_invoice');
     const pendingOrderRaw = localStorage.getItem('orderToConvert_invoice');
-    let newInvoiceData: (Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] }) | null = null;
+    let newInvoiceData: (Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] }) | null = null;
 
 
     if (pendingEstimateRaw) {
@@ -113,7 +113,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [],
+          payments: [], // Initialize payments as empty for estimate conversion
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -141,7 +141,7 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: orderToConvert.payments?.map(p => ({...p, date: new Date(p.date)} as unknown as Payment)) || [],
+          payments: orderToConvert.payments || [], // Carry over payments from order
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
