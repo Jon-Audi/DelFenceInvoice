@@ -11,28 +11,30 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isValid } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail } from '@/types';
+import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
+import { PrintablePaymentsReport } from '@/components/reports/printable-payments-report';
 import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments';
+type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'last7Days';
 
 interface ReportToPrintData {
   reportType: ReportType;
-  data: Invoice[] | Order[] | CustomerInvoiceDetail[];
+  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[];
   companySettings: CompanySettings;
   logoUrl: string;
-  reportTitle?: string; // For outstanding invoices report
-  startDate?: Date;     // For sales and order reports
-  endDate?: Date;       // For sales and order reports
+  reportTitle?: string;
+  startDate?: Date;
+  endDate?: Date;
 }
 
 export default function ReportsPage() {
@@ -42,7 +44,8 @@ export default function ReportsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
-  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | null>(null);
+  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | null>(null);
+  const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
   
   const [isLoading, setIsLoading] = useState(false);
   const [reportToPrintData, setReportToPrintData] = useState<ReportToPrintData | null>(null);
@@ -66,10 +69,40 @@ export default function ReportsPage() {
       }
     };
     fetchCustomers();
+    // Set initial date range to 'This Month'
+    handleDatePresetChange('thisMonth');
   }, [toast]);
 
+  const handleDatePresetChange = (preset: DatePreset) => {
+    setActiveDatePreset(preset);
+    let newStart: Date;
+    let newEnd: Date;
+    const today = new Date();
+
+    switch (preset) {
+      case 'thisYear':
+        newStart = startOfYear(today);
+        newEnd = endOfYear(today);
+        break;
+      case 'thisMonth':
+        newStart = startOfMonth(today);
+        newEnd = endOfMonth(today);
+        break;
+      case 'last7Days':
+        newStart = subDays(today, 6);
+        newEnd = today;
+        break;
+      case 'custom':
+      default:
+        // For custom, don't change dates here, let user pick
+        return; 
+    }
+    setStartDate(newStart);
+    setEndDate(newEnd);
+  };
+
   const handleGenerateReport = async () => {
-    if (reportType !== 'customerBalances' && (!startDate || !endDate)) {
+    if ((reportType !== 'customerBalances') && (!startDate || !endDate)) {
       toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
       return;
     }
@@ -83,17 +116,16 @@ export default function ReportsPage() {
     let currentReportTitle = '';
 
     try {
-      let data: Invoice[] | Order[] | CustomerInvoiceDetail[] = [];
+      let data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] = [];
+      const startQueryDate = startDate ? Timestamp.fromDate(new Date(startDate.setHours(0, 0, 0, 0))) : null;
+      const endQueryDate = endDate ? Timestamp.fromDate(new Date(endDate.setHours(23, 59, 59, 999))) : null;
 
       if (reportType === 'sales') {
         currentReportTitle = `Sales Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
-        const startQueryDate = Timestamp.fromDate(new Date(startDate!.setHours(0, 0, 0, 0)));
-        const endQueryDate = Timestamp.fromDate(new Date(endDate!.setHours(23, 59, 59, 999)));
-        
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
-                        where('date', '>=', startQueryDate.toDate().toISOString()), 
-                        where('date', '<=', endQueryDate.toDate().toISOString()));
+                        where('date', '>=', startQueryDate!.toDate().toISOString()), 
+                        where('date', '<=', endQueryDate!.toDate().toISOString()));
         const querySnapshot = await getDocs(q);
         const fetchedInvoices: Invoice[] = [];
         querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
@@ -101,13 +133,10 @@ export default function ReportsPage() {
 
       } else if (reportType === 'orders') {
         currentReportTitle = `Order Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
-        const startQueryDate = Timestamp.fromDate(new Date(startDate!.setHours(0, 0, 0, 0)));
-        const endQueryDate = Timestamp.fromDate(new Date(endDate!.setHours(23, 59, 59, 999)));
-
         const ordersRef = collection(db, 'orders');
         const q = query(ordersRef, 
-                        where('date', '>=', startQueryDate.toDate().toISOString()), 
-                        where('date', '<=', endQueryDate.toDate().toISOString()));
+                        where('date', '>=', startQueryDate!.toDate().toISOString()), 
+                        where('date', '<=', endQueryDate!.toDate().toISOString()));
         const querySnapshot = await getDocs(q);
         const fetchedOrders: Order[] = [];
         querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
@@ -148,7 +177,60 @@ export default function ReportsPage() {
           });
         });
         data = customerInvoiceDetails.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+      } else if (reportType === 'payments') {
+        currentReportTitle = `Payments Report (${format(startDate!, "P")} - ${format(endDate!, "P")})`;
+        const paymentReportItems: PaymentReportItem[] = [];
+
+        // Fetch Invoices with payments
+        const invoicesRef = collection(db, 'invoices');
+        const qInvoices = query(invoicesRef,
+                                where('status', 'in', ['Paid', 'Partially Paid']),
+                                where('date', '>=', startQueryDate!.toDate().toISOString()),
+                                where('date', '<=', endQueryDate!.toDate().toISOString()),
+                                orderBy('date', 'desc'));
+        const invoicesSnapshot = await getDocs(qInvoices);
+        invoicesSnapshot.forEach(docSnap => {
+          const invoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
+          if (invoice.payments && invoice.payments.length > 0) {
+            paymentReportItems.push({
+              documentId: invoice.id,
+              documentNumber: invoice.invoiceNumber,
+              documentType: 'Invoice',
+              customerName: invoice.customerName || 'N/A',
+              documentDate: invoice.date,
+              documentTotal: invoice.total,
+              payments: invoice.payments,
+              totalPaidForDocument: invoice.amountPaid || 0,
+            });
+          }
+        });
+
+        // Fetch Orders with payments
+        const ordersRef = collection(db, 'orders');
+        const qOrders = query(ordersRef,
+                              where('date', '>=', startQueryDate!.toDate().toISOString()),
+                              where('date', '<=', endQueryDate!.toDate().toISOString()),
+                              orderBy('date', 'desc'));
+        const ordersSnapshot = await getDocs(qOrders);
+        ordersSnapshot.forEach(docSnap => {
+          const order = { id: docSnap.id, ...docSnap.data() } as Order;
+          if (order.payments && order.payments.length > 0) {
+             paymentReportItems.push({
+              documentId: order.id,
+              documentNumber: order.orderNumber,
+              documentType: 'Order',
+              customerName: order.customerName || 'N/A',
+              documentDate: order.date,
+              documentTotal: order.total,
+              payments: order.payments,
+              totalPaidForDocument: order.amountPaid || 0,
+            });
+          }
+        });
+        // Sort combined items by document date
+        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime());
       }
+
 
       setGeneratedReportData(data);
       setReportTitleForSummary(currentReportTitle);
@@ -196,9 +278,9 @@ export default function ReportsPage() {
         data: generatedReportData,
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
-        reportTitle: reportTitleForSummary, // This is already set by handleGenerateReport
-        startDate: reportType !== 'customerBalances' ? startDate : undefined,
-        endDate: reportType !== 'customerBalances' ? endDate : undefined,
+        reportTitle: reportTitleForSummary,
+        startDate: (reportType === 'sales' || reportType === 'orders' || reportType === 'payments') ? startDate : undefined,
+        endDate: (reportType === 'sales' || reportType === 'orders' || reportType === 'payments') ? endDate : undefined,
       };
       setReportToPrintData(dataForPrint);
 
@@ -218,7 +300,7 @@ export default function ReportsPage() {
             setTimeout(() => { 
               win.print(); 
               win.close();
-              setReportToPrintData(null); // Clear after printing
+              setReportToPrintData(null); 
             }, 750);
           } else {
             toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
@@ -237,9 +319,31 @@ export default function ReportsPage() {
     }
   };
 
-  const customerForSummary = reportType === 'customerBalances' && selectedCustomerId !== 'all' 
-    ? customers.find(c => c.id === selectedCustomerId) 
-    : null;
+  const renderReportSummary = () => {
+    if (!generatedReportData) return null;
+
+    if (reportType === 'payments') {
+        const paymentItems = generatedReportData as PaymentReportItem[];
+        const totalPaymentsReceived = paymentItems.reduce((sum, item) => sum + item.totalPaidForDocument, 0);
+        return (
+            <>
+              <p>Total Payments Received: <span className="font-semibold">${totalPaymentsReceived.toFixed(2)}</span></p>
+              <p>Number of Documents with Payments: <span className="font-semibold">{paymentItems.length}</span></p>
+            </>
+        );
+    }
+    // ... existing summaries
+    if (reportType === 'customerBalances') {
+      return <p>Total Outstanding: <span className="font-semibold">${(generatedReportData as CustomerInvoiceDetail[]).reduce((sum, item) => sum + item.balanceDue, 0).toFixed(2)}</span></p>;
+    }
+    if (reportType === 'sales') {
+      return <p>Total Sales Amount: <span className="font-semibold">${(generatedReportData as Invoice[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span></p>;
+    }
+    if (reportType === 'orders') {
+      return <p>Total Order Amount: <span className="font-semibold">${(generatedReportData as Order[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span></p>;
+    }
+    return null;
+  };
 
   return (
     <>
@@ -252,69 +356,65 @@ export default function ReportsPage() {
           <Tabs value={reportType} onValueChange={(value) => {
             setReportType(value as ReportType);
             setGeneratedReportData(null); 
-            setSelectedCustomerId('all'); 
+            setSelectedCustomerId('all');
+            if (value !== 'customerBalances') { // Reset to default preset if not customer balances
+                handleDatePresetChange('thisMonth');
+            } else {
+                setActiveDatePreset('custom'); // No presets for customer balances
+            }
           }}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="sales">Sales Report</TabsTrigger>
               <TabsTrigger value="orders">Order Report</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding Invoices</TabsTrigger>
+              <TabsTrigger value="payments">Payments Report</TabsTrigger>
             </TabsList>
           </Tabs>
 
           {reportType !== 'customerBalances' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="start-date">Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="start-date"
-                      variant={"outline"}
-                      className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                      disabled={isLoading}
-                    >
-                      <Icon name="Calendar" className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
+                <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
+                <Button variant={activeDatePreset === 'last7Days' ? "default" : "outline"} onClick={() => handleDatePresetChange('last7Days')} disabled={isLoading}>Last 7 Days</Button>
+                <Button variant={activeDatePreset === 'custom' ? "default" : "outline"} onClick={() => setActiveDatePreset('custom')} disabled={isLoading}>Custom Range</Button>
               </div>
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="end-date">End Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="end-date"
-                      variant={"outline"}
-                      className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}
-                      disabled={isLoading}
-                    >
-                      <Icon name="Calendar" className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              {activeDatePreset === 'custom' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="start-date">Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button id="start-date" variant={"outline"} className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")} disabled={isLoading}>
+                          <Icon name="Calendar" className="mr-2 h-4 w-4" />
+                          {startDate && isValid(startDate) ? format(startDate, "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus /></PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="end-date">End Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button id="end-date" variant={"outline"} className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")} disabled={isLoading}>
+                          <Icon name="Calendar" className="mr-2 h-4 w-4" />
+                          {endDate && isValid(endDate) ? format(endDate, "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus /></PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {reportType === 'customerBalances' && (
             <div className="space-y-2">
               <Label htmlFor="customer-select">Customer</Label>
-              <Select 
-                value={selectedCustomerId} 
-                onValueChange={setSelectedCustomerId}
-                disabled={isLoadingCustomers || isLoading}
-              >
-                <SelectTrigger id="customer-select">
-                  <SelectValue placeholder="Select Customer" />
-                </SelectTrigger>
+              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId} disabled={isLoadingCustomers || isLoading}>
+                <SelectTrigger id="customer-select"><SelectValue placeholder="Select Customer" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Customers</SelectItem>
                   {customers.map(customer => (
@@ -353,59 +453,25 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <p>Records Found: <span className="font-semibold">{generatedReportData.length}</span></p>
-            {reportType === 'customerBalances' && (
-              <p>Total Outstanding: <span className="font-semibold">
-                ${(generatedReportData as CustomerInvoiceDetail[]).reduce((sum, item) => sum + item.balanceDue, 0).toFixed(2)}
-              </span></p>
-            )}
-             {reportType === 'sales' && (
-              <p>Total Sales Amount: <span className="font-semibold">
-                ${(generatedReportData as Invoice[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}
-              </span></p>
-            )}
-             {reportType === 'orders' && (
-              <p>Total Order Amount: <span className="font-semibold">
-                ${(generatedReportData as Order[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}
-              </span></p>
-            )}
+            {renderReportSummary()}
           </CardContent>
         </Card>
       )}
 
-      {/* Hidden div for printing */}
       <div style={{ display: 'none' }}>
         {reportToPrintData && reportToPrintData.reportType === 'sales' && (
-          <PrintableSalesReport
-            ref={printRef}
-            invoices={reportToPrintData.data as Invoice[]}
-            companySettings={reportToPrintData.companySettings}
-            startDate={reportToPrintData.startDate!}
-            endDate={reportToPrintData.endDate!}
-            logoUrl={reportToPrintData.logoUrl}
-          />
+          <PrintableSalesReport ref={printRef} invoices={reportToPrintData.data as Invoice[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
         )}
         {reportToPrintData && reportToPrintData.reportType === 'orders' && (
-          <PrintableOrderReport
-            ref={printRef}
-            orders={reportToPrintData.data as Order[]}
-            companySettings={reportToPrintData.companySettings}
-            startDate={reportToPrintData.startDate!}
-            endDate={reportToPrintData.endDate!}
-            logoUrl={reportToPrintData.logoUrl}
-          />
+          <PrintableOrderReport ref={printRef} orders={reportToPrintData.data as Order[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
         )}
         {reportToPrintData && reportToPrintData.reportType === 'customerBalances' && (
-          <PrintableOutstandingInvoicesReport
-            ref={printRef}
-            reportData={reportToPrintData.data as CustomerInvoiceDetail[]}
-            companySettings={reportToPrintData.companySettings}
-            reportTitle={reportToPrintData.reportTitle!}
-            logoUrl={reportToPrintData.logoUrl}
-          />
+          <PrintableOutstandingInvoicesReport ref={printRef} reportData={reportToPrintData.data as CustomerInvoiceDetail[]} companySettings={reportToPrintData.companySettings} reportTitle={reportToPrintData.reportTitle!} logoUrl={reportToPrintData.logoUrl} />
+        )}
+        {reportToPrintData && reportToPrintData.reportType === 'payments' && (
+          <PrintablePaymentsReport ref={printRef} reportItems={reportToPrintData.data as PaymentReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
       </div>
     </>
   );
 }
-
-    

@@ -182,3 +182,15 @@ export interface CustomerInvoiceDetail {
   invoiceTotal: number; // Added for clarity in reports
   amountPaid: number;   // Added for clarity in reports
 }
+
+// New type for the Payments Report
+export interface PaymentReportItem {
+  documentId: string;
+  documentNumber: string;
+  documentType: 'Invoice' | 'Order';
+  customerName: string;
+  documentDate: string; // ISO string
+  documentTotal: number;
+  payments: Payment[]; // Array of payments made for this document
+  totalPaidForDocument: number;
+}
