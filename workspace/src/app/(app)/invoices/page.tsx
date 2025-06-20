@@ -34,7 +34,6 @@ import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
-// Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -74,9 +73,6 @@ export default function InvoicesPage() {
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
   
-  // Removed Firebase Functions instance: const functionsInstance = getFunctions();
-  // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
-
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -117,7 +113,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [], // Initialize with empty payments array
+          payments: [],
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -145,7 +141,7 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: orderToConvert.payments?.map(p => ({...p, date: new Date(p.date)} as unknown as Payment)) || [], // Convert payment dates
+          payments: orderToConvert.payments?.map(p => ({...p, date: new Date(p.date)} as unknown as Payment)) || [],
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -753,5 +749,4 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
     
