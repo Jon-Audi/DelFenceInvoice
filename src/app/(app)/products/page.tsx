@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { ProductTable } from '@/components/products/product-table';
 import { ProductDialog } from '@/components/products/product-dialog';
+import { BulkAddProductsDialog } from '@/components/products/bulk-add-products-dialog';
 import type { Product, CompanySettings } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
@@ -127,6 +128,40 @@ export default function ProductsPage() {
         description: `Could not save product. Check your Firestore '/users/${currentUser.uid}' document to ensure the 'role' field is set to 'Admin'. Details: ${(error as Error).message}`,
         variant: "destructive",
         duration: 10000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveMultipleProducts = async (productsToSave: Omit<Product, 'id'>[]) => {
+    const currentUser = firebaseAuthInstance.currentUser;
+    if (!currentUser) {
+      toast({
+        title: "Authentication Error",
+        description: "No user logged in. Cannot save products.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const batch = writeBatch(db);
+      productsToSave.forEach(productData => {
+        const newDocRef = doc(collection(db, 'products'));
+        batch.set(newDocRef, productData);
+      });
+      await batch.commit();
+      toast({
+        title: "Bulk Add Successful",
+        description: `${productsToSave.length} products have been added successfully.`,
+      });
+    } catch (error) {
+      console.error("Error saving multiple products:", error);
+      toast({
+        title: "Error During Bulk Add",
+        description: `Could not save products. Error: ${(error as Error).message}`,
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -588,7 +623,7 @@ export default function ProductsPage() {
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print Price Sheet
           </Button>
-          <ProductDialog 
+           <ProductDialog 
             triggerButton={
               <Button disabled={isLoading}>
                 <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
@@ -598,6 +633,16 @@ export default function ProductsPage() {
             onSave={handleSaveProduct}
             productCategories={productCategories}
             onAddNewCategory={handleAddNewCategory}
+          />
+          <BulkAddProductsDialog
+            triggerButton={
+              <Button variant="secondary" disabled={isLoading}>
+                <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+                Bulk Add Products
+              </Button>
+            }
+            onSave={handleSaveMultipleProducts}
+            productCategories={productCategories}
           />
         </div>
       </PageHeader>
