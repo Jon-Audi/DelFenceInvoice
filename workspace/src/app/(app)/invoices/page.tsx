@@ -68,7 +68,6 @@ export default function InvoicesPage() {
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
   const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] } | null>(null);
 
-
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
@@ -113,7 +112,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [], 
+          payments: [],
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
