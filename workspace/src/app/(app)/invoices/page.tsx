@@ -112,7 +112,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [], // Initialize with empty payments array
+          payments: [],
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -748,5 +748,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
