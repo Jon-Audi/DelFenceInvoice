@@ -112,7 +112,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [],
+          payments: [], // Initialize with empty payments array
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
