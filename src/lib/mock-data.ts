@@ -123,6 +123,9 @@ export const MOCK_INVOICES: Invoice[] = [
     ],
     subtotal: 590.00,
     taxAmount: 0.00,
+    payments: [],
+    amountPaid: 0.00,
+    balanceDue: 590.00,
   },
   {
     id: 'inv_2',
@@ -138,5 +141,8 @@ export const MOCK_INVOICES: Invoice[] = [
     ],
     subtotal: 150.00,
     taxAmount: 0.00,
+    payments: [],
+    amountPaid: 150.00,
+    balanceDue: 0.00,
   },
 ];

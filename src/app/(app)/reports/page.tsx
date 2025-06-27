@@ -11,25 +11,27 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isValid } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isValid, startOfWeek, endOfWeek, addWeeks, isBefore, getISOWeek, subMonths, startOfQuarter, endOfQuarter } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
 import { PrintablePaymentsReport } from '@/components/reports/printable-payments-report';
+import { PrintableWeeklySummaryReport } from '@/components/reports/printable-weekly-summary-report';
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments';
-type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'last7Days';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary';
+type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'lastMonth' | 'thisQuarter';
 
 interface ReportToPrintData {
   reportType: ReportType;
-  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[];
+  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[];
   companySettings: CompanySettings;
   logoUrl: string;
   reportTitle?: string;
@@ -39,12 +41,12 @@ interface ReportToPrintData {
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('sales');
-  const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
-  const [endDate, setEndDate] = useState<Date | undefined>(endOfMonth(new Date()));
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
-  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | null>(null);
+  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[] | null>(null);
   const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
   
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +54,10 @@ export default function ReportsPage() {
   const printRef = useRef<HTMLDivElement>(null);
   const [reportTitleForSummary, setReportTitleForSummary] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    handleDatePresetChange('thisMonth');
+  }, []);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -69,7 +75,6 @@ export default function ReportsPage() {
       }
     };
     fetchCustomers();
-    handleDatePresetChange('thisMonth');
   }, [toast]);
 
   const handleDatePresetChange = (preset: DatePreset) => {
@@ -83,13 +88,18 @@ export default function ReportsPage() {
         newStart = startOfYear(today);
         newEnd = endOfYear(today);
         break;
+      case 'thisQuarter':
+        newStart = startOfQuarter(today);
+        newEnd = endOfQuarter(today);
+        break;
       case 'thisMonth':
         newStart = startOfMonth(today);
         newEnd = endOfMonth(today);
         break;
-      case 'last7Days':
-        newStart = subDays(today, 6);
-        newEnd = today;
+      case 'lastMonth':
+        const lastMonthDate = subMonths(today, 1);
+        newStart = startOfMonth(lastMonthDate);
+        newEnd = endOfMonth(lastMonthDate);
         break;
       case 'custom':
       default:
@@ -112,13 +122,11 @@ export default function ReportsPage() {
     setIsLoading(true);
     setGeneratedReportData(null);
     let currentReportTitle = '';
-    // Ensure dates are set to the very beginning and end of the day for accurate range filtering
     const rangeStart = new Date(startDate.setHours(0, 0, 0, 0));
     const rangeEnd = new Date(endDate.setHours(23, 59, 59, 999));
 
-
     try {
-      let data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] = [];
+      let data: any[] = [];
       
       if (reportType === 'sales') {
         currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
@@ -182,7 +190,6 @@ export default function ReportsPage() {
         currentReportTitle = `Payments Report (Payment Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const paymentReportItems: PaymentReportItem[] = [];
 
-        // Fetch Invoices: All potentially relevant (Paid or Partially Paid)
         const invoicesRef = collection(db, 'invoices');
         const qInvoices = query(invoicesRef, where('status', 'in', ['Paid', 'Partially Paid']));
         const invoicesSnapshot = await getDocs(qInvoices);
@@ -197,23 +204,16 @@ export default function ReportsPage() {
 
             if (paymentsInDateRange.length > 0) {
               paymentReportItems.push({
-                documentId: invoice.id,
-                documentNumber: invoice.invoiceNumber,
-                documentType: 'Invoice',
-                customerName: invoice.customerName || 'N/A',
-                documentDate: invoice.date,
-                documentTotal: invoice.total,
-                payments: paymentsInDateRange, // Only payments within the date range
+                documentId: invoice.id, documentNumber: invoice.invoiceNumber, documentType: 'Invoice', customerName: invoice.customerName || 'N/A', documentDate: invoice.date, documentTotal: invoice.total,
+                payments: paymentsInDateRange,
                 totalPaidForDocument: paymentsInDateRange.reduce((sum, p) => sum + p.amount, 0),
               });
             }
           }
         });
 
-        // Fetch Orders: All orders (or optimize if possible, e.g., if orders have an 'amountPaid' field)
         const ordersRef = collection(db, 'orders');
-        // If orders store payment info similarly and you want to include them:
-        const qOrders = query(ordersRef, where('amountPaid', '>', 0)); // Example optimization: only fetch orders with some payment
+        const qOrders = query(ordersRef, where('amountPaid', '>', 0));
         const ordersSnapshot = await getDocs(qOrders);
 
         ordersSnapshot.forEach(docSnap => {
@@ -226,21 +226,73 @@ export default function ReportsPage() {
 
             if (paymentsInDateRange.length > 0) {
               paymentReportItems.push({
-                documentId: order.id,
-                documentNumber: order.orderNumber,
-                documentType: 'Order',
-                customerName: order.customerName || 'N/A',
-                documentDate: order.date,
-                documentTotal: order.total,
-                payments: paymentsInDateRange, // Only payments within the date range
+                documentId: order.id, documentNumber: order.orderNumber, documentType: 'Order', customerName: order.customerName || 'N/A', documentDate: order.date, documentTotal: order.total,
+                payments: paymentsInDateRange,
                 totalPaidForDocument: paymentsInDateRange.reduce((sum, p) => sum + p.amount, 0),
               });
             }
           }
         });
-        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime()); // Sort by document date for now
-      }
+        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime());
+      
+      } else if (reportType === 'weeklySummary') {
+        currentReportTitle = `Weekly Summary Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
 
+        const [ordersSnapshot, invoicesSnapshot, paymentsInvoicesSnapshot, paymentsOrdersSnapshot] = await Promise.all([
+            getDocs(query(collection(db, 'orders'), where('date', '>=', rangeStart.toISOString()), where('date', '<=', rangeEnd.toISOString()))),
+            getDocs(query(collection(db, 'invoices'), where('date', '>=', rangeStart.toISOString()), where('date', '<=', rangeEnd.toISOString()))),
+            getDocs(query(collection(db, 'invoices'), where('status', 'in', ['Paid', 'Partially Paid']))),
+            getDocs(query(collection(db, 'orders'), where('amountPaid', '>', 0)))
+        ]);
+
+        const allOrdersInRange = ordersSnapshot.docs.map(d => d.data() as Order);
+        const allInvoicesInRange = invoicesSnapshot.docs.map(d => d.data() as Invoice);
+        const allInvoicesWithPayments = paymentsInvoicesSnapshot.docs.map(d => d.data() as Invoice);
+        const allOrdersWithPayments = paymentsOrdersSnapshot.docs.map(d => d.data() as Order);
+
+        const weeklySummaries: WeeklySummaryReportItem[] = [];
+        let currentWeekStart = startOfWeek(rangeStart, { weekStartsOn: 1 });
+
+        while (isBefore(currentWeekStart, rangeEnd)) {
+            const currentWeekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+            const weekIdentifier = `${format(currentWeekStart, 'yyyy')}-W${getISOWeek(currentWeekStart)}`;
+            
+            const totalOrders = allOrdersInRange
+                .filter(o => { const d = new Date(o.date); return d >= currentWeekStart && d <= currentWeekEnd; })
+                .reduce((sum, o) => sum + o.total, 0);
+
+            const totalInvoices = allInvoicesInRange
+                .filter(i => { const d = new Date(i.date); return d >= currentWeekStart && d <= currentWeekEnd; })
+                .reduce((sum, i) => sum + i.total, 0);
+
+            let totalPayments = 0;
+            const processPayments = (doc: Invoice | Order) => {
+              if (doc.payments) {
+                doc.payments.forEach(p => {
+                    const paymentDate = new Date(p.date);
+                    if (paymentDate >= currentWeekStart && paymentDate <= currentWeekEnd) {
+                        totalPayments += p.amount;
+                    }
+                });
+              }
+            };
+
+            allInvoicesWithPayments.forEach(processPayments);
+            allOrdersWithPayments.forEach(processPayments);
+
+            weeklySummaries.push({
+                weekIdentifier,
+                weekStartDate: currentWeekStart.toISOString(),
+                weekEndDate: currentWeekEnd.toISOString(),
+                totalPayments,
+                totalOrders,
+                totalInvoices,
+            });
+
+            currentWeekStart = addWeeks(currentWeekStart, 1);
+        }
+        data = weeklySummaries;
+      }
 
       setGeneratedReportData(data);
       setReportTitleForSummary(currentReportTitle);
@@ -289,8 +341,8 @@ export default function ReportsPage() {
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
         reportTitle: reportTitleForSummary,
-        startDate: startDate, // Pass original startDate for display
-        endDate: endDate,   // Pass original endDate for display
+        startDate: startDate,
+        endDate: endDate,
       };
       setReportToPrintData(dataForPrint);
 
@@ -334,7 +386,6 @@ export default function ReportsPage() {
 
     if (reportType === 'payments') {
         const paymentItems = generatedReportData as PaymentReportItem[];
-        // The totalPaidForDocument in each item is already sum of payments *within the date range*
         const totalPaymentsReceived = paymentItems.reduce((sum, item) => sum + item.totalPaidForDocument, 0);
         const distinctDocuments = new Set(paymentItems.map(item => item.documentId));
         return (
@@ -353,7 +404,47 @@ export default function ReportsPage() {
     if (reportType === 'orders') {
       return <p>Total Order Amount: <span className="font-semibold">${(generatedReportData as Order[]).reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span></p>;
     }
+    if (reportType === 'weeklySummary') {
+      const weeklyItems = generatedReportData as WeeklySummaryReportItem[];
+      const grandTotalPayments = weeklyItems.reduce((sum, item) => sum + item.totalPayments, 0);
+      const grandTotalOrders = weeklyItems.reduce((sum, item) => sum + item.totalOrders, 0);
+      const grandTotalInvoices = weeklyItems.reduce((sum, item) => sum + item.totalInvoices, 0);
+       return (
+         <div className="space-y-1">
+            <p>Total Payments in Period: <span className="font-semibold">${grandTotalPayments.toFixed(2)}</span></p>
+            <p>Total Order Value in Period: <span className="font-semibold">${grandTotalOrders.toFixed(2)}</span></p>
+            <p>Total Invoice Value in Period: <span className="font-semibold">${grandTotalInvoices.toFixed(2)}</span></p>
+         </div>
+       );
+    }
     return null;
+  };
+
+  const renderReportTable = () => {
+    if (!generatedReportData || reportType !== 'weeklySummary') return null;
+
+    return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Week</TableHead>
+              <TableHead className="text-right">Payments Collected</TableHead>
+              <TableHead className="text-right">Total Orders</TableHead>
+              <TableHead className="text-right">Total Invoices</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(generatedReportData as WeeklySummaryReportItem[]).map(item => (
+              <TableRow key={item.weekIdentifier}>
+                <TableCell>{format(new Date(item.weekStartDate), "MMM d")} - {format(new Date(item.weekEndDate), "MMM d, yyyy")}</TableCell>
+                <TableCell className="text-right">${item.totalPayments.toFixed(2)}</TableCell>
+                <TableCell className="text-right">${item.totalOrders.toFixed(2)}</TableCell>
+                <TableCell className="text-right">${item.totalInvoices.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+    );
   };
 
   return (
@@ -368,22 +459,24 @@ export default function ReportsPage() {
             setReportType(value as ReportType);
             setGeneratedReportData(null); 
             setSelectedCustomerId('all');
-            handleDatePresetChange('thisMonth'); // Default to 'thisMonth' for all reports on tab change
+            handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="sales">Sales Report</TabsTrigger>
-              <TabsTrigger value="orders">Order Report</TabsTrigger>
-              <TabsTrigger value="customerBalances">Outstanding Invoices</TabsTrigger>
-              <TabsTrigger value="payments">Payments Report</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="sales">Sales</TabsTrigger>
+              <TabsTrigger value="orders">Orders</TabsTrigger>
+              <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
+              <TabsTrigger value="payments">Payments</TabsTrigger>
+              <TabsTrigger value="weeklySummary">Weekly Summary</TabsTrigger>
             </TabsList>
           </Tabs>
 
-          {reportType !== 'customerBalances' && ( // Date presets for all except customer balances
+          {reportType !== 'customerBalances' && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
                 <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
-                <Button variant={activeDatePreset === 'last7Days' ? "default" : "outline"} onClick={() => handleDatePresetChange('last7Days')} disabled={isLoading}>Last 7 Days</Button>
+                <Button variant={activeDatePreset === 'lastMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('lastMonth')} disabled={isLoading}>Last Month</Button>
+                <Button variant={activeDatePreset === 'thisQuarter' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisQuarter')} disabled={isLoading}>This Quarter</Button>
+                <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
                 <Button variant={activeDatePreset === 'custom' ? "default" : "outline"} onClick={() => setActiveDatePreset('custom')} disabled={isLoading}>Custom Range</Button>
               </div>
               {activeDatePreset === 'custom' && (
@@ -459,8 +552,8 @@ export default function ReportsPage() {
             <CardTitle>{reportTitleForSummary || 'Generated Report Summary'}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>Records Found: <span className="font-semibold">{generatedReportData.length}</span></p>
             {renderReportSummary()}
+            {reportType === 'weeklySummary' && <div className="mt-4">{renderReportTable()}</div>}
           </CardContent>
         </Card>
       )}
@@ -478,8 +571,10 @@ export default function ReportsPage() {
         {reportToPrintData && reportToPrintData.reportType === 'payments' && (
           <PrintablePaymentsReport ref={printRef} reportItems={reportToPrintData.data as PaymentReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
+        {reportToPrintData && reportToPrintData.reportType === 'weeklySummary' && (
+          <PrintableWeeklySummaryReport ref={printRef} reportItems={reportToPrintData.data as WeeklySummaryReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
+        )}
       </div>
     </>
   );
 }
-

@@ -1,3 +1,4 @@
+
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -192,6 +193,15 @@ export interface PaymentReportItem {
   documentTotal: number;
   payments: Payment[]; // Array of payments made for this document
   totalPaidForDocument: number;
+}
+
+export interface WeeklySummaryReportItem {
+  weekIdentifier: string; // e.g., "2024-W25"
+  weekStartDate: string; // ISO string
+  weekEndDate: string; // ISO string
+  totalPayments: number;
+  totalOrders: number;
+  totalInvoices: number;
 }
 
 // Ensure Invoice type in initialData for InvoiceForm expects Payment[] with string dates
