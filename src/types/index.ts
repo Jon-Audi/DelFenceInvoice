@@ -126,9 +126,9 @@ export interface Order extends BaseDocument {
   readyForPickUpDate?: string;
   pickedUpDate?: string;
   orderState: 'Open' | 'Closed';
-  payments?: Payment[];
-  amountPaid?: number;
-  balanceDue?: number;
+  payments: Payment[];
+  amountPaid: number;
+  balanceDue: number;
 }
 
 export interface Invoice extends BaseDocument {

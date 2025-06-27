@@ -22,7 +22,7 @@ interface OrderDialogProps {
   productCategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  initialData?: OrderFormData | null; 
+  initialData?: Partial<OrderFormData> & { lineItems: NonNullable<OrderFormData['lineItems']> } | null;
 }
 
 export function OrderDialog({ 
@@ -83,19 +83,8 @@ export function OrderDialog({
     const taxAmount = 0; 
     const total = subtotal + taxAmount;
 
-    let existingPayments: Payment[] = order?.payments ? [...order.payments] : [];
-    if (formData.newPaymentAmount && formData.newPaymentAmount > 0 && formData.newPaymentDate && formData.newPaymentMethod) {
-      const newPayment: Payment = {
-        id: crypto.randomUUID(),
-        date: formData.newPaymentDate.toISOString(),
-        amount: formData.newPaymentAmount,
-        method: formData.newPaymentMethod,
-        notes: formData.newPaymentNotes || '',
-      };
-      existingPayments.push(newPayment);
-    }
-
-    const totalAmountPaid = existingPayments.reduce((acc, p) => acc + p.amount, 0);
+    const finalPayments: Payment[] = formData.payments || [];
+    const totalAmountPaid = finalPayments.reduce((acc, p) => acc + p.amount, 0);
     const balanceDue = total - totalAmountPaid;
 
 
@@ -116,7 +105,7 @@ export function OrderDialog({
       taxAmount: taxAmount,
       total: total,
       notes: formData.notes,
-      payments: existingPayments,
+      payments: finalPayments,
       amountPaid: totalAmountPaid,
       balanceDue: balanceDue,
     };
@@ -137,7 +126,7 @@ export function OrderDialog({
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <OrderForm 
-          key={order?.id || initialData?.id || 'new-order-form'} // Added key here
+          key={order?.id || initialData?.id || 'new-order-form'}
           order={order} 
           initialData={initialData}
           onSubmit={handleSubmit} 

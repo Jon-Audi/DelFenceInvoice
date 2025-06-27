@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -199,6 +200,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
     form.reset(defaultValues);
     setLocalPayments(initialLocalPayments);
+    setEditingPayment(null); 
 
     const formLineItemsAfterReset = form.getValues('lineItems') || [];
     const newCategoryFilters = formLineItemsAfterReset.map(item => {

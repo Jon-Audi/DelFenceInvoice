@@ -5,10 +5,19 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Order, DocumentStatus, Customer, Product, PaymentMethod } from '@/types';
+import type { Order, DocumentStatus, Customer, Product, PaymentMethod, Payment } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -29,11 +38,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { ALL_CATEGORIES_MARKUP_KEY, PAYMENT_METHODS } from '@/lib/constants';
-import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog'; // Import bulk add dialog
+import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
 const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
@@ -67,6 +76,14 @@ const lineItemSchema = z.object({
   }
 });
 
+const formPaymentSchema = z.object({
+  id: z.string(),
+  date: z.date(),
+  amount: z.coerce.number().positive("Amount must be positive"),
+  method: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]),
+  notes: z.string().optional(),
+});
+
 const orderFormSchema = z.object({
   id: z.string().optional(),
   orderNumber: z.string().min(1, "Order number is required"),
@@ -80,25 +97,30 @@ const orderFormSchema = z.object({
   pickedUpDate: z.date().optional(),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
-  newPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
-  newPaymentDate: z.date().optional(),
-  newPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
-  newPaymentNotes: z.string().optional(),
+  payments: z.array(formPaymentSchema).optional(),
+  currentPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
+  currentPaymentDate: z.date().optional(),
+  currentPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
+  currentPaymentNotes: z.string().optional(),
 }).refine(data => {
-    if (data.newPaymentAmount && data.newPaymentAmount > 0) {
-        return !!data.newPaymentDate && !!data.newPaymentMethod;
+    if (data.currentPaymentAmount && data.currentPaymentAmount > 0) {
+        return !!data.currentPaymentDate && !!data.currentPaymentMethod;
     }
     return true;
 }, {
     message: "Payment date and method are required if payment amount is entered.",
-    path: ["newPaymentMethod"],
+    path: ["currentPaymentMethod"],
 });
 
-export type OrderFormData = z.infer<typeof orderFormSchema>;
+export type OrderFormData = Omit<z.infer<typeof orderFormSchema>, 'payments'> & {
+  payments?: Payment[];
+};
+export type FormPayment = z.infer<typeof formPaymentSchema>;
+
 
 interface OrderFormProps {
   order?: Order;
-  initialData?: OrderFormData | null;
+  initialData?: Partial<OrderFormData> & { lineItems: NonNullable<OrderFormData['lineItems']> } | null;
   onSubmit: (data: OrderFormData) => void;
   onClose?: () => void;
   customers: Customer[];
@@ -108,81 +130,12 @@ interface OrderFormProps {
 
 export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
-  const [conversionJustProcessed, setConversionJustProcessed] = useState(false);
-  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false); // State for bulk add dialog
+  const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
+  const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
 
-  const initialDefaultValues = useMemo((): OrderFormData => {
-    let baseValues: Omit<OrderFormData, 'newPaymentAmount' | 'newPaymentDate' | 'newPaymentMethod' | 'newPaymentNotes'> & { id?: string};
-    if (order) {
-      baseValues = {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customerId: order.customerId,
-        date: new Date(order.date),
-        status: order.status,
-        orderState: order.orderState,
-        poNumber: order.poNumber || '',
-        expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
-        readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
-        pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
-        lineItems: order.lineItems.map(li => ({
-          id: li.id,
-          productId: li.productId,
-          productName: li.productName,
-          quantity: li.quantity,
-          unitPrice: li.unitPrice,
-          isReturn: li.isReturn || false,
-          isNonStock: li.isNonStock || false,
-        })),
-        notes: order.notes || '',
-      };
-    } else if (initialData) {
-      baseValues = {
-        ...initialData,
-        id: initialData.id, 
-        poNumber: initialData.poNumber ?? '',
-        date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
-        expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
-        readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
-        pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
-        lineItems: (initialData.lineItems || []).map(li => ({
-            id: li.id || crypto.randomUUID(),
-            productId: li.productId,
-            productName: li.productName,
-            quantity: li.quantity,
-            unitPrice: li.unitPrice,
-            isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false,
-        })),
-      };
-    } else {
-      baseValues = {
-        id: undefined,
-        orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
-        customerId: '',
-        date: new Date(),
-        status: 'Draft',
-        orderState: 'Open',
-        poNumber: '',
-        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
-        notes: '',
-        expectedDeliveryDate: undefined,
-        readyForPickUpDate: undefined,
-        pickedUpDate: undefined,
-      };
-    }
-     return {
-      ...baseValues,
-      newPaymentAmount: undefined,
-      newPaymentDate: undefined,
-      newPaymentMethod: undefined,
-      newPaymentNotes: undefined,
-    };
-  }, [order, initialData]);
-
-  const form = useForm<OrderFormData>({
+  const form = useForm<z.infer<typeof orderFormSchema>>({
     resolver: zodResolver(orderFormSchema),
-    defaultValues: initialDefaultValues,
   });
 
   const { fields, append, remove, update } = useFieldArray({
@@ -190,12 +143,59 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     name: "lineItems",
   });
 
-  const watchedLineItems = form.watch('lineItems') || [];
-  const watchedCustomerId = form.watch('customerId');
-
-
   useEffect(() => {
-    form.reset(initialDefaultValues);
+    let defaultValues: z.infer<typeof orderFormSchema>;
+    let initialLocalPayments: FormPayment[] = [];
+
+    if (order) {
+        defaultValues = {
+            id: order.id, orderNumber: order.orderNumber, customerId: order.customerId,
+            date: new Date(order.date), status: order.status, orderState: order.orderState,
+            poNumber: order.poNumber || '',
+            expectedDeliveryDate: order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : undefined,
+            readyForPickUpDate: order.readyForPickUpDate ? new Date(order.readyForPickUpDate) : undefined,
+            pickedUpDate: order.pickedUpDate ? new Date(order.pickedUpDate) : undefined,
+            lineItems: order.lineItems.map(li => ({
+                id: li.id, productId: li.productId, productName: li.productName,
+                quantity: li.quantity, unitPrice: li.unitPrice,
+                isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
+            })),
+            notes: order.notes || '',
+            payments: order.payments?.map(p => ({...p, date: parseISO(p.date)})) || [],
+        };
+        initialLocalPayments = defaultValues.payments || [];
+    } else if (initialData) {
+        defaultValues = {
+            ...initialData, id: initialData.id,
+            orderNumber: initialData.orderNumber || `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+            customerId: initialData.customerId || '',
+            date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date || Date.now()),
+            status: initialData.status || 'Draft', orderState: initialData.orderState || 'Open',
+            poNumber: initialData.poNumber ?? '',
+            expectedDeliveryDate: initialData.expectedDeliveryDate ? (initialData.expectedDeliveryDate instanceof Date ? initialData.expectedDeliveryDate : new Date(initialData.expectedDeliveryDate)) : undefined,
+            readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
+            pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
+            lineItems: (initialData.lineItems || [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }]).map(li => ({ ...li, id: li.id || crypto.randomUUID() })),
+            notes: initialData.notes || '',
+            payments: initialData.payments?.map(p => ({...p, date: p.date instanceof Date ? p.date : parseISO(p.date)})) || [],
+        };
+        initialLocalPayments = defaultValues.payments || [];
+    } else {
+        defaultValues = {
+            id: undefined, orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+            customerId: '', date: new Date(), status: 'Draft', orderState: 'Open', poNumber: '',
+            lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+            notes: '', expectedDeliveryDate: undefined, readyForPickUpDate: undefined, pickedUpDate: undefined, payments: [],
+        };
+    }
+    defaultValues.currentPaymentAmount = undefined;
+    defaultValues.currentPaymentDate = undefined;
+    defaultValues.currentPaymentMethod = undefined;
+    defaultValues.currentPaymentNotes = undefined;
+
+    form.reset(defaultValues);
+    setLocalPayments(initialLocalPayments);
+    setEditingPayment(null);
 
     const formLineItemsAfterReset = form.getValues('lineItems') || [];
     const newCategoryFilters = formLineItemsAfterReset.map(item => {
@@ -206,18 +206,14 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         return undefined;
     });
     setLineItemCategoryFilters(newCategoryFilters);
+  }, [order, initialData, form, products]);
 
-    if (initialData && !order) {
-        setConversionJustProcessed(true);
-    } else {
-        setConversionJustProcessed(false);
-    }
-  }, [initialDefaultValues, form, products, initialData, order]);
-
+  const watchedLineItems = form.watch('lineItems') || [];
+  const watchedCustomerId = form.watch('customerId');
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
     let finalPrice = product.price;
-    if (customer && customer.specificMarkups && customer.specificMarkups.length > 0) {
+    if (customer?.specificMarkups?.length) {
       const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
       const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
 
@@ -231,60 +227,105 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
-    if (conversionJustProcessed) {
-      setConversionJustProcessed(false); 
-      return; 
-    }
-
-    if (!watchedCustomerId || !products || products.length === 0) return;
+    if (!watchedCustomerId || !products?.length) return;
     const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-
     const currentLineItems = form.getValues('lineItems') || [];
-    const updatedLineItems = currentLineItems.map((item) => {
+    const updatedLineItems = currentLineItems.map(item => {
       if (item.isNonStock || !item.productId) return item;
-
       const product = products.find(p => p.id === item.productId);
       if (!product) return item;
-
       const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-
-      if (item.unitPrice !== newUnitPrice) {
-        return { ...item, unitPrice: newUnitPrice };
-      }
-      return item;
+      return item.unitPrice !== newUnitPrice ? { ...item, unitPrice: newUnitPrice } : item;
     });
 
     if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
-        updatedLineItems.forEach((item, index) => {
-            update(index, item);
-        });
+      updatedLineItems.forEach((item, index) => update(index, item));
     }
-  }, [watchedCustomerId, customers, products, form, update, conversionJustProcessed]);
+  }, [watchedCustomerId, customers, products, form, update]);
 
-
-  const currentSubtotal = useMemo(() => {
+  const currentOrderTotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const quantity = item.quantity || 0;
-      const itemTotal = price * quantity;
-      return acc + (item.isReturn ? -itemTotal : itemTotal);
+      return acc + (item.isReturn ? -(price * quantity) : (price * quantity));
     }, 0);
   }, [watchedLineItems]);
 
-  const currentOrderTotal = currentSubtotal;
+  const totalPaidFromLocalPayments = useMemo(() => {
+    return localPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+  }, [localPayments]);
 
-  const amountAlreadyPaid = order?.amountPaid || 0;
-  const newPaymentAmountValue = form.watch("newPaymentAmount") || 0;
-  const totalPaidDisplay = amountAlreadyPaid + newPaymentAmountValue;
-  const balanceDueDisplay = currentOrderTotal - totalPaidDisplay;
+  const balanceDueDisplay = currentOrderTotal - totalPaidFromLocalPayments;
 
-  const handleCategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
-    const newCategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
-    setLineItemCategoryFilters(prevFilters => {
-      const newFilters = [...prevFilters];
-      newFilters[index] = newCategoryFilter;
-      return newFilters;
+  const handleAddOrUpdatePayment = () => {
+    const amount = form.getValues("currentPaymentAmount");
+    const date = form.getValues("currentPaymentDate");
+    const method = form.getValues("currentPaymentMethod");
+    const notes = form.getValues("currentPaymentNotes");
+
+    if (amount && amount > 0 && date && method) {
+      if (editingPayment) {
+        setLocalPayments(prev => prev.map(p => p.id === editingPayment.id ? { ...editingPayment, date, amount, method, notes } : p));
+        setEditingPayment(null);
+      } else {
+        const newPayment: FormPayment = { id: crypto.randomUUID(), date, amount, method, notes };
+        setLocalPayments(prev => [...prev, newPayment]);
+      }
+      form.reset({
+        ...form.getValues(),
+        currentPaymentAmount: undefined, currentPaymentDate: undefined,
+        currentPaymentMethod: undefined, currentPaymentNotes: '',
+      });
+      form.clearErrors(["currentPaymentAmount", "currentPaymentDate", "currentPaymentMethod"]);
+    } else {
+      form.trigger(["currentPaymentAmount", "currentPaymentDate", "currentPaymentMethod"]);
+    }
+  };
+
+  const handleEditPayment = (paymentToEdit: FormPayment) => {
+    setEditingPayment(paymentToEdit);
+    form.setValue("currentPaymentAmount", paymentToEdit.amount);
+    form.setValue("currentPaymentDate", paymentToEdit.date);
+    form.setValue("currentPaymentMethod", paymentToEdit.method);
+    form.setValue("currentPaymentNotes", paymentToEdit.notes || '');
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    setLocalPayments(prev => prev.filter(p => p.id !== paymentId));
+    if (editingPayment?.id === paymentId) {
+      handleCancelEditPayment();
+    }
+  };
+
+  const handleCancelEditPayment = () => {
+    setEditingPayment(null);
+    form.reset({
+      ...form.getValues(),
+      currentPaymentAmount: undefined, currentPaymentDate: undefined,
+      currentPaymentMethod: undefined, currentPaymentNotes: '',
     });
+    form.clearErrors(["currentPaymentAmount", "currentPaymentDate", "currentPaymentMethod"]);
+  };
+
+  const handleFormSubmit = (data: z.infer<typeof orderFormSchema>) => {
+    const paymentsForSubmission: Payment[] = localPayments.map(p => ({
+      ...p,
+      date: p.date.toISOString(),
+    }));
+
+    const formDataForSubmission: OrderFormData = { ...data, payments: paymentsForSubmission };
+    delete (formDataForSubmission as any).currentPaymentAmount;
+    delete (formDataForSubmission as any).currentPaymentDate;
+    delete (formDataForSubmission as any).currentPaymentMethod;
+    delete (formDataForSubmission as any).currentPaymentNotes;
+
+    onSubmit(formDataForSubmission);
+  };
+
+  const handleCategoryFilterChange = (index: number, valueFromSelect?: string) => {
+    const newFilters = [...lineItemCategoryFilters];
+    newFilters[index] = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
+    setLineItemCategoryFilters(newFilters);
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.setValue(`lineItems.${index}.productName`, '');
     form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
@@ -292,28 +333,21 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const getFilteredProducts = (index: number) => {
-    const selectedCategory = lineItemCategoryFilters[index];
-    if (selectedCategory && selectedCategory !== ALL_CATEGORIES_VALUE) {
-      return products.filter(p => p.category === selectedCategory);
-    }
-    return products;
+    const category = lineItemCategoryFilters[index];
+    return category && category !== ALL_CATEGORIES_VALUE ? products.filter(p => p.category === category) : (products || []);
   };
 
   const handleProductSelect = (index: number, productId: string) => {
-    const selectedProd = products.find(p => p.id === productId);
-    const currentCustomerId = form.getValues('customerId');
-    const currentCustomer = customers.find(c => c.id === currentCustomerId);
-
-    if (selectedProd) {
-      const finalPrice = calculateUnitPrice(selectedProd, currentCustomer);
-      form.setValue(`lineItems.${index}.productId`, selectedProd.id, { shouldValidate: true });
-      form.setValue(`lineItems.${index}.productName`, selectedProd.name);
-      form.setValue(`lineItems.${index}.unitPrice`, finalPrice, { shouldValidate: true });
-      setLineItemCategoryFilters(prevFilters => {
-        const newFilters = [...prevFilters];
-        newFilters[index] = selectedProd.category;
-        return newFilters;
-      });
+    const product = products.find(p => p.id === productId);
+    const customer = customers.find(c => c.id === form.getValues('customerId'));
+    if (product) {
+      const unitPrice = calculateUnitPrice(product, customer);
+      form.setValue(`lineItems.${index}.productId`, product.id, { shouldValidate: true });
+      form.setValue(`lineItems.${index}.productName`, product.name);
+      form.setValue(`lineItems.${index}.unitPrice`, unitPrice, { shouldValidate: true });
+      const newFilters = [...lineItemCategoryFilters];
+      newFilters[index] = product.category;
+      setLineItemCategoryFilters(newFilters);
     }
     form.trigger(`lineItems.${index}.productId`);
     form.trigger(`lineItems.${index}.unitPrice`);
@@ -333,42 +367,29 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     form.setValue(`lineItems.${index}.isNonStock`, checked);
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined);
-      form.setValue(`lineItems.${index}.unitPrice`, 0); 
-      form.trigger(`lineItems.${index}.productName`);
-      form.trigger(`lineItems.${index}.unitPrice`);
+      form.setValue(`lineItems.${index}.unitPrice`, 0);
     } else {
-      form.setValue(`lineItems.${index}.productName`, ''); 
+      form.setValue(`lineItems.${index}.productName`, '');
     }
+    form.trigger(`lineItems.${index}.productId`);
+    form.trigger(`lineItems.${index}.unitPrice`);
   };
 
   const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
-    const newFilterEntries: (string | undefined)[] = [];
-    const currentCustomerId = form.getValues('customerId');
-    const currentCustomer = customers.find(c => c.id === currentCustomerId);
-
+    const customer = customers.find(c => c.id === form.getValues('customerId'));
     itemsToAdd.forEach(item => {
-      const productDetails = products.find(p => p.id === item.productId);
-      if (!productDetails) return;
-
-      const finalPrice = calculateUnitPrice(productDetails, currentCustomer);
-
-      append({
-        id: crypto.randomUUID(),
-        productId: item.productId,
-        productName: productDetails.name,
-        quantity: item.quantity,
-        unitPrice: finalPrice,
-        isReturn: false,
-        isNonStock: false,
-      });
-      newFilterEntries.push(productDetails?.category);
+      const product = products.find(p => p.id === item.productId);
+      if (product) {
+        append({
+          id: crypto.randomUUID(), productId: item.productId,
+          productName: product.name, quantity: item.quantity,
+          unitPrice: calculateUnitPrice(product, customer),
+          isReturn: false, isNonStock: false,
+        });
+        setLineItemCategoryFilters(prev => [...prev, product.category]);
+      }
     });
-    setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
     setIsBulkAddDialogOpen(false);
-  };
-
-  const handleFormSubmit = (data: OrderFormData) => {
-    onSubmit(data);
   };
 
   return (
@@ -379,87 +400,53 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         )} />
 
         <FormField
-          control={form.control}
-          name="customerId"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Customer</FormLabel>
+          control={form.control} name="customerId" render={({ field }) => (
+            <FormItem className="flex flex-col"><FormLabel>Customer</FormLabel>
               <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                      {field.value
-                        ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}`
-                        : "Select customer"}
-                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search customer..." />
-                    <CommandList>
-                      <CommandEmpty>No customer found.</CommandEmpty>
-                      <CommandGroup>
-                        {customers.map((customer) => {
-                           const displayName = customer.companyName ?
-                               `${customer.companyName} (${customer.firstName} ${customer.lastName})` :
-                               `${customer.firstName} ${customer.lastName}`;
-                           const allEmails = customer.emailContacts?.map(ec => ec.email).join(' ') || '';
-                           const searchableValue = [
-                             customer.firstName,
-                             customer.lastName,
-                             customer.companyName,
-                             customer.phone,
-                             allEmails,
-                             ...(customer.specificMarkups?.map(sm => `${sm.categoryName} ${sm.markupPercentage}%`) || [])
-                           ].filter(Boolean).join(' ').toLowerCase();
-
-                          return (
-                            <CommandItem
-                              value={searchableValue}
-                              key={customer.id}
-                              onSelect={() => {
-                                form.setValue("customerId", customer.id, { shouldValidate: true });
-                              }}
-                            >
-                              <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")}/>
-                              {displayName}
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
+                <PopoverTrigger asChild><FormControl>
+                  <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
+                    {field.value ? customers.find(c => c.id === field.value)?.companyName || `${customers.find(c => c.id === field.value)?.firstName} ${customers.find(c => c.id === field.value)?.lastName}` : "Select customer"}
+                    <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </FormControl></PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command>
+                  <CommandInput placeholder="Search customer..." />
+                  <CommandList><CommandEmpty>No customer found.</CommandEmpty>
+                    <CommandGroup>
+                      {customers.map((customer) => {
+                        const displayName = customer.companyName ? `${customer.companyName} (${customer.firstName} ${customer.lastName})` : `${customer.firstName} ${customer.lastName}`;
+                        const searchableValue = [customer.firstName, customer.lastName, customer.companyName, customer.phone, customer.emailContacts?.map(ec => ec.email).join(' ')].filter(Boolean).join(' ').toLowerCase();
+                        return (
+                          <CommandItem value={searchableValue} key={customer.id} onSelect={() => form.setValue("customerId", customer.id, { shouldValidate: true })}>
+                            <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")} />
+                            {displayName}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command></PopoverContent>
               </Popover>
               <FormMessage />
             </FormItem>
           )}
         />
-
         <FormField control={form.control} name="poNumber" render={({ field }) => (
           <FormItem><FormLabel>P.O. Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Customer PO" /></FormControl><FormMessage /></FormItem>
         )} />
-
         <FormField control={form.control} name="date" render={({ field }) => (
-          <FormItem className="flex flex-col">
-            <FormLabel>Order Date</FormLabel>
+          <FormItem className="flex flex-col"><FormLabel>Order Date</FormLabel>
             <Popover>
-              <PopoverTrigger asChild>
-                <FormControl>
-                  <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                    <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                  </Button>
-                </FormControl>
-              </PopoverTrigger>
+              <PopoverTrigger asChild><FormControl>
+                <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                  {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                  <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </FormControl></PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-            </Popover>
-            <FormMessage />
+            </Popover><FormMessage />
           </FormItem>
         )} />
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="status" render={({ field }) => (
             <FormItem>
@@ -467,8 +454,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                 <SelectContent>{ORDER_STATUSES.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent>
-              </Select>
-              <FormMessage />
+              </Select><FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="orderState" render={({ field }) => (
@@ -477,321 +463,153 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger></FormControl>
                 <SelectContent>{ORDER_STATES.map(state => <SelectItem key={state} value={state}>{state}</SelectItem>)}</SelectContent>
-              </Select>
-              <FormMessage />
+              </Select><FormMessage />
             </FormItem>
           )} />
         </div>
-
-        <FormField control={form.control} name="expectedDeliveryDate" render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Expected Delivery (Optional)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild><FormControl>
-                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                      <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                </FormControl></PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
-              </Popover><FormMessage />
-            </FormItem>
+        <FormField control={form.control} name="readyForPickUpDate" render={({ field }) => (
+          <FormItem className="flex flex-col"><FormLabel>Ready for Pickup (Optional)</FormLabel>
+            <Popover>
+              <PopoverTrigger asChild><FormControl>
+                <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                  {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                  <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </FormControl></PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
+            </Popover><FormMessage />
+          </FormItem>
         )} />
-         <FormField control={form.control} name="readyForPickUpDate" render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Ready for Pickup (Optional)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild><FormControl>
-                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                      <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                </FormControl></PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
-              </Popover><FormMessage />
-            </FormItem>
-        )} />
-         <FormField control={form.control} name="pickedUpDate" render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Picked Up Date (Optional)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild><FormControl>
-                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                      <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                </FormControl></PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
-              </Popover><FormMessage />
-            </FormItem>
-        )} />
-
-        <Separator />
-        <h3 className="text-lg font-medium">Line Items</h3>
+        <Separator /><h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
-          const currentLineItem = watchedLineItems[index];
-          const quantity = currentLineItem?.quantity || 0;
-          const unitPrice = typeof currentLineItem?.unitPrice === 'number' ? currentLineItem.unitPrice : 0;
-          const isReturn = currentLineItem?.isReturn || false;
-          const isNonStock = currentLineItem?.isNonStock || false;
-          const lineTotal = isReturn ? -(quantity * unitPrice) : (quantity * unitPrice);
-          const filteredProductsForLine = getFilteredProducts(index);
-
-          return (
-            <div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
-              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
-                <Icon name="Trash2" className="h-4 w-4 text-destructive" />
-              </Button>
-
-              <div className="flex items-center space-x-4">
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.isReturn`}
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-2">
-                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      <FormLabel className="font-normal">Return Item?</FormLabel>
+            const currentLineItem = watchedLineItems[index];
+            const lineTotal = (currentLineItem?.quantity || 0) * (currentLineItem?.unitPrice || 0) * (currentLineItem?.isReturn ? -1 : 1);
+            const filteredProductsForLine = getFilteredProducts(index);
+            return (<div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
+                <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
+                  <Icon name="Trash2" className="h-4 w-4 text-destructive" />
+                </Button>
+                <div className="flex items-center space-x-4">
+                    <FormField control={form.control} name={`lineItems.${index}.isReturn`} render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="font-normal">Return</FormLabel></FormItem>
+                    )} />
+                    <FormField control={form.control} name={`lineItems.${index}.isNonStock`} render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={checked => handleNonStockToggle(index, !!checked)} /></FormControl><FormLabel className="font-normal">Non-Stock</FormLabel></FormItem>
+                    )} />
+                </div>
+                {currentLineItem?.isNonStock ? (
+                    <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
+                        <FormItem><FormLabel>Product/Service Name</FormLabel><FormControl><Input {...field} placeholder="Enter item name" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                ) : (
+                    <><FormItem><FormLabel>Category Filter</FormLabel>
+                        <Select value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE} onValueChange={value => handleCategoryFilterChange(index, value)}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                            <SelectContent><SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>{productCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+                        </Select>
                     </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.isNonStock`}
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-2">
-                      <FormControl><Checkbox checked={field.value} onCheckedChange={(checked) => handleNonStockToggle(index, !!checked)} /></FormControl>
-                      <FormLabel className="font-normal">Non-Stock Item?</FormLabel>
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {isNonStock ? (
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.productName`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product/Service Name</FormLabel>
-                      <FormControl><Input {...field} placeholder="Enter item name" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : (
-                <>
-                  <FormItem>
-                    <FormLabel>Category Filter</FormLabel>
-                    <Select
-                      value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
-                      onValueChange={(value) => handleCategoryFilterChange(index, value)}
-                    >
-                      <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
-                        {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-
-                  <FormField
-                    control={form.control}
-                    name={`lineItems.${index}.productId`}
-                    render={({ field: controllerField }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Product</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button variant="outline" role="combobox" className={cn("w-full justify-between", !controllerField.value && "text-muted-foreground")}>
-                                {controllerField.value && products.length > 0 ? products.find(p => p.id === controllerField.value)?.name : "Select product"}
-                                <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                            <Command>
-                              <CommandInput placeholder="Search product..." />
-                              <CommandList>
-                                <CommandEmpty>No product found.</CommandEmpty>
-                                <CommandGroup>
-                                  {filteredProductsForLine.map((product) => {
-                                    const searchableValue = [product.name, product.category, product.unit]
-                                      .filter(Boolean)
-                                      .join(' ')
-                                      .toLowerCase();
-                                    return (
-                                      <CommandItem
-                                        value={searchableValue}
-                                        key={product.id}
-                                        onSelect={() => handleProductSelect(index, product.id)}
-                                      >
-                                        <Icon name="Check" className={cn("mr-2 h-4 w-4", product.id === controllerField.value ? "opacity-100" : "opacity-0")}/>
-                                        {product.name} ({product.unit}) - Cost: ${product.cost.toFixed(2)}
-                                      </CommandItem>
-                                    );
-                                  })}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              )}
-
-              <div className="grid grid-cols-3 gap-4 items-end">
-                 <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.unitPrice`}
-                  render={({ field: priceField }) => (
-                    <FormItem>
-                      <FormLabel>Unit Price</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...priceField}
-                           value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
-                           onChange={(e) => {
-                            const val = e.target.value;
-                            const num = parseFloat(val);
-                            priceField.onChange(isNaN(num) ? undefined : num);
-                           }}
-                          disabled={!isNonStock && (!watchedLineItems[index]?.productId || products.length === 0)}
-                          placeholder="0.00"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.quantity`}
-                  render={({ field: qtyField }) => (
-                    <FormItem>
-                      <FormLabel>Quantity</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          {...qtyField}
-                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
-                           onChange={(e) => {
-                            const val = e.target.value;
-                            const num = parseInt(val, 10);
-                            qtyField.onChange(isNaN(num) ? undefined : num);
-                           }}
-                          min="1"
-                          disabled={!isNonStock && (!watchedLineItems[index]?.productId || products.length === 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormItem>
-                  <FormLabel>Line Total</FormLabel>
-                  <Input type="text" readOnly value={lineTotal !== 0 ? `${isReturn ? '-' : ''}$${Math.abs(lineTotal).toFixed(2)}` : '$0.00'} className={cn("bg-muted font-semibold", isReturn && "text-destructive")} />
-                </FormItem>
-              </div>
-            </div>
-          );
+                    <FormField control={form.control} name={`lineItems.${index}.productId`} render={({ field }) => (
+                        <FormItem className="flex flex-col"><FormLabel>Product</FormLabel>
+                            <Popover><PopoverTrigger asChild><FormControl>
+                                <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
+                                    {field.value && products.length > 0 ? products.find(p => p.id === field.value)?.name : "Select product"}
+                                    <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </FormControl></PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command>
+                                <CommandInput placeholder="Search product..." />
+                                <CommandList><CommandEmpty>No product found.</CommandEmpty>
+                                    <CommandGroup>{filteredProductsForLine.map(p => (
+                                        <CommandItem value={p.name} key={p.id} onSelect={() => handleProductSelect(index, p.id)}>
+                                            <Icon name="Check" className={cn("mr-2 h-4 w-4", p.id === field.value ? "opacity-100" : "opacity-0")} />
+                                            {p.name}
+                                        </CommandItem>
+                                    ))}</CommandGroup>
+                                </CommandList>
+                            </Command></PopoverContent></Popover><FormMessage />
+                        </FormItem>
+                    )} /></>
+                )}
+                <div className="grid grid-cols-3 gap-4 items-end">
+                    <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
+                        <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} placeholder="0.00" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field }) => (
+                        <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" {...field} min="1" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormItem><FormLabel>Line Total</FormLabel><Input type="text" readOnly value={`$${lineTotal.toFixed(2)}`} className={cn("bg-muted font-semibold", currentLineItem?.isReturn && "text-destructive")} /></FormItem>
+                </div>
+            </div>);
         })}
         <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={addLineItem}>
-              <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setIsBulkAddDialogOpen(true)}>
-                <Icon name="Layers" className="mr-2 h-4 w-4" /> Bulk Add Stock Items
-            </Button>
+            <Button type="button" variant="outline" onClick={addLineItem}><Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Item</Button>
+            <Button type="button" variant="outline" onClick={() => setIsBulkAddDialogOpen(true)}><Icon name="Layers" className="mr-2 h-4 w-4" /> Bulk Add Items</Button>
         </div>
-        {form.formState.errors.lineItems && !form.formState.errors.lineItems.root && !fields.length && (
-             <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.message}</p>
+        <Separator />
+        <h3 className="text-lg font-medium">Payments</h3>
+        {localPayments.length > 0 && (
+          <div className="space-y-2 mb-4">
+            <Label>Recorded Payments:</Label>
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Amount</TableHead><TableHead>Method</TableHead><TableHead>Notes</TableHead><TableHead className="w-[100px]">Actions</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {localPayments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{format(p.date, "PPP")}</TableCell>
+                    <TableCell>${p.amount.toFixed(2)}</TableCell>
+                    <TableCell>{p.method}</TableCell>
+                    <TableCell>{p.notes || 'N/A'}</TableCell>
+                    <TableCell className="space-x-1">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleEditPayment(p)} className="h-7 w-7"><Icon name="Edit" className="h-4 w-4" /></Button>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleDeletePayment(p.id)} className="h-7 w-7"><Icon name="Trash2" className="h-4 w-4 text-destructive" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-        {form.formState.errors.lineItems?.root?.message && (
-            <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.root.message}</p>
-        )}
+        <div className="p-4 border rounded-md space-y-3">
+            <h4 className="text-md font-medium">{editingPayment ? "Edit Payment" : "Record New Payment"}</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="currentPaymentAmount" render={({ field }) => (
+                    <FormItem><FormLabel>Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="currentPaymentDate" render={({ field }) => (
+                    <FormItem className="flex flex-col"><FormLabel>Date</FormLabel>
+                        <Popover><PopoverTrigger asChild><FormControl>
+                            <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                {field.value ? format(field.value, "PPP") : <span>Pick a date</span>} <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                        </FormControl></PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
+                        </Popover><FormMessage />
+                    </FormItem>
+                )} />
+            </div>
+            <FormField control={form.control} name="currentPaymentMethod" render={({ field }) => (
+                <FormItem><FormLabel>Method</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger></FormControl>
+                <SelectContent>{PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage />
+                </FormItem>
+            )} />
+            <FormField control={form.control} name="currentPaymentNotes" render={({ field }) => (
+              <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Deposit" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <div className="flex gap-2">
+                <Button type="button" onClick={handleAddOrUpdatePayment}>
+                    {editingPayment ? <><Icon name="Check" className="mr-2 h-4 w-4" />Update Payment</> : <><Icon name="PlusCircle" className="mr-2 h-4 w-4" />Add Payment</>}
+                </Button>
+                {editingPayment && <Button type="button" variant="outline" onClick={handleCancelEditPayment}>Cancel Edit</Button>}
+            </div>
+        </div>
 
         <Separator />
         <div className="space-y-2 text-right font-medium">
             <div>Order Total: <span className="font-semibold">${currentOrderTotal.toFixed(2)}</span></div>
-            {order && amountAlreadyPaid > 0 && (
-                 <div>Previously Paid: <span className="text-green-600">(${amountAlreadyPaid.toFixed(2)})</span></div>
-            )}
-            {newPaymentAmountValue > 0 && (
-                 <div>New Payment: <span className="text-green-600">(${newPaymentAmountValue.toFixed(2)})</span></div>
-            )}
+            {totalPaidFromLocalPayments > 0 && <div>Total Paid: <span className="text-green-600">(${totalPaidFromLocalPayments.toFixed(2)})</span></div>}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
-
-        <Separator />
-        <h3 className="text-lg font-medium">Record New Payment (Optional)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="newPaymentAmount" render={({ field }) => (
-                <FormItem><FormLabel>Payment Amount</FormLabel><FormControl>
-                    <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                        value={field.value === undefined || field.value === null ? '' : String(field.value)}
-                        onChange={e => {
-                            const val = e.target.value;
-                            if (val === '') {
-                                field.onChange(undefined);
-                            } else {
-                                const num = parseFloat(val);
-                                field.onChange(isNaN(num) ? undefined : num);
-                            }
-                        }}
-                    />
-                </FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="newPaymentDate" render={({ field }) => (
-                <FormItem className="flex flex-col">
-                <FormLabel>Payment Date</FormLabel>
-                <Popover><PopoverTrigger asChild><FormControl>
-                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                        <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                </FormControl></PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-                </Popover><FormMessage />
-                </FormItem>
-            )} />
-        </div>
-        <FormField control={form.control} name="newPaymentMethod" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Payment Method</FormLabel>
-                <Select
-                    onValueChange={field.onChange}
-                    value={field.value || ""}
-                >
-                <FormControl><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger></FormControl>
-                <SelectContent>{PAYMENT_METHODS.map(method => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-            </FormItem>
-        )} />
-        <FormField control={form.control} name="newPaymentNotes" render={({ field }) => (
-          <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl>
-            <Textarea
-                placeholder="e.g., Check #123, Deposit"
-                {...field}
-                value={field.value === undefined || field.value === null ? '' : field.value}
-                rows={2}
-            />
-            </FormControl><FormMessage /></FormItem>
-        )} />
-        {(form.formState.errors.newPaymentMethod || (form.formState.errors.newPaymentDate && form.getValues("newPaymentAmount"))) && (
-             <p className="text-sm font-medium text-destructive">{form.formState.errors.newPaymentMethod?.message || form.formState.errors.newPaymentDate?.message}</p>
-        )}
-
         <Separator />
         <FormField control={form.control} name="notes" render={({ field }) => (
           <FormItem><FormLabel>Order Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Additional notes for the order..." {...field} rows={3} /></FormControl><FormMessage /></FormItem>
@@ -802,13 +620,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         </div>
       </form>
        {isBulkAddDialogOpen && (
-        <BulkAddProductsDialog
-          isOpen={isBulkAddDialogOpen}
-          onOpenChange={setIsBulkAddDialogOpen}
-          products={products}
-          productCategories={productCategories}
-          onAddItems={handleBulkAddItems}
-        />
+        <BulkAddProductsDialog isOpen={isBulkAddDialogOpen} onOpenChange={setIsBulkAddDialogOpen} products={products} productCategories={productCategories} onAddItems={handleBulkAddItems} />
       )}
     </Form>
   );
