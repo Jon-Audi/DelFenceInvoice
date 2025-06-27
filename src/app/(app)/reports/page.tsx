@@ -27,7 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary';
-type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'lastMonth' | 'thisQuarter';
+type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'last7Days';
 
 interface ReportToPrintData {
   reportType: ReportType;
@@ -100,6 +100,10 @@ export default function ReportsPage() {
         const lastMonthDate = subMonths(today, 1);
         newStart = startOfMonth(lastMonthDate);
         newEnd = endOfMonth(lastMonthDate);
+        break;
+      case 'last7Days':
+        newStart = subDays(today, 6);
+        newEnd = today;
         break;
       case 'custom':
       default:
@@ -473,11 +477,21 @@ export default function ReportsPage() {
           {reportType !== 'customerBalances' && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
-                <Button variant={activeDatePreset === 'lastMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('lastMonth')} disabled={isLoading}>Last Month</Button>
-                <Button variant={activeDatePreset === 'thisQuarter' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisQuarter')} disabled={isLoading}>This Quarter</Button>
-                <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
-                <Button variant={activeDatePreset === 'custom' ? "default" : "outline"} onClick={() => setActiveDatePreset('custom')} disabled={isLoading}>Custom Range</Button>
+                {reportType === 'weeklySummary' ? (
+                  <>
+                    <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
+                    <Button variant={activeDatePreset === 'lastMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('lastMonth')} disabled={isLoading}>Last Month</Button>
+                    <Button variant={activeDatePreset === 'thisQuarter' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisQuarter')} disabled={isLoading}>This Quarter</Button>
+                    <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
+                    <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
+                    <Button variant={activeDatePreset === 'last7Days' ? "default" : "outline"} onClick={() => handleDatePresetChange('last7Days')} disabled={isLoading}>Last 7 Days</Button>
+                  </>
+                )}
+                 <Button variant={activeDatePreset === 'custom' ? "default" : "outline"} onClick={() => setActiveDatePreset('custom')} disabled={isLoading}>Custom Range</Button>
               </div>
               {activeDatePreset === 'custom' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
