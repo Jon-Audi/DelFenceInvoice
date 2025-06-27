@@ -7,11 +7,12 @@ import type { Product, CompanySettings } from '@/types';
 interface PrintablePriceSheetProps {
   groupedProducts: Map<string, Product[]>;
   companySettings: CompanySettings | null;
-  logoUrl?: string; // Added logoUrl prop
+  logoUrl?: string; 
+  customerName?: string;
 }
 
 export const PrintablePriceSheet = React.forwardRef<HTMLDivElement, PrintablePriceSheetProps>(
-  ({ groupedProducts, companySettings, logoUrl }, ref) => {
+  ({ groupedProducts, companySettings, logoUrl, customerName }, ref) => {
     if (!groupedProducts || groupedProducts.size === 0 || !companySettings) {
       return (
         <div ref={ref} className="print-only-container">
@@ -23,6 +24,7 @@ export const PrintablePriceSheet = React.forwardRef<HTMLDivElement, PrintablePri
     }
 
     const currentDate = new Date().toLocaleDateString();
+    const reportTitle = customerName ? `Price Sheet for ${customerName}` : 'Price Sheet';
 
     return (
       <div ref={ref} className="print-only-container">
@@ -50,7 +52,7 @@ export const PrintablePriceSheet = React.forwardRef<HTMLDivElement, PrintablePri
               {companySettings.email && <p className="text-xs">Email: {companySettings.email}</p>}
             </div>
             <div className="text-right">
-              <h2 className="text-2xl font-bold text-gray-700">PRICE SHEET</h2>
+              <h2 className="text-2xl font-bold text-gray-700">{reportTitle}</h2>
               <p className="text-sm"><span className="font-semibold">Date:</span> {currentDate}</p>
             </div>
           </div>

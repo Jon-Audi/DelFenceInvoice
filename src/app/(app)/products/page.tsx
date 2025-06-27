@@ -8,29 +8,35 @@ import { Icon } from '@/components/icons';
 import { ProductTable } from '@/components/products/product-table';
 import { ProductDialog } from '@/components/products/product-dialog';
 import { BulkAddProductsDialog } from '@/components/products/bulk-add-products-dialog';
-import type { Product, CompanySettings } from '@/types';
-import { INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
+import type { Product, CompanySettings, Customer } from '@/types';
+import { INITIAL_PRODUCT_CATEGORIES, ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; 
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { PrintablePriceSheet } from '@/components/products/printable-price-sheet';
-import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; 
+import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<string[]>(INITIAL_PRODUCT_CATEGORIES);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
 
   const [productsForPrinting, setProductsForPrinting] = useState<Map<string, Product[]> | null>(null);
+  const [customerForPrinting, setCustomerForPrinting] = useState<Customer | null>(null);
   const [companySettingsForPrinting, setCompanySettingsForPrinting] = useState<CompanySettings | null>(null);
   const [isLoadingCompanySettings, setIsLoadingCompanySettings] = useState(false);
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
+  const [isCustomerSelectDialogOpen, setIsCustomerSelectDialogOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-
 
   useEffect(() => {
     setIsLoading(true);
@@ -59,6 +65,23 @@ export default function ProductsPage() {
 
     return () => unsubscribe();
   }, [toast]);
+  
+  useEffect(() => {
+    setIsLoadingCustomers(true);
+    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const fetchedCustomers: Customer[] = [];
+      snapshot.forEach((docSnap) => {
+        const customerData = docSnap.data() as Omit<Customer, 'id'>;
+        fetchedCustomers.push({ ...customerData, id: docSnap.id });
+      });
+      setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
+      setIsLoadingCustomers(false);
+    }, (error) => {
+      console.error("[ProductsPage] Error fetching customers:", error);
+      setIsLoadingCustomers(false);
+    });
+     return () => unsubscribeCustomers();
+  }, []);
 
   const handleAddNewCategory = (category: string) => {
     if (category.trim() === '') return;
@@ -519,6 +542,21 @@ export default function ProductsPage() {
       setIsLoadingCompanySettings(false);
     }
   };
+  
+  const calculateCustomerPrice = (product: Product, customer: Customer): number => {
+    let finalPrice = product.price; 
+    if (customer.specificMarkups && customer.specificMarkups.length > 0) {
+      const specificRule = customer.specificMarkups.find(m => m.categoryName === product.category);
+      const allCategoriesRule = customer.specificMarkups.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
+
+      if (specificRule) {
+        finalPrice = product.cost * (1 + specificRule.markupPercentage / 100);
+      } else if (allCategoriesRule) {
+        finalPrice = product.cost * (1 + allCategoriesRule.markupPercentage / 100);
+      }
+    }
+    return parseFloat(finalPrice.toFixed(2));
+  };
 
   const handlePrintPriceSheetAction = async (selectedCategories: string[]) => {
     if (selectedCategories.length === 0) {
@@ -531,23 +569,37 @@ export default function ProductsPage() {
     setIsLoadingCompanySettings(false);
 
     if (settings) {
-      const filteredGroupedProducts = new Map<string, Product[]>();
-      selectedCategories.forEach(categoryName => {
-        if (groupedProducts.has(categoryName)) {
-          filteredGroupedProducts.set(categoryName, groupedProducts.get(categoryName)!);
-        }
-      });
+      let productsWithCorrectPrices = products;
+      
+      // If a customer is selected for printing, calculate their specific prices
+      if(customerForPrinting) {
+        productsWithCorrectPrices = products.map(p => ({
+          ...p,
+          price: calculateCustomerPrice(p, customerForPrinting)
+        }));
+      }
 
-      if (filteredGroupedProducts.size === 0) {
+      const productsToPrint = productsWithCorrectPrices.filter(p => selectedCategories.includes(p.category));
+
+      if (productsToPrint.length === 0) {
         toast({ title: "No Products in Selected Categories", description: "No products found in the chosen categories to print.", variant: "default" });
         setIsSelectCategoriesDialogOpen(false);
+        setCustomerForPrinting(null); // Reset customer
         return;
       }
 
+      // Group the correctly priced and filtered products for the printable component
+      const filteredGroupedProducts = new Map<string, Product[]>();
+      selectedCategories.forEach(categoryName => {
+        const categoryProducts = productsToPrint.filter(p => p.category === categoryName);
+        if (categoryProducts.length > 0) {
+          filteredGroupedProducts.set(categoryName, categoryProducts);
+        }
+      });
+      
       setCompanySettingsForPrinting(settings);
-      setProductsForPrinting(filteredGroupedProducts); // This will trigger the useEffect for printing
+      setProductsForPrinting(filteredGroupedProducts); 
 
-      // New print logic will be handled by a useEffect watching productsForPrinting & companySettingsForPrinting
       setTimeout(() => {
         if (printRef.current) {
           const printContents = printRef.current.innerHTML;
@@ -564,28 +616,40 @@ export default function ProductsPage() {
             setTimeout(() => { 
               win.print(); 
               win.close(); 
-              // Reset states after print dialog is closed
               setProductsForPrinting(null);
               setCompanySettingsForPrinting(null);
-            }, 750); // Timeout for content to render in new window
+              setCustomerForPrinting(null);
+            }, 750); 
           } else {
             toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
             setProductsForPrinting(null);
             setCompanySettingsForPrinting(null);
+            setCustomerForPrinting(null);
           }
         } else {
           toast({ title: "Print Error", description: "Printable content not found.", variant: "destructive" });
           setProductsForPrinting(null);
           setCompanySettingsForPrinting(null);
+          setCustomerForPrinting(null);
         }
-      }, 100); // Small delay for state to update and component to re-render before capturing innerHTML
+      }, 100);
 
     } else {
       toast({ title: "Cannot Print", description: "Company settings are required for printing.", variant: "destructive"});
     }
     setIsSelectCategoriesDialogOpen(false); 
   };
-
+  
+  const handleCustomerSelectedForPrinting = (customer: Customer) => {
+    setCustomerForPrinting(customer);
+    setIsCustomerSelectDialogOpen(false);
+    setIsSelectCategoriesDialogOpen(true);
+  };
+  
+  const handleOpenStandardPriceSheet = () => {
+    setCustomerForPrinting(null); // Ensure no customer is selected
+    setIsSelectCategoriesDialogOpen(true);
+  }
 
   if (isLoading && products.length === 0) { 
     return (
@@ -619,9 +683,13 @@ export default function ProductsPage() {
             <Icon name="Download" className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0 || isLoadingCompanySettings}>
+          <Button variant="outline" onClick={handleOpenStandardPriceSheet} disabled={isLoading || products.length === 0 || isLoadingCompanySettings}>
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print Price Sheet
+          </Button>
+           <Button variant="outline" onClick={() => setIsCustomerSelectDialogOpen(true)} disabled={isLoading || products.length === 0 || isLoadingCompanySettings || isLoadingCustomers}>
+            <Icon name="Users" className="mr-2 h-4 w-4" />
+            Print Customer Price Sheet
           </Button>
            <ProductDialog 
             triggerButton={
@@ -662,10 +730,42 @@ export default function ProductsPage() {
         </p>
       )}
 
+      <Dialog open={isCustomerSelectDialogOpen} onOpenChange={setIsCustomerSelectDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Select a Customer</DialogTitle>
+                <DialogDescription>Choose a customer to generate their specific price sheet.</DialogDescription>
+            </DialogHeader>
+            <Command>
+              <CommandInput placeholder="Search customer..." />
+              <CommandList>
+                <CommandEmpty>No customer found.</CommandEmpty>
+                <CommandGroup>
+                  {customers.map((customer) => {
+                    const displayName = customer.companyName || `${customer.firstName} ${customer.lastName}`;
+                    return (
+                      <CommandItem
+                        value={displayName}
+                        key={customer.id}
+                        onSelect={() => handleCustomerSelectedForPrinting(customer)}
+                      >
+                        {displayName}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+        </DialogContent>
+      </Dialog>
+      
       {isSelectCategoriesDialogOpen && (
         <SelectCategoriesDialog
           isOpen={isSelectCategoriesDialogOpen}
-          onOpenChange={setIsSelectCategoriesDialogOpen}
+          onOpenChange={(open) => {
+            setIsSelectCategoriesDialogOpen(open);
+            if(!open) setCustomerForPrinting(null); // Reset customer if dialog is closed
+          }}
           allCategories={productCategories}
           onSubmit={handlePrintPriceSheetAction}
         />
@@ -679,17 +779,18 @@ export default function ProductsPage() {
             groupedProducts={productsForPrinting}
             companySettings={companySettingsForPrinting}
             logoUrl={absoluteLogoUrl}
+            customerName={customerForPrinting?.companyName || (customerForPrinting ? `${customerForPrinting.firstName} ${customerForPrinting.lastName}`: undefined)}
           />
         )}
       </div>
 
-       {(isLoadingCompanySettings && isSelectCategoriesDialogOpen) && ( 
-        // Simplified loading indicator for when print is initiated
+       {(isLoadingCompanySettings && (isSelectCategoriesDialogOpen || isCustomerSelectDialogOpen)) && ( 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <Icon name="Loader2" className="h-10 w-10 animate-spin text-white" />
-            <p className="ml-2 text-white">Preparing price sheet...</p>
+            <p className="ml-2 text-white">Preparing...</p>
         </div>
       )}
     </>
   );
 }
+
