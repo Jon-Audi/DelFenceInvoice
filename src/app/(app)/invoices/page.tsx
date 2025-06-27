@@ -115,10 +115,10 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          newPaymentAmount: undefined,
-          newPaymentDate: undefined,
-          newPaymentMethod: undefined,
-          newPaymentNotes: '',
+          currentPaymentAmount: undefined,
+          currentPaymentDate: undefined,
+          currentPaymentMethod: undefined,
+          currentPaymentNotes: '',
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -146,10 +146,10 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          newPaymentAmount: undefined,
-          newPaymentDate: undefined,
-          newPaymentMethod: undefined,
-          newPaymentNotes: '',
+          currentPaymentAmount: undefined,
+          currentPaymentDate: undefined,
+          currentPaymentMethod: undefined,
+          currentPaymentNotes: '',
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);

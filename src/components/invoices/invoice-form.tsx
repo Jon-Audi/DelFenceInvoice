@@ -35,6 +35,7 @@ import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
@@ -178,7 +179,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         })),
         paymentTerms: initialData.paymentTerms || 'Due on receipt',
         notes: initialData.notes || '',
-        payments: initialData.payments?.map(p => ({...p, date: p.date instanceof Date ? p.date : parseISO(p.date as unknown as string)})) || [],
+        payments: initialData.payments?.map(p => ({...p, date: typeof p.date === 'string' ? parseISO(p.date as string) : p.date})) || [],
       };
       initialLocalPayments = defaultValues.payments || [];
     } else {

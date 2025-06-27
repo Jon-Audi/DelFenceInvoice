@@ -676,7 +676,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             )} />
             <div className="flex gap-2">
                 <Button type="button" onClick={handleAddOrUpdatePayment}>
-                    {editingPayment ? <><Icon name="Save" className="mr-2 h-4 w-4" />Update Payment</> : <><Icon name="PlusCircle" className="mr-2 h-4 w-4" />Add Payment</>}
+                    {editingPayment ? <><Icon name="Check" className="mr-2 h-4 w-4" />Update Payment</> : <><Icon name="PlusCircle" className="mr-2 h-4 w-4" />Add Payment</>}
                 </Button>
                 {editingPayment && <Button type="button" variant="outline" onClick={handleCancelEditPayment}>Cancel Edit</Button>}
             </div>
