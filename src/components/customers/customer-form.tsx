@@ -46,18 +46,18 @@ const specificMarkupSchema = z.object({
 const customerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  companyName: z.string().optional(),
+  companyName: z.string().default(''),
   phone: z.string().min(1, "Phone number is required"),
   customerType: z.enum(CUSTOMER_TYPES as [CustomerType, ...CustomerType[]]),
   emailContacts: z.array(emailContactSchema).min(1, "At least one email contact is required"),
   address: z.object({
-    street: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-  }).optional(),
-  notes: z.string().optional(),
-  specificMarkups: z.array(specificMarkupSchema).optional(),
+    street: z.string().default(''),
+    city: z.string().default(''),
+    state: z.string().default(''),
+    zip: z.string().default(''),
+  }).optional().default({ street: '', city: '', state: '', zip: '' }),
+  notes: z.string().default(''),
+  specificMarkups: z.array(specificMarkupSchema).optional().default([]),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -76,6 +76,9 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
       ...customer,
       emailContacts: customer.emailContacts.map(ec => ({...ec, id: ec.id || crypto.randomUUID()})),
       specificMarkups: customer.specificMarkups?.map(sm => ({...sm, id: sm.id || crypto.randomUUID() })) || [],
+      address: customer.address || { street: '', city: '', state: '', zip: '' },
+      notes: customer.notes || '',
+      companyName: customer.companyName || '',
     } : {
       firstName: '',
       lastName: '',
@@ -228,4 +231,3 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
     </Form>
   );
 }
-
