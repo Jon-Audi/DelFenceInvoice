@@ -29,7 +29,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -68,7 +68,6 @@ export default function InvoicesPage() {
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
   const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] } | null>(null);
 
-
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
@@ -96,6 +95,7 @@ export default function InvoicesPage() {
       try {
         const estimateToConvert = JSON.parse(pendingEstimateRaw) as Estimate;
         newInvoiceData = {
+          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Draft',
@@ -123,6 +123,7 @@ export default function InvoicesPage() {
       try {
         const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
          newInvoiceData = {
+          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: orderToConvert.customerId,
           date: new Date(),
           status: 'Draft',
@@ -238,49 +239,31 @@ export default function InvoicesPage() {
     }
   }, [products]);
 
-  const handleSaveInvoice = async (invoiceToSave: Invoice) => {
-    const { id, ...invoiceDataFromDialog } = invoiceToSave;
-
-    const payload: Omit<Invoice, 'id'> & { [key: string]: any } = {
-      invoiceNumber: invoiceDataFromDialog.invoiceNumber,
-      customerId: invoiceDataFromDialog.customerId,
-      customerName: invoiceDataFromDialog.customerName,
-      date: invoiceDataFromDialog.date,
-      status: invoiceDataFromDialog.status,
-      lineItems: invoiceDataFromDialog.lineItems,
-      subtotal: invoiceDataFromDialog.subtotal,
-      taxAmount: invoiceDataFromDialog.taxAmount || 0,
-      total: invoiceDataFromDialog.total,
-      payments: invoiceDataFromDialog.payments || [],
-      amountPaid: invoiceDataFromDialog.amountPaid || 0,
-      balanceDue: (invoiceDataFromDialog.total || 0) - (invoiceDataFromDialog.amountPaid || 0),
-    };
-
-    if (invoiceDataFromDialog.poNumber) payload.poNumber = invoiceDataFromDialog.poNumber;
-    if (invoiceDataFromDialog.dueDate) payload.dueDate = invoiceDataFromDialog.dueDate;
-    if (invoiceDataFromDialog.paymentTerms) payload.paymentTerms = invoiceDataFromDialog.paymentTerms;
-    if (invoiceDataFromDialog.notes) payload.notes = invoiceDataFromDialog.notes;
+  const handleSaveInvoice = async (invoiceData: Invoice) => {
+    const { id, ...payload } = invoiceData;
 
     try {
-      if (id && invoices.some(i => i.id === id)) {
-        const invoiceRef = doc(db, 'invoices', id);
-        const updatePayload = { ...payload };
-        if (!updatePayload.poNumber) updatePayload.poNumber = deleteField();
-        if (!updatePayload.dueDate) updatePayload.dueDate = deleteField();
-        if (!updatePayload.paymentTerms) updatePayload.paymentTerms = deleteField();
-        if (!updatePayload.notes) updatePayload.notes = deleteField();
-        
-        await setDoc(invoiceRef, updatePayload, { merge: true });
-        toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
-      } else {
-        const docRef = await addDoc(collection(db, 'invoices'), payload);
-        toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
-      }
+        if (id) {
+            // Document has an ID, so we are updating it.
+            const invoiceRef = doc(db, 'invoices', id);
+            await setDoc(invoiceRef, payload); 
+            toast({ title: "Invoice Updated", description: `Invoice ${payload.invoiceNumber} has been updated.` });
+        } else {
+            // No ID, so create a new document.
+            const docRef = await addDoc(collection(db, 'invoices'), payload);
+            toast({ title: "Invoice Added", description: `Invoice ${payload.invoiceNumber} has been added with ID: ${docRef.id}.` });
+        }
     } catch (error: any) {
         console.error("Error saving invoice:", error);
-        toast({ title: "Error", description: `Could not save invoice to database. ${error.message}`, variant: "destructive" });
+        toast({
+            title: "Error Saving Invoice",
+            description: `Could not save invoice to database. Error: ${error.message}`,
+            variant: "destructive",
+            duration: 8000
+        });
     }
-
+    
+    // This part for handling conversion UI state remains the same.
     if (isConvertingInvoice) {
         setIsConvertingInvoice(false);
         setConversionInvoiceData(null);
@@ -729,5 +712,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    

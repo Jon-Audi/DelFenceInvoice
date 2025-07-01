@@ -100,37 +100,32 @@ export function InvoiceDialog({
       determinedStatus = formDataFromForm.status;
     }
 
-    const invoiceToSave: Partial<Invoice> & Pick<Invoice, 'id' | 'invoiceNumber' | 'customerId' | 'customerName' | 'date' | 'status' | 'lineItems' | 'subtotal' | 'taxAmount' | 'total' | 'payments' | 'amountPaid' | 'balanceDue'> = {
-      id: invoice?.id || initialData?.id || formDataFromForm.id || crypto.randomUUID(),
-      invoiceNumber: formDataFromForm.invoiceNumber,
-      customerId: formDataFromForm.customerId,
-      customerName: customerName,
-      date: formDataFromForm.date.toISOString(),
-      status: determinedStatus,
-      lineItems: lineItems,
-      subtotal: currentSubtotal,
-      taxAmount: currentTaxAmount,
-      total: currentTotal,
-      payments: finalPayments,
-      amountPaid: roundedTotalAmountPaid,
-      balanceDue: roundedBalanceDue,
+    // Build the final, clean payload for Firestore
+    const invoicePayload: Omit<Invoice, 'id'> & { id?: string } = {
+        id: invoice?.id || initialData?.id || formDataFromForm.id, // Keep id for onSave logic
+        invoiceNumber: formDataFromForm.invoiceNumber,
+        customerId: formDataFromForm.customerId,
+        customerName: customerName,
+        date: formDataFromForm.date.toISOString(),
+        status: determinedStatus,
+        lineItems: lineItems,
+        subtotal: currentSubtotal,
+        taxAmount: currentTaxAmount,
+        total: currentTotal,
+        payments: finalPayments,
+        amountPaid: roundedTotalAmountPaid,
+        balanceDue: roundedBalanceDue,
     };
-    
-    // Conditionally add optional fields to prevent 'undefined' values
-    if (formDataFromForm.dueDate) {
-      invoiceToSave.dueDate = formDataFromForm.dueDate.toISOString();
-    }
-    if (formDataFromForm.poNumber) {
-      invoiceToSave.poNumber = formDataFromForm.poNumber;
-    }
-    if (formDataFromForm.paymentTerms) {
-      invoiceToSave.paymentTerms = formDataFromForm.paymentTerms;
-    }
-    if (formDataFromForm.notes) {
-      invoiceToSave.notes = formDataFromForm.notes;
-    }
 
-    onSave(invoiceToSave as Invoice);
+    // Only add optional fields if they have a truthy value
+    if (formDataFromForm.dueDate) invoicePayload.dueDate = formDataFromForm.dueDate.toISOString();
+    if (formDataFromForm.poNumber) invoicePayload.poNumber = formDataFromForm.poNumber;
+    if (formDataFromForm.paymentTerms) invoicePayload.paymentTerms = formDataFromForm.paymentTerms;
+    if (formDataFromForm.notes) invoicePayload.notes = formDataFromForm.notes;
+    if (invoice?.internalNotes) invoicePayload.internalNotes = invoice.internalNotes;
+    if (invoice?.orderId) invoicePayload.orderId = invoice.orderId;
+
+    onSave(invoicePayload as Invoice); // Pass the clean object.
     setOpen(false);
   };
 
