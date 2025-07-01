@@ -73,7 +73,6 @@ export default function OrdersPage() {
   const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
   const [packingSlipToPrint, setPackingSlipToPrint] = useState<any | null>(null);
   
-
   useEffect(() => {
     setIsClient(true);
     const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
@@ -684,5 +683,3 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
