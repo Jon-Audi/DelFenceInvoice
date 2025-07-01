@@ -24,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact } from '@/types';
+import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact, Payment } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
@@ -34,7 +34,6 @@ import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { cn } from '@/lib/utils';
-// Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -67,15 +66,13 @@ export default function InvoicesPage() {
   const router = useRouter();
 
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
-  const [conversionInvoiceData, setConversionInvoiceData] = useState<InvoiceFormData | null>(null);
+  const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] } | null>(null);
+
 
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
   
-  // Removed Firebase Functions instance: const functionsInstance = getFunctions();
-  // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
-
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -91,14 +88,14 @@ export default function InvoicesPage() {
   useEffect(() => {
     const pendingEstimateRaw = localStorage.getItem('estimateToConvert_invoice');
     const pendingOrderRaw = localStorage.getItem('orderToConvert_invoice');
-    let newInvoiceData: InvoiceFormData | null = null;
+    let newInvoiceData: (Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] }) | null = null;
+
 
     if (pendingEstimateRaw) {
       localStorage.removeItem('estimateToConvert_invoice');
       try {
         const estimateToConvert = JSON.parse(pendingEstimateRaw) as Estimate;
         newInvoiceData = {
-          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: estimateToConvert.customerId,
           date: new Date(),
           status: 'Draft',
@@ -115,10 +112,7 @@ export default function InvoicesPage() {
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          currentPaymentAmount: undefined,
-          currentPaymentDate: undefined,
-          currentPaymentMethod: undefined,
-          currentPaymentNotes: '',
+          payments: [],
         };
       } catch (error) {
         console.error("Error processing estimate for invoice conversion:", error);
@@ -129,7 +123,6 @@ export default function InvoicesPage() {
       try {
         const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
          newInvoiceData = {
-          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: orderToConvert.customerId,
           date: new Date(),
           status: 'Draft',
@@ -146,10 +139,7 @@ export default function InvoicesPage() {
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          currentPaymentAmount: undefined,
-          currentPaymentDate: undefined,
-          currentPaymentMethod: undefined,
-          currentPaymentNotes: '',
+          payments: orderToConvert.payments?.map(p => ({ ...p, date: p.date })) || [],
         };
       } catch (error) {
         console.error("Error processing order for invoice conversion:", error);
@@ -251,7 +241,7 @@ export default function InvoicesPage() {
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     const { id, ...invoiceDataFromDialog } = invoiceToSave;
 
-    const basePayload: any = {
+    const payload: Omit<Invoice, 'id'> & { [key: string]: any } = {
       invoiceNumber: invoiceDataFromDialog.invoiceNumber,
       customerId: invoiceDataFromDialog.customerId,
       customerName: invoiceDataFromDialog.customerName,
@@ -263,45 +253,27 @@ export default function InvoicesPage() {
       total: invoiceDataFromDialog.total,
       payments: invoiceDataFromDialog.payments || [],
       amountPaid: invoiceDataFromDialog.amountPaid || 0,
+      balanceDue: (invoiceDataFromDialog.total || 0) - (invoiceDataFromDialog.amountPaid || 0),
     };
-    basePayload.balanceDue = (basePayload.total || 0) - (basePayload.amountPaid || 0);
 
+    if (invoiceDataFromDialog.poNumber) payload.poNumber = invoiceDataFromDialog.poNumber;
+    if (invoiceDataFromDialog.dueDate) payload.dueDate = invoiceDataFromDialog.dueDate;
+    if (invoiceDataFromDialog.paymentTerms) payload.paymentTerms = invoiceDataFromDialog.paymentTerms;
+    if (invoiceDataFromDialog.notes) payload.notes = invoiceDataFromDialog.notes;
 
     try {
       if (id && invoices.some(i => i.id === id)) {
         const invoiceRef = doc(db, 'invoices', id);
-        const updatePayload = { ...basePayload };
-
-        updatePayload.poNumber = (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '')
-                                  ? invoiceDataFromDialog.poNumber.trim()
-                                  : deleteField();
-        updatePayload.dueDate = invoiceDataFromDialog.dueDate ? invoiceDataFromDialog.dueDate : deleteField();
-        updatePayload.paymentTerms = (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '')
-                                     ? invoiceDataFromDialog.paymentTerms.trim()
-                                     : deleteField();
-        updatePayload.notes = (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '')
-                               ? invoiceDataFromDialog.notes.trim()
-                               : deleteField();
-
+        const updatePayload = { ...payload };
+        if (!updatePayload.poNumber) updatePayload.poNumber = deleteField();
+        if (!updatePayload.dueDate) updatePayload.dueDate = deleteField();
+        if (!updatePayload.paymentTerms) updatePayload.paymentTerms = deleteField();
+        if (!updatePayload.notes) updatePayload.notes = deleteField();
+        
         await setDoc(invoiceRef, updatePayload, { merge: true });
         toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
       } else {
-        const addPayload = { ...basePayload };
-
-        if (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') {
-          addPayload.poNumber = invoiceDataFromDialog.poNumber.trim();
-        }
-        if (invoiceDataFromDialog.dueDate) {
-          addPayload.dueDate = invoiceDataFromDialog.dueDate;
-        }
-        if (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') {
-          addPayload.paymentTerms = invoiceDataFromDialog.paymentTerms.trim();
-        }
-        if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
-          addPayload.notes = invoiceDataFromDialog.notes.trim();
-        }
-
-        const docRef = await addDoc(collection(db, 'invoices'), addPayload);
+        const docRef = await addDoc(collection(db, 'invoices'), payload);
         toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
@@ -757,3 +729,5 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
