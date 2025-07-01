@@ -33,6 +33,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+// Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -73,6 +74,10 @@ export default function OrdersPage() {
   const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
   const [packingSlipToPrint, setPackingSlipToPrint] = useState<any | null>(null);
   
+  // Removed Firebase Functions instance: const functionsInstance = getFunctions();
+  // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
+
+
   useEffect(() => {
     setIsClient(true);
     const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
