@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -81,13 +82,10 @@ export function InvoiceDialog({
     const currentTaxAmount = 0; // Assuming no tax for now
     const currentTotal = parseFloat((currentSubtotal + currentTaxAmount).toFixed(2));
 
-    // Payments are now managed by InvoiceForm and passed in formDataFromForm.payments
-    // These payments have dates as ISO strings, matching the Payment type.
     const finalPayments: Payment[] = formDataFromForm.payments || [];
-
     const roundedTotalAmountPaid = parseFloat(finalPayments.reduce((acc, p) => acc + p.amount, 0).toFixed(2));
     const roundedBalanceDue = parseFloat((currentTotal - roundedTotalAmountPaid).toFixed(2));
-    const EPSILON = 0.005; // Half a cent
+    const EPSILON = 0.005;
 
     let determinedStatus: Invoice['status'];
     if (formDataFromForm.status === 'Voided') {
@@ -102,26 +100,37 @@ export function InvoiceDialog({
       determinedStatus = formDataFromForm.status;
     }
 
-    const invoiceToSave: Invoice = {
+    const invoiceToSave: Partial<Invoice> & Pick<Invoice, 'id' | 'invoiceNumber' | 'customerId' | 'customerName' | 'date' | 'status' | 'lineItems' | 'subtotal' | 'taxAmount' | 'total' | 'payments' | 'amountPaid' | 'balanceDue'> = {
       id: invoice?.id || initialData?.id || formDataFromForm.id || crypto.randomUUID(),
       invoiceNumber: formDataFromForm.invoiceNumber,
       customerId: formDataFromForm.customerId,
       customerName: customerName,
       date: formDataFromForm.date.toISOString(),
-      dueDate: formDataFromForm.dueDate?.toISOString(),
       status: determinedStatus,
-      poNumber: formDataFromForm.poNumber,
       lineItems: lineItems,
       subtotal: currentSubtotal,
       taxAmount: currentTaxAmount,
       total: currentTotal,
-      paymentTerms: formDataFromForm.paymentTerms,
-      notes: formDataFromForm.notes,
-      payments: finalPayments, // Use the payments list from the form
+      payments: finalPayments,
       amountPaid: roundedTotalAmountPaid,
       balanceDue: roundedBalanceDue,
     };
-    onSave(invoiceToSave);
+    
+    // Conditionally add optional fields to prevent 'undefined' values
+    if (formDataFromForm.dueDate) {
+      invoiceToSave.dueDate = formDataFromForm.dueDate.toISOString();
+    }
+    if (formDataFromForm.poNumber) {
+      invoiceToSave.poNumber = formDataFromForm.poNumber;
+    }
+    if (formDataFromForm.paymentTerms) {
+      invoiceToSave.paymentTerms = formDataFromForm.paymentTerms;
+    }
+    if (formDataFromForm.notes) {
+      invoiceToSave.notes = formDataFromForm.notes;
+    }
+
+    onSave(invoiceToSave as Invoice);
     setOpen(false);
   };
 
