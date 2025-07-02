@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES, INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
+import { Input } from '@/components/ui/input';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -21,6 +22,7 @@ export default function CustomersPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
 
   useEffect(() => {
@@ -295,6 +297,24 @@ export default function CustomersPage() {
     reader.readAsText(file);
   };
 
+  const filteredCustomers = useMemo(() => {
+    if (!searchTerm) {
+      return customers;
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return customers.filter(customer => {
+      const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
+      const companyName = customer.companyName?.toLowerCase() || '';
+      const phone = customer.phone?.toLowerCase() || '';
+      
+      return (
+        fullName.includes(lowercasedFilter) ||
+        companyName.includes(lowercasedFilter) ||
+        phone.includes(lowercasedFilter)
+      );
+    });
+  }, [customers, searchTerm]);
+
   if ((isLoading || isLoadingProducts) && customers.length === 0) {
     return (
       <PageHeader title="Customers" description="Loading customer database...">
@@ -333,15 +353,25 @@ export default function CustomersPage() {
           />
         </div>
       </PageHeader>
+      
+      <div className="mb-4">
+        <Input
+          placeholder="Search by name, company, or phone..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
       <CustomerTable
-        customers={customers}
+        customers={filteredCustomers}
         onSave={handleSaveCustomer}
         onDelete={handleDeleteCustomer}
         productCategories={productCategories}
       />
-       {customers.length === 0 && !isLoading && !isLoadingProducts && (
+       {filteredCustomers.length === 0 && !isLoading && !isLoadingProducts && (
         <p className="p-4 text-center text-muted-foreground">
-          No customers found. Try adding one or importing a CSV.
+          {searchTerm ? "No customers match your search." : "No customers found. Try adding one or importing a CSV."}
         </p>
       )}
     </>
