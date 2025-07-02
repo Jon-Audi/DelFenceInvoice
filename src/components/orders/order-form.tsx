@@ -176,8 +176,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             readyForPickUpDate: initialData.readyForPickUpDate ? (initialData.readyForPickUpDate instanceof Date ? initialData.readyForPickUpDate : new Date(initialData.readyForPickUpDate)) : undefined,
             pickedUpDate: initialData.pickedUpDate ? (initialData.pickedUpDate instanceof Date ? initialData.pickedUpDate : new Date(initialData.pickedUpDate)) : undefined,
             lineItems: (initialData.lineItems || [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }]).map(li => ({ ...li, id: li.id || crypto.randomUUID() })),
-            notes: initialData.notes || '',
-            payments: initialData.payments?.map(p => ({...p, date: p.date instanceof Date ? p.date : parseISO(p.date)})) || [],
+            notes: initialData.notes || '', // Cast to any because initialData might have date strings
+            payments: initialData.payments?.map((p: any) => ({...p, date: typeof p.date === 'string' ? parseISO(p.date) : p.date})) || [],
         };
         initialLocalPayments = defaultValues.payments || [];
     } else {

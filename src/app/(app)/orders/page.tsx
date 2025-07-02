@@ -105,10 +105,6 @@ export default function OrdersPage() {
           expectedDeliveryDate: undefined,
           readyForPickUpDate: undefined,
           pickedUpDate: undefined,
-          newPaymentAmount: undefined,
-          newPaymentDate: undefined,
-          newPaymentMethod: undefined,
-          newPaymentNotes: '',
         };
         setConversionOrderData(newOrderData);
       } catch (error) {

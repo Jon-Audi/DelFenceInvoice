@@ -90,6 +90,9 @@ export const MOCK_ORDERS: Order[] = [
     orderState: 'Open',
     readyForPickUpDate: undefined,
     pickedUpDate: undefined,
+    payments: [],
+    amountPaid: 0,
+    balanceDue: 0,
   },
   {
     id: 'ord_2',
@@ -104,6 +107,9 @@ export const MOCK_ORDERS: Order[] = [
     orderState: 'Closed',
     readyForPickUpDate: '2024-07-28T09:00:00.000Z',
     pickedUpDate: undefined,
+    payments: [],
+    amountPaid: 0,
+    balanceDue: 0,
   },
 ];
 
