@@ -13,6 +13,7 @@ import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES, INITIAL_PRODUCT_CATEGORIES } from 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
+import { PrintableCustomerList } from '@/components/customers/printable-customer-list';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -23,6 +24,7 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const printRef = useRef<HTMLDivElement>(null);
 
 
   useEffect(() => {
@@ -89,7 +91,11 @@ export default function CustomersPage() {
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
         });
       } else {
-        const docRef = await addDoc(collection(db, 'customers'), customerData);
+        const dataToSave = {
+          ...customerData,
+          createdAt: new Date().toISOString(),
+        };
+        const docRef = await addDoc(collection(db, 'customers'), dataToSave);
         toast({
           title: "Customer Added",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added with ID: ${docRef.id}.`,
@@ -207,7 +213,8 @@ export default function CustomersPage() {
           name: `${firstName} ${lastName}` 
         }] : [],
         customerType: CUSTOMER_TYPES[0], 
-        specificMarkups: [], // Initialize with empty specific markups
+        specificMarkups: [],
+        createdAt: new Date().toISOString(),
       };
 
       if (customerDataFromCsv.companyname) {
@@ -315,6 +322,41 @@ export default function CustomersPage() {
     });
   }, [customers, searchTerm]);
 
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printContents = printRef.current.innerHTML;
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(`
+          <html>
+            <head>
+              <title>Customer List</title>
+              <style>
+                body { font-family: sans-serif; margin: 2rem; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                h1 { text-align: center; }
+              </style>
+            </head>
+            <body>
+              ${printContents}
+            </body>
+          </html>
+        `);
+        win.document.close();
+        win.focus();
+        setTimeout(() => {
+          win.print();
+          win.close();
+        }, 250);
+      } else {
+        toast({ title: "Print Error", description: "Could not open print window. Please check your browser's popup blocker.", variant: "destructive" });
+      }
+    }
+  };
+
+
   if ((isLoading || isLoadingProducts) && customers.length === 0) {
     return (
       <PageHeader title="Customers" description="Loading customer database...">
@@ -340,6 +382,10 @@ export default function CustomersPage() {
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading || isLoadingProducts}>
             <Icon name="Upload" className="mr-2 h-4 w-4" />
             Import CSV
+          </Button>
+          <Button variant="outline" onClick={handlePrint} disabled={isLoading || isLoadingProducts}>
+            <Icon name="Printer" className="mr-2 h-4 w-4" />
+            Print List
           </Button>
           <CustomerDialog
             triggerButton={
@@ -374,6 +420,10 @@ export default function CustomersPage() {
           {searchTerm ? "No customers match your search." : "No customers found. Try adding one or importing a CSV."}
         </p>
       )}
+
+      <div style={{ display: 'none' }}>
+        <PrintableCustomerList ref={printRef} customers={filteredCustomers} />
+      </div>
     </>
   );
 }

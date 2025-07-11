@@ -52,6 +52,7 @@ export interface Customer {
   phone: string;
   emailContacts: EmailContact[];
   customerType: CustomerType;
+  createdAt?: string; // ISO Date String
   address?: {
     street: string;
     city: string;
@@ -65,7 +66,7 @@ export interface Customer {
 export interface LineItem {
   id: string;
   productId?: string; // Optional for non-stock items
-  productName: string; // Manually entered for non-stock, or denormalized from product
+  productName: string; // Manually entered for non-stock, or from product
   quantity: number;
   unitPrice: number; // Manually entered for non-stock, or from product/override for stock
   total: number;

@@ -43,6 +43,15 @@ interface CustomerTableProps {
 export function CustomerTable({ customers, onSave, onDelete, productCategories }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
 
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
   return (
     <>
       <div className="rounded-lg border shadow-sm">
@@ -54,6 +63,7 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
               <TableHead>Type</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Primary Email</TableHead>
+              <TableHead>Date Added</TableHead>
               <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -65,6 +75,7 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
                 <TableCell><Badge variant="outline">{customer.customerType}</Badge></TableCell>
                 <TableCell>{customer.phone}</TableCell>
                 <TableCell>{customer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || customer.emailContacts[0]?.email || 'N/A'}</TableCell>
+                <TableCell>{formatDate(customer.createdAt)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
