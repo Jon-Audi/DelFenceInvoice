@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
 import { PrintableCustomerList } from '@/components/customers/printable-customer-list';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, isValid } from 'date-fns';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -24,6 +25,7 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'thisWeek' | 'thisMonth' | 'lastMonth'>('all');
   const printRef = useRef<HTMLDivElement>(null);
 
 
@@ -305,11 +307,36 @@ export default function CustomersPage() {
   };
 
   const filteredCustomers = useMemo(() => {
+    let customersToFilter = customers;
+
+    // Date filtering
+    if (dateFilter !== 'all') {
+        const now = new Date();
+        let interval: Interval;
+
+        if (dateFilter === 'thisWeek') {
+            interval = { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+        } else if (dateFilter === 'thisMonth') {
+            interval = { start: startOfMonth(now), end: endOfMonth(now) };
+        } else { // lastMonth
+            const lastMonthDate = subMonths(now, 1);
+            interval = { start: startOfMonth(lastMonthDate), end: endOfMonth(lastMonthDate) };
+        }
+
+        customersToFilter = customersToFilter.filter(customer => {
+            if (!customer.createdAt) return false;
+            const createdAtDate = new Date(customer.createdAt);
+            if (!isValid(createdAtDate)) return false;
+            return isWithinInterval(createdAtDate, interval);
+        });
+    }
+
+    // Search term filtering
     if (!searchTerm) {
-      return customers;
+      return customersToFilter;
     }
     const lowercasedFilter = searchTerm.toLowerCase();
-    return customers.filter(customer => {
+    return customersToFilter.filter(customer => {
       const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
       const companyName = customer.companyName?.toLowerCase() || '';
       const phone = customer.phone?.toLowerCase() || '';
@@ -320,7 +347,7 @@ export default function CustomersPage() {
         phone.includes(lowercasedFilter)
       );
     });
-  }, [customers, searchTerm]);
+  }, [customers, searchTerm, dateFilter]);
 
   const handlePrint = () => {
     if (printRef.current) {
@@ -400,13 +427,19 @@ export default function CustomersPage() {
         </div>
       </PageHeader>
       
-      <div className="mb-4">
+      <div className="flex flex-wrap gap-4 mb-4">
         <Input
           placeholder="Search by name, company, or phone..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
         />
+         <div className="flex items-center gap-2">
+            <Button variant={dateFilter === 'all' ? "default" : "outline"} onClick={() => setDateFilter('all')}>All Time</Button>
+            <Button variant={dateFilter === 'thisWeek' ? "default" : "outline"} onClick={() => setDateFilter('thisWeek')}>This Week</Button>
+            <Button variant={dateFilter === 'thisMonth' ? "default" : "outline"} onClick={() => setDateFilter('thisMonth')}>This Month</Button>
+            <Button variant={dateFilter === 'lastMonth' ? "default" : "outline"} onClick={() => setDateFilter('lastMonth')}>Last Month</Button>
+        </div>
       </div>
 
       <CustomerTable
@@ -417,7 +450,7 @@ export default function CustomersPage() {
       />
        {filteredCustomers.length === 0 && !isLoading && !isLoadingProducts && (
         <p className="p-4 text-center text-muted-foreground">
-          {searchTerm ? "No customers match your search." : "No customers found. Try adding one or importing a CSV."}
+          {searchTerm || dateFilter !== 'all' ? "No customers match your search criteria." : "No customers found. Try adding one or importing a CSV."}
         </p>
       )}
 
@@ -427,3 +460,6 @@ export default function CustomersPage() {
     </>
   );
 }
+
+
+    
