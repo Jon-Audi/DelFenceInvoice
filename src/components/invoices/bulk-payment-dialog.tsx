@@ -12,7 +12,7 @@ import { PAYMENT_METHODS } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Icon } from '@/components/icons';
+import { Icon } from '@/components/ui/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -66,6 +66,7 @@ interface BulkPaymentDialogProps {
 export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: BulkPaymentDialogProps) {
   const [outstandingInvoices, setOutstandingInvoices] = useState<Invoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+  const [isCustomerPopoverOpen, setIsCustomerPopoverOpen] = useState(false);
 
   const form = useForm<BulkPaymentFormData>({
     resolver: zodResolver(bulkPaymentSchema),
@@ -86,6 +87,7 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
     const fetchInvoices = async () => {
       if (!selectedCustomerId) {
         setOutstandingInvoices([]);
+        form.setValue('selectedInvoiceIds', []);
         return;
       }
       setIsLoadingInvoices(true);
@@ -94,14 +96,15 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
         const q = query(
           invoicesRef,
           where('customerId', '==', selectedCustomerId),
-          where('status', 'in', ['Sent', 'Partially Paid']),
+          where('status', 'in', ['Sent', 'Partially Paid', 'Draft']), // Included Draft
+          where('balanceDue', '>', 0),
           orderBy('date', 'asc')
         );
         const snapshot = await getDocs(q);
         const fetchedInvoices: Invoice[] = [];
         snapshot.forEach((doc) => fetchedInvoices.push({ id: doc.id, ...doc.data() } as Invoice));
         setOutstandingInvoices(fetchedInvoices);
-        form.setValue('selectedInvoiceIds', fetchedInvoices.map(inv => inv.id));
+        form.setValue('selectedInvoiceIds', fetchedInvoices.map(inv => inv.id!));
       } catch (error) {
         console.error('Error fetching outstanding invoices:', error);
         setOutstandingInvoices([]);
@@ -115,7 +118,7 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
 
   const totalBalanceDue = useMemo(() => {
     return outstandingInvoices
-        .filter(inv => selectedInvoiceIds.includes(inv.id))
+        .filter(inv => selectedInvoiceIds.includes(inv.id!))
         .reduce((sum, inv) => sum + (inv.balanceDue || 0), 0);
   }, [outstandingInvoices, selectedInvoiceIds]);
 
@@ -131,7 +134,7 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
   };
   
   const handleSelectAll = (checked: boolean) => {
-    form.setValue('selectedInvoiceIds', checked ? outstandingInvoices.map(inv => inv.id) : []);
+    form.setValue('selectedInvoiceIds', checked ? outstandingInvoices.map(inv => inv.id!) : []);
   };
 
   const isAllSelected = outstandingInvoices.length > 0 && selectedInvoiceIds.length === outstandingInvoices.length;
@@ -149,22 +152,50 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
               control={form.control}
               name="customerId"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="flex flex-col">
                   <FormLabel>Customer</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a customer" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.companyName || `${c.firstName} ${c.lastName}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                   <Popover open={isCustomerPopoverOpen} onOpenChange={setIsCustomerPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                        >
+                          {field.value
+                            ? customers.find((c) => c.id === field.value)?.companyName ||
+                              `${customers.find((c) => c.id === field.value)?.firstName} ${
+                                customers.find((c) => c.id === field.value)?.lastName
+                              }`
+                            : "Select a customer"}
+                          <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search customer..." />
+                        <CommandList>
+                          <CommandEmpty>No customer found.</CommandEmpty>
+                          <CommandGroup>
+                            {customers.map((customer) => (
+                              <CommandItem
+                                value={customer.companyName || `${customer.firstName} ${customer.lastName}`}
+                                key={customer.id}
+                                onSelect={() => {
+                                  form.setValue("customerId", customer.id);
+                                  setIsCustomerPopoverOpen(false);
+                                }}
+                              >
+                                <Icon name="Check" className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")} />
+                                {customer.companyName || `${customer.firstName} ${customer.lastName}`}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
@@ -214,10 +245,10 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
                             <TableRow key={invoice.id}>
                               <TableCell>
                                 <Checkbox
-                                  checked={selectedInvoiceIds.includes(invoice.id)}
+                                  checked={selectedInvoiceIds.includes(invoice.id!)}
                                   onCheckedChange={(checked) => {
                                     const newIds = checked
-                                      ? [...selectedInvoiceIds, invoice.id]
+                                      ? [...selectedInvoiceIds, invoice.id!]
                                       : selectedInvoiceIds.filter((id) => id !== invoice.id);
                                     form.setValue('selectedInvoiceIds', newIds);
                                   }}
@@ -252,3 +283,4 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
     </Dialog>
   );
 }
+
