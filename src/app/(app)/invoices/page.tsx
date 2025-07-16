@@ -29,10 +29,11 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
+import { BulkPaymentDialog } from '@/components/invoices/bulk-payment-dialog';
 import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -72,6 +73,7 @@ export default function InvoicesPage() {
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
   
+  const [isBulkPaymentDialogOpen, setIsBulkPaymentDialogOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -267,6 +269,76 @@ export default function InvoicesPage() {
     if (isConvertingInvoice) {
         setIsConvertingInvoice(false);
         setConversionInvoiceData(null);
+    }
+  };
+
+  const handleBulkPaymentSave = async (
+    customerId: string,
+    paymentDetails: Omit<Payment, 'id' | 'amount'> & { amount: number },
+    invoiceIdsToPay: string[]
+  ) => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        let remainingPaymentAmount = paymentDetails.amount;
+  
+        const invoicesRef = collection(db, 'invoices');
+        const q = query(invoicesRef, 
+                        where('customerId', '==', customerId), 
+                        where(doc.path, 'in', invoiceIdsToPay),
+                        orderBy('date', 'asc'));
+  
+        const snapshot = await getDocs(q);
+  
+        for (const invoiceDoc of snapshot.docs) {
+          if (remainingPaymentAmount <= 0) break;
+  
+          const invoice = invoiceDoc.data() as Invoice;
+          const balanceDue = invoice.balanceDue || 0;
+  
+          if (balanceDue > 0) {
+            const amountToApply = Math.min(remainingPaymentAmount, balanceDue);
+            const newPayment: Payment = {
+              id: crypto.randomUUID(),
+              date: paymentDetails.date,
+              amount: amountToApply,
+              method: paymentDetails.method,
+              notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment of $${paymentDetails.amount.toFixed(2)})` : `Applied from bulk payment of $${paymentDetails.amount.toFixed(2)}`,
+            };
+  
+            const newAmountPaid = (invoice.amountPaid || 0) + amountToApply;
+            const newBalanceDue = invoice.total - newAmountPaid;
+            const newStatus = newBalanceDue <= 0.005 ? 'Paid' : 'Partially Paid';
+  
+            transaction.update(invoiceDoc.ref, {
+              payments: [...(invoice.payments || []), newPayment],
+              amountPaid: newAmountPaid,
+              balanceDue: newBalanceDue,
+              status: newStatus,
+            });
+  
+            remainingPaymentAmount -= amountToApply;
+          }
+        }
+  
+        if (remainingPaymentAmount > 0.01) { // Check for unapplied amount
+          // This will rollback the transaction
+          throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
+        }
+      });
+  
+      toast({
+        title: "Bulk Payment Successful",
+        description: `Payment of $${paymentDetails.amount.toFixed(2)} applied successfully.`,
+      });
+      setIsBulkPaymentDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error during bulk payment:", error);
+      toast({
+        title: "Bulk Payment Failed",
+        description: error.message || "Could not apply payments. The transaction was rolled back.",
+        variant: "destructive",
+        duration: 10000,
+      });
     }
   };
 
@@ -553,19 +625,32 @@ export default function InvoicesPage() {
   return (
     <>
       <PageHeader title="Invoices" description="Create and manage customer invoices.">
-        <InvoiceDialog
-            triggerButton={
-              <Button>
-                <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
-                New Invoice
-              </Button>
-            }
-            onSave={handleSaveInvoice}
-            customers={customers}
-            products={products}
-            productCategories={stableProductCategories}
-          />
+        <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setIsBulkPaymentDialogOpen(true)} disabled={isLoadingCustomers}>
+                <Icon name="ClipboardList" className="mr-2 h-4 w-4" />
+                Record Bulk Payment
+            </Button>
+            <InvoiceDialog
+                triggerButton={
+                  <Button>
+                    <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+                    New Invoice
+                  </Button>
+                }
+                onSave={handleSaveInvoice}
+                customers={customers}
+                products={products}
+                productCategories={stableProductCategories}
+            />
+        </div>
       </PageHeader>
+
+      <BulkPaymentDialog
+        isOpen={isBulkPaymentDialogOpen}
+        onOpenChange={setIsBulkPaymentDialogOpen}
+        customers={customers}
+        onSave={handleBulkPaymentSave}
+      />
 
       {isConvertingInvoice && conversionInvoiceData && (
         <InvoiceDialog
