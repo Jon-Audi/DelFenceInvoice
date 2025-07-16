@@ -24,16 +24,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact, Payment } from '@/types';
+import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact, Payment, BulkPaymentReceiptData } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentData, Timestamp } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
 import { BulkPaymentDialog } from '@/components/invoices/bulk-payment-dialog';
+import { PrintableBulkPaymentReceipt } from '@/components/invoices/printable-bulk-payment-receipt';
+import { BulkPaymentToastAction } from '@/components/invoices/bulk-payment-toast-action';
 import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -72,6 +74,7 @@ export default function InvoicesPage() {
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
+  const [bulkPaymentReceiptToPrint, setBulkPaymentReceiptToPrint] = useState<BulkPaymentReceiptData | null>(null);
   
   const [isBulkPaymentDialogOpen, setIsBulkPaymentDialogOpen] = useState(false);
 
@@ -277,15 +280,17 @@ export default function InvoicesPage() {
     paymentDetails: Omit<Payment, 'id' | 'amount'> & { amount: number },
     invoiceIdsToPay: string[]
   ) => {
+    let affectedInvoicesData: { invoiceNumber: string; amountApplied: number }[] = [];
+
     try {
       await runTransaction(db, async (transaction) => {
         let remainingPaymentAmount = paymentDetails.amount;
+        affectedInvoicesData = []; // Reset for this transaction attempt
   
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
-                        where('customerId', '==', customerId), 
-                        where(doc.path, 'in', invoiceIdsToPay),
-                        orderBy('date', 'asc'));
+                        where(doc.id, 'in', invoiceIdsToPay),
+                        orderBy('date', 'asc')); // Note: customerId check is inherently done by selected invoices
   
         const snapshot = await getDocs(q);
   
@@ -293,6 +298,9 @@ export default function InvoicesPage() {
           if (remainingPaymentAmount <= 0) break;
   
           const invoice = invoiceDoc.data() as Invoice;
+          // Ensure we're only paying for invoices belonging to the selected customer
+          if (invoice.customerId !== customerId) continue; 
+
           const balanceDue = invoice.balanceDue || 0;
   
           if (balanceDue > 0) {
@@ -302,7 +310,7 @@ export default function InvoicesPage() {
               date: paymentDetails.date,
               amount: amountToApply,
               method: paymentDetails.method,
-              notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment of $${paymentDetails.amount.toFixed(2)})` : `Applied from bulk payment of $${paymentDetails.amount.toFixed(2)}`,
+              notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment)` : `Bulk payment application`,
             };
   
             const newAmountPaid = (invoice.amountPaid || 0) + amountToApply;
@@ -315,20 +323,30 @@ export default function InvoicesPage() {
               balanceDue: newBalanceDue,
               status: newStatus,
             });
-  
+            
+            affectedInvoicesData.push({ invoiceNumber: invoice.invoiceNumber, amountApplied: amountToApply });
             remainingPaymentAmount -= amountToApply;
           }
         }
   
         if (remainingPaymentAmount > 0.01) { // Check for unapplied amount
-          // This will rollback the transaction
           throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
         }
       });
   
+      const customer = customers.find(c => c.id === customerId);
+      const receiptData: BulkPaymentReceiptData = {
+        paymentDetails: { ...paymentDetails, id: crypto.randomUUID() },
+        customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'N/A',
+        affectedInvoices: affectedInvoicesData,
+        companySettings: (await fetchCompanySettings())!,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      };
+
       toast({
         title: "Bulk Payment Successful",
         description: `Payment of $${paymentDetails.amount.toFixed(2)} applied successfully.`,
+        action: <BulkPaymentToastAction onPrint={() => handlePrepareAndPrintBulkReceipt(receiptData)} />,
       });
       setIsBulkPaymentDialogOpen(false);
     } catch (error: any) {
@@ -341,6 +359,32 @@ export default function InvoicesPage() {
       });
     }
   };
+
+  const handlePrepareAndPrintBulkReceipt = (receiptData: BulkPaymentReceiptData) => {
+    setBulkPaymentReceiptToPrint(receiptData);
+    // Use timeout to allow state to update before triggering print
+    setTimeout(() => {
+        if (printRef.current) {
+            const printContents = printRef.current.innerHTML;
+            const win = window.open('', '_blank');
+            if (win) {
+              win.document.write('<html><head><title>Print Bulk Payment Receipt</title>');
+              win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+              win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+              win.document.write('</head><body>');
+              win.document.write(printContents);
+              win.document.write('</body></html>');
+              win.document.close();
+              win.focus();
+              setTimeout(() => { win.print(); win.close(); }, 750);
+            } else {
+              toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+            }
+          }
+          setBulkPaymentReceiptToPrint(null); // Clear after printing
+    }, 100);
+  };
+
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     try {
@@ -779,6 +823,7 @@ export default function InvoicesPage() {
       <div style={{ display: 'none' }}>
         {invoiceToPrint && <PrintableInvoice ref={printRef} {...invoiceToPrint} />}
         {packingSlipToPrintForInvoice && <PrintableInvoicePackingSlip ref={printRef} {...packingSlipToPrintForInvoice} />}
+        {bulkPaymentReceiptToPrint && <PrintableBulkPaymentReceipt ref={printRef} receiptData={bulkPaymentReceiptToPrint} />}
       </div>
 
       {invoiceForViewingItems && (

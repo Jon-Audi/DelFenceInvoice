@@ -206,6 +206,18 @@ export interface WeeklySummaryReportItem {
   totalInvoices: number;
 }
 
+export interface BulkPaymentReceiptData {
+  paymentDetails: Payment;
+  customerName: string;
+  affectedInvoices: {
+    invoiceNumber: string;
+    amountApplied: number;
+  }[];
+  companySettings: CompanySettings;
+  logoUrl?: string;
+}
+
+
 // Ensure Invoice type in initialData for InvoiceForm expects Payment[] with string dates
 export type InvoiceForFormInitialData = Omit<Invoice, 'payments'> & {
   payments?: (Omit<Payment, 'date'> & { date: string | Date })[];
