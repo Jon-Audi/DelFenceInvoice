@@ -673,8 +673,10 @@ export default function ProductsPage() {
   
     setIsLoading(true);
     try {
-      const productRef = doc(db, 'products', productForStockUpdate.id);
-      await setDoc(productRef, { quantityInStock: newQuantity }, { merge: true });
+      await runTransaction(db, async (transaction) => {
+          const productRef = doc(db, 'products', productForStockUpdate.id);
+          transaction.update(productRef, { quantityInStock: newQuantity });
+      });
       toast({
         title: "Stock Updated",
         description: `Stock for ${productForStockUpdate.name} has been set to ${newQuantity}.`
