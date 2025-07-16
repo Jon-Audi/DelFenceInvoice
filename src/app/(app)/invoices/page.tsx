@@ -29,7 +29,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentData, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentData, Timestamp, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -289,12 +289,18 @@ export default function InvoicesPage() {
   
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
-                        where(doc.id, 'in', invoiceIdsToPay),
-                        orderBy('date', 'asc')); // Note: customerId check is inherently done by selected invoices
+                        where(documentId(), 'in', invoiceIdsToPay));
   
         const snapshot = await getDocs(q);
+        
+        // Sort documents by date client-side as `orderBy` is complex with `in` filter on documentId
+        const sortedDocs = snapshot.docs.sort((a,b) => {
+            const dateA = new Date(a.data().date).getTime();
+            const dateB = new Date(b.data().date).getTime();
+            return dateA - dateB;
+        });
   
-        for (const invoiceDoc of snapshot.docs) {
+        for (const invoiceDoc of sortedDocs) {
           if (remainingPaymentAmount <= 0) break;
   
           const invoice = invoiceDoc.data() as Invoice;
