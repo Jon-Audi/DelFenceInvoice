@@ -14,9 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { PrintableInventorySheet } from '@/components/inventory/printable-inventory-sheet';
+import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; // Import the dialog
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [productCategories, setProductCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
@@ -24,17 +26,25 @@ export default function InventoryPage() {
   const [isStockUpdateDialogOpen, setIsStockUpdateDialogOpen] = useState(false);
   const [productForStockUpdate, setProductForStockUpdate] = useState<Product | null>(null);
   const [newStockQuantity, setNewStockQuantity] = useState<string>('');
+  
+  const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
+  const [productsForPrinting, setProductsForPrinting] = useState<Product[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const fetchedProducts: Product[] = [];
+      const categoriesFromDb = new Set<string>();
       snapshot.forEach((docSnap) => {
         const productData = docSnap.data() as Omit<Product, 'id'>;
         fetchedProducts.push({ ...productData, id: docSnap.id });
+        if (productData.category) {
+            categoriesFromDb.add(productData.category);
+        }
       });
       setProducts(fetchedProducts.sort((a,b) => a.name.localeCompare(b.name)));
+      setProductCategories(Array.from(categoriesFromDb).sort());
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching products for inventory:", error);
@@ -76,7 +86,7 @@ export default function InventoryPage() {
       return;
     }
   
-    setIsLoading(true); // You might want a more granular loading state for this operation
+    setIsLoading(true); 
     try {
       const productRef = doc(db, 'products', productForStockUpdate.id);
       await setDoc(productRef, { quantityInStock: newQuantity }, { merge: true });
@@ -94,38 +104,62 @@ export default function InventoryPage() {
     }
   };
   
-  const handlePrint = () => {
-    if (printRef.current) {
-      const printContents = printRef.current.innerHTML;
-      const win = window.open('', '_blank');
-      if (win) {
-        win.document.write(`
-          <html>
-            <head>
-              <title>Inventory Count Sheet</title>
-              <style>
-                body { font-family: sans-serif; margin: 2rem; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-                h1 { text-align: center; }
-              </style>
-            </head>
-            <body>
-              ${printContents}
-            </body>
-          </html>
-        `);
-        win.document.close();
-        win.focus();
-        setTimeout(() => {
-          win.print();
-          win.close();
-        }, 250);
-      } else {
-        toast({ title: "Print Error", description: "Could not open print window. Please check your browser's popup blocker.", variant: "destructive" });
-      }
+  const handlePrintRequest = (selectedCategories: string[]) => {
+     if (selectedCategories.length === 0) {
+      toast({ title: "No Categories Selected", description: "Please select at least one category to print.", variant: "default" });
+      setIsSelectCategoriesDialogOpen(false);
+      return;
     }
+    
+    const productsToPrint = products.filter(p => selectedCategories.includes(p.category));
+
+    if (productsToPrint.length === 0) {
+      toast({ title: "No Products Found", description: "No products in the selected categories to print.", variant: "default" });
+      setIsSelectCategoriesDialogOpen(false);
+      return;
+    }
+    
+    setProductsForPrinting(productsToPrint);
+
+    setTimeout(() => {
+      if (printRef.current) {
+        const printContents = printRef.current.innerHTML;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(`
+            <html>
+              <head>
+                <title>Inventory Count Sheet</title>
+                <style>
+                  body { font-family: sans-serif; margin: 2rem; }
+                  table { width: 100%; border-collapse: collapse; }
+                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                  th { background-color: #f2f2f2; }
+                  h1, h2 { text-align: center; }
+                  @page { size: auto; margin: 25mm; }
+                  section { page-break-after: always; }
+                  section:last-child { page-break-after: avoid; }
+                </style>
+              </head>
+              <body>
+                ${printContents}
+              </body>
+            </html>
+          `);
+          win.document.close();
+          win.focus();
+          setTimeout(() => {
+            win.print();
+            win.close();
+          }, 250);
+        } else {
+          toast({ title: "Print Error", description: "Could not open print window. Please check your browser's popup blocker.", variant: "destructive" });
+        }
+      }
+      setProductsForPrinting(null);
+    }, 100);
+
+    setIsSelectCategoriesDialogOpen(false);
   };
 
   if (isLoading && products.length === 0) {
@@ -141,7 +175,7 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader title="Inventory Management" description="View and update product stock levels.">
-        <Button variant="outline" onClick={handlePrint} disabled={isLoading || filteredProducts.length === 0}>
+        <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print Count Sheet
         </Button>
@@ -194,8 +228,17 @@ export default function InventoryPage() {
         </Dialog>
       )}
 
+      {isSelectCategoriesDialogOpen && (
+        <SelectCategoriesDialog
+          isOpen={isSelectCategoriesDialogOpen}
+          onOpenChange={setIsSelectCategoriesDialogOpen}
+          allCategories={productCategories}
+          onSubmit={handlePrintRequest}
+        />
+      )}
+
       <div style={{ display: 'none' }}>
-        <PrintableInventorySheet ref={printRef} products={filteredProducts} />
+        {productsForPrinting && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
       </div>
     </>
   );
