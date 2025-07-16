@@ -16,6 +16,7 @@ import { Icon } from '@/components/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
