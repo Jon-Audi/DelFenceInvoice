@@ -59,7 +59,8 @@ interface ProductTableProps {
   onAddNewCategory: (category: string) => void;
   isLoading: boolean;
   onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
-  onDeleteCategory: (categoryName: string) => void; // New prop
+  onDeleteCategory: (categoryName: string) => void;
+  onUpdateStock: (product: Product) => void; // New prop for updating stock
 }
 
 export function ProductTable({ 
@@ -70,7 +71,8 @@ export function ProductTable({
   onAddNewCategory,
   isLoading,
   onApplyCategoryMarkup,
-  onDeleteCategory // New prop
+  onDeleteCategory,
+  onUpdateStock,
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null); // Renamed to avoid conflict
@@ -195,6 +197,7 @@ export function ProductTable({
                         <TableHead className="text-right text-card-foreground/80">Cost</TableHead>
                         <TableHead className="text-right text-card-foreground/80">Price</TableHead>
                         <TableHead className="text-right text-card-foreground/80">Markup</TableHead>
+                        <TableHead className="text-right text-card-foreground/80">Qty in Stock</TableHead>
                         <TableHead className="w-[80px] text-center text-card-foreground/80">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -210,6 +213,7 @@ export function ProductTable({
                               ? `${product.markupPercentage.toFixed(2)}%`
                               : 'N/A'}
                           </TableCell>
+                           <TableCell className="text-right font-medium text-card-foreground/90">{product.quantityInStock ?? 0}</TableCell>
                           <TableCell className="text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -218,6 +222,10 @@ export function ProductTable({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => onUpdateStock(product)}>
+                                    <Icon name="PackageCheck" className="mr-2 h-4 w-4" />
+                                    Update Stock
+                                </DropdownMenuItem>
                                 <ProductDialog
                                   product={product}
                                   triggerButton={

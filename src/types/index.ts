@@ -29,6 +29,7 @@ export interface Product {
   cost: number;
   markupPercentage: number;
   description?: string;
+  quantityInStock?: number; // Added for inventory tracking
 }
 
 export interface EmailContact {

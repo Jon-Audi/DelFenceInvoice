@@ -12,12 +12,14 @@ import type { Product, CompanySettings, Customer } from '@/types';
 import { INITIAL_PRODUCT_CATEGORIES, ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth as firebaseAuthInstance } from '@/lib/firebase'; 
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch, query, where, getDocs, getDoc as getFirestoreDoc, runTransaction } from 'firebase/firestore';
 import { PrintablePriceSheet } from '@/components/products/printable-price-sheet';
 import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -37,6 +39,10 @@ export default function ProductsPage() {
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
   const [isCustomerSelectDialogOpen, setIsCustomerSelectDialogOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const [isStockUpdateDialogOpen, setIsStockUpdateDialogOpen] = useState(false);
+  const [productForStockUpdate, setProductForStockUpdate] = useState<Product | null>(null);
+  const [newStockQuantity, setNewStockQuantity] = useState<string>('');
 
   useEffect(() => {
     setIsLoading(true);
@@ -112,6 +118,7 @@ export default function ProductsPage() {
       cost: restOfProductData.cost,
       price: restOfProductData.price,
       markupPercentage: restOfProductData.markupPercentage,
+      quantityInStock: restOfProductData.quantityInStock || 0,
     };
 
     if (restOfProductData.description !== undefined) {
@@ -132,7 +139,7 @@ export default function ProductsPage() {
       setIsLoading(true);
       if (id && products.some(p => p.id === id)) {
         const productRef = doc(db, 'products', id);
-        await setDoc(productRef, dataForFirestore); 
+        await setDoc(productRef, dataForFirestore, { merge: true });
         toast({
           title: "Product Updated",
           description: `Product ${productToSave.name} has been updated.`,
@@ -410,7 +417,7 @@ export default function ProductsPage() {
             const batch = writeBatch(db);
             parsedProducts.forEach(productDataFromCsv => { 
               const newDocRef = doc(collection(db, 'products'));
-              const productToWrite: Partial<Product> = { ...productDataFromCsv };
+              const productToWrite: Partial<Product> = { ...productDataFromCsv, quantityInStock: 0 };
               if (productToWrite.description === undefined) {
                 delete productToWrite.description;
               }
@@ -449,7 +456,7 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
-    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'description'];
+    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'quantityInStock', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product =>
       headers.map(header => {
@@ -571,7 +578,6 @@ export default function ProductsPage() {
     if (settings) {
       let productsWithCorrectPrices = products;
       
-      // If a customer is selected for printing, calculate their specific prices
       if(customerForPrinting) {
         productsWithCorrectPrices = products.map(p => ({
           ...p,
@@ -584,11 +590,10 @@ export default function ProductsPage() {
       if (productsToPrint.length === 0) {
         toast({ title: "No Products in Selected Categories", description: "No products found in the chosen categories to print.", variant: "default" });
         setIsSelectCategoriesDialogOpen(false);
-        setCustomerForPrinting(null); // Reset customer
+        setCustomerForPrinting(null); 
         return;
       }
 
-      // Group the correctly priced and filtered products for the printable component
       const filteredGroupedProducts = new Map<string, Product[]>();
       selectedCategories.forEach(categoryName => {
         const categoryProducts = productsToPrint.filter(p => p.category === categoryName);
@@ -647,9 +652,42 @@ export default function ProductsPage() {
   };
   
   const handleOpenStandardPriceSheet = () => {
-    setCustomerForPrinting(null); // Ensure no customer is selected
+    setCustomerForPrinting(null);
     setIsSelectCategoriesDialogOpen(true);
   }
+
+  const handleOpenStockUpdateDialog = (product: Product) => {
+    setProductForStockUpdate(product);
+    setNewStockQuantity(String(product.quantityInStock || 0));
+    setIsStockUpdateDialogOpen(true);
+  };
+  
+  const handleUpdateStock = async () => {
+    if (!productForStockUpdate) return;
+  
+    const newQuantity = parseInt(newStockQuantity, 10);
+    if (isNaN(newQuantity) || newQuantity < 0) {
+      toast({ title: "Invalid Quantity", description: "Stock quantity must be a non-negative number.", variant: "destructive" });
+      return;
+    }
+  
+    setIsLoading(true);
+    try {
+      const productRef = doc(db, 'products', productForStockUpdate.id);
+      await setDoc(productRef, { quantityInStock: newQuantity }, { merge: true });
+      toast({
+        title: "Stock Updated",
+        description: `Stock for ${productForStockUpdate.name} has been set to ${newQuantity}.`
+      });
+      setIsStockUpdateDialogOpen(false);
+      setProductForStockUpdate(null);
+    } catch (error) {
+      console.error("Error updating stock:", error);
+      toast({ title: "Error", description: "Could not update stock quantity.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading && products.length === 0) { 
     return (
@@ -723,6 +761,7 @@ export default function ProductsPage() {
         isLoading={isLoading}
         onApplyCategoryMarkup={handleApplyCategoryMarkup}
         onDeleteCategory={handleDeleteCategory}
+        onUpdateStock={handleOpenStockUpdateDialog}
       />
        {groupedProducts.size === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
@@ -771,7 +810,31 @@ export default function ProductsPage() {
         />
       )}
 
-      {/* Hidden div for printing */}
+      {isStockUpdateDialogOpen && productForStockUpdate && (
+        <Dialog open={isStockUpdateDialogOpen} onOpenChange={setIsStockUpdateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Update Stock for: {productForStockUpdate.name}</DialogTitle>
+              <DialogDescription>Set the new quantity in stock for this product.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="stock-quantity">New Quantity</Label>
+              <Input
+                id="stock-quantity"
+                type="number"
+                value={newStockQuantity}
+                onChange={(e) => setNewStockQuantity(e.target.value)}
+                placeholder="Enter new stock count"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsStockUpdateDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleUpdateStock} disabled={isLoading}>Update Stock</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <div style={{ display: 'none' }}>
         {(productsForPrinting && companySettingsForPrinting) && (
           <PrintablePriceSheet
@@ -793,4 +856,3 @@ export default function ProductsPage() {
     </>
   );
 }
-

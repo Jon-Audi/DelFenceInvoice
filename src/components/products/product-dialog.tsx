@@ -26,7 +26,12 @@ export function ProductDialog({ product, triggerButton, onSave, productCategorie
 
   const handleSubmit = (data: Omit<Product, 'id'>) => {
     if (onSave) {
-      onSave({ ...data, id: product?.id || crypto.randomUUID() });
+      const productToSave: Product = {
+        ...product, // Carry over existing fields like id and quantityInStock
+        ...data,    // Overwrite with form data
+        id: product?.id || crypto.randomUUID(), // Ensure ID is present
+      };
+      onSave(productToSave);
     }
     setOpen(false); 
   };

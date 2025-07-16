@@ -14,7 +14,7 @@ import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact 
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField, runTransaction, writeBatch } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -33,7 +33,6 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-// Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -74,10 +73,6 @@ export default function OrdersPage() {
   const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
   const [packingSlipToPrint, setPackingSlipToPrint] = useState<any | null>(null);
   
-  // Removed Firebase Functions instance: const functionsInstance = getFunctions();
-  // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
-
-
   useEffect(() => {
     setIsClient(true);
     const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
@@ -105,6 +100,7 @@ export default function OrdersPage() {
           expectedDeliveryDate: undefined,
           readyForPickUpDate: undefined,
           pickedUpDate: undefined,
+          payments: [],
         };
         setConversionOrderData(newOrderData);
       } catch (error) {
@@ -200,46 +196,74 @@ export default function OrdersPage() {
   }, [products]);
 
   const handleSaveOrder = async (orderToSave: Order) => {
-    const { id, ...orderDataFromDialog } = orderToSave;
-
     try {
-      if (id && orders.some(o => o.id === id)) {
-        const orderRef = doc(db, 'orders', id);
-        const updatePayload: any = { ...orderDataFromDialog };
+        await runTransaction(db, async (transaction) => {
+            const { id, ...orderDataFromDialog } = orderToSave;
+            let originalOrder: Order | null = null;
+            if (id) {
+                const originalOrderRef = doc(db, 'orders', id);
+                const originalOrderSnap = await transaction.get(originalOrderRef);
+                if (originalOrderSnap.exists()) {
+                    originalOrder = { id, ...originalOrderSnap.data() } as Order;
+                }
+            }
+            
+            // Re-calculate inventory changes
+            const inventoryChanges = new Map<string, number>();
 
-        updatePayload.poNumber = (orderDataFromDialog.poNumber && orderDataFromDialog.poNumber.trim() !== '')
-                                  ? orderDataFromDialog.poNumber.trim()
-                                  : deleteField();
-        updatePayload.expectedDeliveryDate = orderDataFromDialog.expectedDeliveryDate ? orderDataFromDialog.expectedDeliveryDate : deleteField();
-        updatePayload.readyForPickUpDate = orderDataFromDialog.readyForPickUpDate ? orderDataFromDialog.readyForPickUpDate : deleteField();
-        updatePayload.pickedUpDate = orderDataFromDialog.pickedUpDate ? orderDataFromDialog.pickedUpDate : deleteField();
-        updatePayload.notes = (orderDataFromDialog.notes && orderDataFromDialog.notes.trim() !== '')
-                               ? orderDataFromDialog.notes.trim()
-                               : deleteField();
+            // If updating, revert previous inventory changes
+            if (originalOrder) {
+                originalOrder.lineItems.forEach(item => {
+                    if (item.productId && !item.isNonStock) {
+                        const change = item.isReturn ? -item.quantity : item.quantity;
+                        inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                    }
+                });
+            }
 
-        await setDoc(orderRef, updatePayload, { merge: true });
-        toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} has been updated.` });
-      } else {
-        const addPayload: any = { ...orderDataFromDialog };
+            // Apply new inventory changes
+            orderDataFromDialog.lineItems.forEach(item => {
+                if (item.productId && !item.isNonStock) {
+                    const change = item.isReturn ? item.quantity : -item.quantity;
+                    inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                }
+            });
 
-        if (!addPayload.poNumber || addPayload.poNumber.trim() === '') delete addPayload.poNumber;
-        if (!addPayload.expectedDeliveryDate) delete addPayload.expectedDeliveryDate;
-        if (!addPayload.readyForPickUpDate) delete addPayload.readyForPickUpDate;
-        if (!addPayload.pickedUpDate) delete addPayload.pickedUpDate;
-        if (!addPayload.notes || addPayload.notes.trim() === '') delete addPayload.notes;
+            // Update product quantities in transaction
+            for (const [productId, quantityChange] of inventoryChanges.entries()) {
+                if (quantityChange === 0) continue;
+                const productRef = doc(db, 'products', productId);
+                const productSnap = await transaction.get(productRef);
+                if (!productSnap.exists()) {
+                    throw new Error(`Product with ID ${productId} not found!`);
+                }
+                const currentStock = productSnap.data().quantityInStock || 0;
+                const newStock = currentStock + quantityChange;
+                transaction.update(productRef, { quantityInStock: newStock });
+            }
 
-        const docRef = await addDoc(collection(db, 'orders'), addPayload);
-        toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} has been added with ID: ${docRef.id}.` });
-      }
+            // Save the order document
+            if (id) {
+                const orderRef = doc(db, 'orders', id);
+                transaction.set(orderRef, orderDataFromDialog, { merge: true });
+                toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} and stock levels have been updated.` });
+            } else {
+                const orderRef = doc(collection(db, 'orders'));
+                transaction.set(orderRef, orderDataFromDialog);
+                toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} added and stock levels updated.` });
+            }
+        });
     } catch (error: any) {
-      console.error("Error saving order:", error);
-      toast({ title: "Error", description: `Could not save order: ${error.message}`, variant: "destructive" });
-    }
-    if (isConvertingOrder) {
-        setIsConvertingOrder(false);
-        setConversionOrderData(null);
+        console.error("Error saving order:", error);
+        toast({ title: "Error", description: `Could not save order: ${error.message}`, variant: "destructive" });
+    } finally {
+        if (isConvertingOrder) {
+            setIsConvertingOrder(false);
+            setConversionOrderData(null);
+        }
     }
   };
+
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
