@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Icon } from '@/components/icons';
 import type { Product } from '@/types';
@@ -13,6 +13,7 @@ import { InventoryTable } from '@/components/inventory/inventory-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { PrintableInventorySheet } from '@/components/inventory/printable-inventory-sheet';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -23,6 +24,7 @@ export default function InventoryPage() {
   const [isStockUpdateDialogOpen, setIsStockUpdateDialogOpen] = useState(false);
   const [productForStockUpdate, setProductForStockUpdate] = useState<Product | null>(null);
   const [newStockQuantity, setNewStockQuantity] = useState<string>('');
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -92,6 +94,40 @@ export default function InventoryPage() {
     }
   };
   
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printContents = printRef.current.innerHTML;
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(`
+          <html>
+            <head>
+              <title>Inventory Count Sheet</title>
+              <style>
+                body { font-family: sans-serif; margin: 2rem; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                h1 { text-align: center; }
+              </style>
+            </head>
+            <body>
+              ${printContents}
+            </body>
+          </html>
+        `);
+        win.document.close();
+        win.focus();
+        setTimeout(() => {
+          win.print();
+          win.close();
+        }, 250);
+      } else {
+        toast({ title: "Print Error", description: "Could not open print window. Please check your browser's popup blocker.", variant: "destructive" });
+      }
+    }
+  };
+
   if (isLoading && products.length === 0) {
     return (
       <PageHeader title="Inventory Management" description="Loading product inventory...">
@@ -105,7 +141,10 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader title="Inventory Management" description="View and update product stock levels.">
-        {/* Actions like bulk update could go here in the future */}
+        <Button variant="outline" onClick={handlePrint} disabled={isLoading || filteredProducts.length === 0}>
+            <Icon name="Printer" className="mr-2 h-4 w-4" />
+            Print Count Sheet
+        </Button>
       </PageHeader>
       
       <div className="mb-4">
@@ -154,6 +193,10 @@ export default function InventoryPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      <div style={{ display: 'none' }}>
+        <PrintableInventorySheet ref={printRef} products={filteredProducts} />
+      </div>
     </>
   );
 }
