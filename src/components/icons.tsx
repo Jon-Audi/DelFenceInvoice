@@ -40,6 +40,7 @@ import {
   Printer,
   Layers,
   PackageCheck,
+  ClipboardList,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -86,6 +87,7 @@ const iconComponents = {
   Printer,
   Layers,
   PackageCheck,
+  ClipboardList,
 };
 
 interface IconProps extends LucideProps {

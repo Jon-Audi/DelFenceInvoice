@@ -14,6 +14,7 @@ export const ALL_CATEGORIES_MARKUP_KEY = "__ALL_CATEGORIES__";
 export const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { href: '/products', label: 'Products', icon: 'Package' },
+  { href: '/inventory', label: 'Inventory', icon: 'ClipboardList' },
   { href: '/customers', label: 'Customers', icon: 'Users' },
   { href: '/estimates', label: 'Estimates', icon: 'FileText' },
   { href: '/orders', label: 'Orders', icon: 'ShoppingCart' },
@@ -55,4 +56,3 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'view_invoices',
   ],
 };
-
