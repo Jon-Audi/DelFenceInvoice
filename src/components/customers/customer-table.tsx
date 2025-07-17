@@ -35,7 +35,7 @@ import React from 'react';
 
 interface CustomerTableProps {
   customers: Customer[];
-  onSave: (customer: Customer) => void;
+  onSave: (customer: Omit<Customer, 'id'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
   productCategories: ProductCategory[]; // Added this prop
 }
