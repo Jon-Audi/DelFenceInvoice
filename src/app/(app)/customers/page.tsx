@@ -82,15 +82,18 @@ export default function CustomersPage() {
   }, [toast]);
 
   const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id'> & { id?: string }) => {
+    // The createdAt from the form can be a Date object, but from Firestore it's a string.
+    // We need to handle this to avoid type errors.
     const { id, createdAt, ...customerData } = customerToSave;
 
-    // Handle both Date objects from the form and string dates from Firestore
     let finalCreatedAt: string;
     if (createdAt instanceof Date) {
         finalCreatedAt = createdAt.toISOString();
     } else if (typeof createdAt === 'string' && createdAt) {
+        // It's already an ISO string from Firestore, use it as is.
         finalCreatedAt = createdAt;
     } else {
+        // It's a new customer without a date set, so create a new one.
         finalCreatedAt = new Date().toISOString();
     }
 
