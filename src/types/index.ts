@@ -136,12 +136,14 @@ export interface Order extends BaseDocument {
 export interface Invoice extends BaseDocument {
   invoiceNumber: string;
   orderId?: string;
-  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>;
+  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>;
   dueDate?: string;
   paymentTerms?: string;
   payments: Payment[]; // Ensure payments is always an array, even if empty
   amountPaid: number;   // Ensure amountPaid is always present
   balanceDue: number;   // Ensure balanceDue is always present
+  readyForPickUpDate?: string;
+  pickedUpDate?: string;
 }
 
 export interface User {

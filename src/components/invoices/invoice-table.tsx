@@ -45,7 +45,7 @@ interface InvoiceTableProps {
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
   onPrintPackingSlip: (invoice: Invoice) => void;
-  formatDate: (dateString: string | undefined) => string;
+  formatDate: (dateString: string | undefined, options?: Intl.DateTimeFormatOptions) => string;
   customers: Customer[];
   products: Product[];
   productCategories: string[];
@@ -79,8 +79,12 @@ export function InvoiceTable({
         return 'default'; 
       case 'Partially Paid':
         return 'secondary'; 
+      case 'Ready for pick up':
+         return 'secondary';
+      case 'Picked up':
+         return 'default';
       case 'Sent':
-        return 'outline'; 
+      case 'Ordered':
       case 'Draft':
         return 'outline'; 
       case 'Voided':
@@ -144,9 +148,13 @@ export function InvoiceTable({
                        className={cn(
                            invoice.status === 'Paid' && 'bg-green-500 hover:bg-green-600 text-white',
                            invoice.status === 'Partially Paid' && 'bg-yellow-500 hover:bg-yellow-600 text-black',
+                           invoice.status === 'Ready for pick up' && 'bg-yellow-500 hover:bg-yellow-600 text-black',
+                           invoice.status === 'Picked up' && 'bg-green-500 hover:bg-green-600 text-white',
                        )}
                 >
                     {invoice.status}
+                     {invoice.status === 'Ready for pick up' && invoice.readyForPickUpDate && ` (${formatDate(invoice.readyForPickUpDate, { month: '2-digit', day: '2-digit' })})`}
+                     {invoice.status === 'Picked up' && invoice.pickedUpDate && ` (${formatDate(invoice.pickedUpDate, { month: '2-digit', day: '2-digit' })})`}
                 </Badge>
               </TableCell>
               <TableCell className="text-center">

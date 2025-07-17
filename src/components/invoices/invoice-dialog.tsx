@@ -124,6 +124,9 @@ export function InvoiceDialog({
     if (formDataFromForm.notes) invoicePayload.notes = formDataFromForm.notes;
     if (invoice?.internalNotes) invoicePayload.internalNotes = invoice.internalNotes;
     if (invoice?.orderId) invoicePayload.orderId = invoice.orderId;
+    if (formDataFromForm.readyForPickUpDate) invoicePayload.readyForPickUpDate = formDataFromForm.readyForPickUpDate.toISOString();
+    if (formDataFromForm.pickedUpDate) invoicePayload.pickedUpDate = formDataFromForm.pickedUpDate.toISOString();
+
 
     onSave(invoicePayload as Invoice); // Pass the clean object.
     setOpen(false);

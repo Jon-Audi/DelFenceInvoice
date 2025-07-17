@@ -37,7 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided'];
+const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Ordered', 'Ready for pick up', 'Picked up', 'Partially Paid', 'Paid', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
 const lineItemSchema = z.object({
@@ -89,6 +89,8 @@ const invoiceFormSchema = z.object({
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
   payments: z.array(formPaymentSchema).optional(), // Holds the array of all payments for the invoice
+  readyForPickUpDate: z.date().optional(),
+  pickedUpDate: z.date().optional(),
 
   // Fields for the "Add/Edit Payment" UI section
   currentPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
@@ -141,6 +143,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     name: "lineItems",
   });
 
+  const watchedStatus = form.watch('status');
+
   // Initialize localPayments and form when invoice or initialData props change
   useEffect(() => {
     let defaultValues: z.infer<typeof invoiceFormSchema>;
@@ -163,6 +167,8 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
         payments: invoice.payments?.map(p => ({...p, date: parseISO(p.date)})) || [], // Convert ISO string to Date
+        readyForPickUpDate: invoice.readyForPickUpDate ? new Date(invoice.readyForPickUpDate) : undefined,
+        pickedUpDate: invoice.pickedUpDate ? new Date(invoice.pickedUpDate) : undefined,
       };
       initialLocalPayments = defaultValues.payments || [];
     } else if (initialData) {
@@ -233,23 +239,35 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
 
   useEffect(() => {
-    if (watchedCustomerId && watchedCustomerId !== prevCustomerIdRef.current) {
-        const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-        const currentItems = form.getValues('lineItems');
-        
-        currentItems.forEach((item, index) => {
-            if (!item.isNonStock && item.productId) {
-                const product = products.find(p => p.id === item.productId);
-                if (product) {
-                    const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-                    form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
-                }
-            }
-        });
+    const customer = customers.find(c => c.id === watchedCustomerId);
+    if (!watchedCustomerId || !customer || !products || products.length === 0) return;
+  
+    const currentLineItems = form.getValues('lineItems');
+    let hasChanged = false;
+  
+    const updatedLineItems = currentLineItems.map(item => {
+      if (item.isNonStock || !item.productId) {
+        return item;
+      }
+      const product = products.find(p => p.id === item.productId);
+      if (!product) {
+        return item;
+      }
+      const newUnitPrice = calculateUnitPrice(product, customer);
+      if (Math.abs(item.unitPrice - newUnitPrice) > 0.001) { // Compare with tolerance
+        hasChanged = true;
+        return { ...item, unitPrice: newUnitPrice };
+      }
+      return item;
+    });
+  
+    if (hasChanged) {
+      form.setValue('lineItems', updatedLineItems, { shouldValidate: true });
     }
+  
     prevCustomerIdRef.current = watchedCustomerId;
   }, [watchedCustomerId, customers, products, form]);
-
+  
   const currentInvoiceTotal = useMemo(() => {
     return (watchedLineItems || []).reduce((acc, item) => {
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
@@ -510,6 +528,37 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             </Select><FormMessage />
           </FormItem>
         )} />
+
+        {watchedStatus === 'Ready for pick up' && (
+             <FormField control={form.control} name="readyForPickUpDate" render={({ field }) => (
+                <FormItem className="flex flex-col"><FormLabel>Ready for Pickup Date</FormLabel>
+                    <Popover><PopoverTrigger asChild><FormControl>
+                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                            <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                    </FormControl></PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
+                    </Popover><FormMessage />
+                </FormItem>
+            )} />
+        )}
+         {watchedStatus === 'Picked up' && (
+             <FormField control={form.control} name="pickedUpDate" render={({ field }) => (
+                <FormItem className="flex flex-col"><FormLabel>Picked Up Date</FormLabel>
+                    <Popover><PopoverTrigger asChild><FormControl>
+                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                            <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                    </FormControl></PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent>
+                    </Popover><FormMessage />
+                </FormItem>
+            )} />
+        )}
+
+
         <FormField control={form.control} name="paymentTerms" render={({ field }) => (
           <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} placeholder="e.g., Due on receipt, NET 30" /></FormControl><FormMessage /></FormItem>
         )} />
