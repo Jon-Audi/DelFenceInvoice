@@ -88,9 +88,9 @@ export default function CustomersPage() {
 
     // Handle both Date objects from the form and string dates from Firestore
     let finalCreatedAt: string;
-    if (typeof rawCreatedAt === 'object' && rawCreatedAt !== null && typeof rawCreatedAt.toISOString === 'function') {
+    if (typeof rawCreatedAt === 'object' && rawCreatedAt !== null && typeof (rawCreatedAt as any).toISOString === 'function') {
       // It's a Date object
-      finalCreatedAt = rawCreatedAt.toISOString();
+      finalCreatedAt = (rawCreatedAt as Date).toISOString();
     } else if (typeof rawCreatedAt === 'string' && rawCreatedAt) {
       // It's already an ISO string from Firestore, use it as is.
       finalCreatedAt = rawCreatedAt;
