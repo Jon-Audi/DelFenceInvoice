@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { PrintableInventorySheet } from '@/components/inventory/printable-inventory-sheet';
-import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog'; // Import the dialog
+import { PrintableStockValuationSheet } from '@/components/inventory/printable-stock-valuation-sheet';
+import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -28,6 +29,7 @@ export default function InventoryPage() {
   const [newStockQuantity, setNewStockQuantity] = useState<string>('');
   
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
+  const [printMode, setPrintMode] = useState<'countSheet' | 'valuationSheet' | null>(null);
   const [productsForPrinting, setProductsForPrinting] = useState<Product[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -124,18 +126,20 @@ export default function InventoryPage() {
     setTimeout(() => {
       if (printRef.current) {
         const printContents = printRef.current.innerHTML;
+        const title = printMode === 'valuationSheet' ? 'Stock Valuation' : 'Inventory Count Sheet';
         const win = window.open('', '_blank');
         if (win) {
           win.document.write(`
             <html>
               <head>
-                <title>Inventory Count Sheet</title>
+                <title>${title}</title>
                 <style>
                   body { font-family: sans-serif; margin: 2rem; }
-                  table { width: 100%; border-collapse: collapse; }
-                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                  table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; page-break-inside: avoid; }
                   th { background-color: #f2f2f2; }
                   h1, h2 { text-align: center; }
+                  tfoot { display: table-footer-group; }
                   @page { size: auto; margin: 25mm; }
                   section { page-break-after: always; }
                   section:last-child { page-break-after: avoid; }
@@ -157,9 +161,15 @@ export default function InventoryPage() {
         }
       }
       setProductsForPrinting(null);
+      setPrintMode(null);
     }, 100);
 
     setIsSelectCategoriesDialogOpen(false);
+  };
+  
+  const handleOpenPrintDialog = (mode: 'countSheet' | 'valuationSheet') => {
+    setPrintMode(mode);
+    setIsSelectCategoriesDialogOpen(true);
   };
 
   if (isLoading && products.length === 0) {
@@ -175,10 +185,16 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader title="Inventory Management" description="View and update product stock levels.">
-        <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
-            <Icon name="Printer" className="mr-2 h-4 w-4" />
-            Print Count Sheet
-        </Button>
+        <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleOpenPrintDialog('countSheet')} disabled={isLoading || products.length === 0}>
+                <Icon name="Printer" className="mr-2 h-4 w-4" />
+                Print Count Sheet
+            </Button>
+            <Button variant="outline" onClick={() => handleOpenPrintDialog('valuationSheet')} disabled={isLoading || products.length === 0}>
+                <Icon name="Calculator" className="mr-2 h-4 w-4" />
+                Print Stock Valuation
+            </Button>
+        </div>
       </PageHeader>
       
       <div className="mb-4">
@@ -238,7 +254,8 @@ export default function InventoryPage() {
       )}
 
       <div style={{ display: 'none' }}>
-        {productsForPrinting && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && printMode === 'countSheet' && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && printMode === 'valuationSheet' && <PrintableStockValuationSheet ref={printRef} products={productsForPrinting} />}
       </div>
     </>
   );
