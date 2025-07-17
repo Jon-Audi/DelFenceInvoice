@@ -16,7 +16,7 @@ import {
 interface CustomerDialogProps {
   customer?: Customer;
   triggerButton?: React.ReactElement;
-  onSave?: (customer: Customer) => void;
+  onSave?: (customer: Omit<Customer, 'id'> & { id?: string }) => void;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   productCategories: ProductCategory[]; // Added this prop
@@ -38,10 +38,11 @@ export function CustomerDialog({
 
   const handleSubmit = (data: any) => {
     if (onSave) {
-      const customerToSave: Customer = {
+      const customerToSave: Omit<Customer, 'id'> & { id?: string } = {
         ...data,
-        id: customer?.id || crypto.randomUUID(),
-        specificMarkups: data.specificMarkups || [], // Ensure specificMarkups is an array
+        id: customer?.id, // Let onSave logic handle new ID generation
+        specificMarkups: data.specificMarkups || [],
+        createdAt: data.createdAt ? data.createdAt.toISOString() : new Date().toISOString(),
       };
       onSave(customerToSave);
     }

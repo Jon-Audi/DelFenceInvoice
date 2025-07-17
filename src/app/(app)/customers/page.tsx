@@ -81,40 +81,42 @@ export default function CustomersPage() {
     };
   }, [toast]);
 
-  const handleSaveCustomer = async (customerToSave: Customer) => {
-    const { id, ...customerData } = customerToSave;
+  const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id'> & { id?: string }) => {
+    const { id, createdAt, ...customerData } = customerToSave;
+    
+    // Ensure createdAt is a string, defaulting to now if not provided
+    const dataToSave = {
+        ...customerData,
+        createdAt: createdAt instanceof Date ? createdAt.toISOString() : (createdAt || new Date().toISOString())
+    };
 
     try {
-      if (id && customers.some(c => c.id === id)) {
-        const customerRef = doc(db, 'customers', id);
-        // For existing customers, we just save the data from the form.
-        // We don't want to update the createdAt date.
-        await setDoc(customerRef, customerData, { merge: true });
-        toast({
-          title: "Customer Updated",
-          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
-        });
-      } else {
-        // For new customers, we must add the createdAt date.
-        const dataToSave = {
-          ...customerData,
-          createdAt: new Date().toISOString(),
-        };
-        const docRef = await addDoc(collection(db, 'customers'), dataToSave);
-        toast({
-          title: "Customer Added",
-          description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added with ID: ${docRef.id}.`,
-        });
-      }
+        if (id && customers.some(c => c.id === id)) {
+            const customerRef = doc(db, 'customers', id);
+            // When updating, we just save the data. `dataToSave` already has the correct `createdAt`.
+            await setDoc(customerRef, dataToSave, { merge: true });
+            toast({
+                title: "Customer Updated",
+                description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
+            });
+        } else {
+            // When adding a new customer, the `createdAt` is already correctly set in `dataToSave`.
+            const docRef = await addDoc(collection(db, 'customers'), dataToSave);
+            toast({
+                title: "Customer Added",
+                description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added with ID: ${docRef.id}.`,
+            });
+        }
     } catch (error) {
-      console.error("Error saving customer:", error);
-      toast({
-        title: "Error",
-        description: "Could not save customer to database.",
-        variant: "destructive",
-      });
+        console.error("Error saving customer:", error);
+        toast({
+            title: "Error",
+            description: "Could not save customer to database.",
+            variant: "destructive",
+        });
     }
   };
+
 
   const handleDeleteCustomer = async (customerId: string) => {
     try {

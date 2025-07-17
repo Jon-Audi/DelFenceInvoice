@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Icon } from '@/components/icons';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import {
   Select,
   SelectContent,
@@ -29,6 +31,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 const emailContactSchema = z.object({
   id: z.string().optional(),
@@ -50,6 +54,7 @@ const customerSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   customerType: z.enum(CUSTOMER_TYPES as [CustomerType, ...CustomerType[]]),
   emailContacts: z.array(emailContactSchema).min(1, "At least one email contact is required"),
+  createdAt: z.date().optional(),
   address: z.object({
     street: z.string().default(''),
     city: z.string().default(''),
@@ -74,6 +79,7 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
     resolver: zodResolver(customerSchema),
     defaultValues: customer ? {
       ...customer,
+      createdAt: customer.createdAt ? new Date(customer.createdAt) : new Date(),
       emailContacts: customer.emailContacts.map(ec => ({...ec, id: ec.id || crypto.randomUUID()})),
       specificMarkups: customer.specificMarkups?.map(sm => ({...sm, id: sm.id || crypto.randomUUID() })) || [],
       address: customer.address || { street: '', city: '', state: '', zip: '' },
@@ -89,6 +95,7 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
       address: { street: '', city: '', state: '', zip: '' },
       notes: '',
       specificMarkups: [],
+      createdAt: new Date(),
     },
   });
 
@@ -131,6 +138,25 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
             </FormItem>
           )} />
         </div>
+        <FormField control={form.control} name="createdAt" render={({ field }) => (
+          <FormItem className="flex flex-col">
+            <FormLabel>Date Added</FormLabel>
+            <Popover>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                    <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        )} />
         
         <Separator />
         <h3 className="text-lg font-medium">Email Contacts</h3>
