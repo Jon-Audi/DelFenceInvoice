@@ -83,24 +83,31 @@ export default function CustomersPage() {
 
   const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id'> & { id?: string }) => {
     const { id, createdAt, ...customerData } = customerToSave;
-    
-    // Ensure createdAt is a string, defaulting to now if not provided
+
+    // Handle both Date objects from the form and string dates from Firestore
+    let finalCreatedAt: string;
+    if (createdAt instanceof Date) {
+        finalCreatedAt = createdAt.toISOString();
+    } else if (typeof createdAt === 'string' && createdAt) {
+        finalCreatedAt = createdAt;
+    } else {
+        finalCreatedAt = new Date().toISOString();
+    }
+
     const dataToSave = {
         ...customerData,
-        createdAt: createdAt instanceof Date ? createdAt.toISOString() : (createdAt || new Date().toISOString())
+        createdAt: finalCreatedAt
     };
 
     try {
         if (id && customers.some(c => c.id === id)) {
             const customerRef = doc(db, 'customers', id);
-            // When updating, we just save the data. `dataToSave` already has the correct `createdAt`.
             await setDoc(customerRef, dataToSave, { merge: true });
             toast({
                 title: "Customer Updated",
                 description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
             });
         } else {
-            // When adding a new customer, the `createdAt` is already correctly set in `dataToSave`.
             const docRef = await addDoc(collection(db, 'customers'), dataToSave);
             toast({
                 title: "Customer Added",
