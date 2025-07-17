@@ -192,21 +192,21 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         currentItems.forEach((item, index) => {
             if (!item.isNonStock && item.productId) {
                 const product = products.find(p => p.id === item.productId);
-                if (product) {
+                if (product && item.unitPrice !== calculateUnitPrice(product, currentCustomer)) {
                     const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-                    form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
+                    update(index, {...item, unitPrice: newUnitPrice});
                 }
             }
         });
     }
     prevCustomerIdRef.current = watchedCustomerId;
-  }, [watchedCustomerId, customers, products, form]);
+  }, [watchedCustomerId, customers, products, form, update]);
 
 
-  const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {
-    const newCustomerId = await onSaveCustomer(newCustomerData);
+  const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Omit<Customer, 'id'> & { id?: string }) => {
+    const newCustomerId = await onSaveCustomer(newCustomerData as Customer);
     if (newCustomerId && typeof newCustomerId === 'string') {
-      const customerToSelect = { ...newCustomerData, id: newCustomerId };
+      const customerToSelect = { ...newCustomerData, id: newCustomerId } as Customer;
       setCustomers(prev => [...prev, customerToSelect].sort((a,b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));
 
       form.setValue("customerId", newCustomerId, { shouldValidate: true });
