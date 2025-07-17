@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -97,6 +97,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
+  const prevCustomerIdRef = useRef<string | undefined>();
 
   useEffect(() => {
     setCustomers(initialCustomers);
@@ -182,36 +183,24 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
     }
     return parseFloat(finalPrice.toFixed(2));
   };
-
+  
   useEffect(() => {
-    if (!watchedCustomerId) return;
-    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-
-    const updatedLineItems = watchedLineItems.map((item) => {
-      if (item.isNonStock || !item.productId) return item; // Skip non-stock or items without product ID
-
-      const product = products.find(p => p.id === item.productId);
-      if (!product) return item;
-
-      const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-      
-      // Only update if the price would change based on customer/product logic
-      // This preserves manual overrides if the underlying logic doesn't necessitate a change
-      if (item.unitPrice !== newUnitPrice) { 
-        // This check might be too simple. If a user manually changed the price,
-        // and then changes customer, should it revert to new customer-specific logic?
-        // For now, yes. If they want to preserve a manual price, they'd re-enter.
-        return { ...item, unitPrice: newUnitPrice };
-      }
-      return item;
-    });
-
-    if (JSON.stringify(updatedLineItems) !== JSON.stringify(watchedLineItems)) {
-        updatedLineItems.forEach((item, index) => {
-            update(index, item); 
+    if (watchedCustomerId && watchedCustomerId !== prevCustomerIdRef.current) {
+        const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+        const currentItems = form.getValues('lineItems');
+        
+        currentItems.forEach((item, index) => {
+            if (!item.isNonStock && item.productId) {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    const newUnitPrice = calculateUnitPrice(product, currentCustomer);
+                    form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
+                }
+            }
         });
     }
-  }, [watchedCustomerId, customers, products, watchedLineItems, update]);
+    prevCustomerIdRef.current = watchedCustomerId;
+  }, [watchedCustomerId, customers, products, form]);
 
 
   const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Customer) => {

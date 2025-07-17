@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -130,7 +130,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   
   // Local state for managing the list of payments displayed and manipulated in the form
   const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
-
+  const prevCustomerIdRef = useRef<string | undefined>();
 
   const form = useForm<z.infer<typeof invoiceFormSchema>>({
     resolver: zodResolver(invoiceFormSchema),
@@ -233,23 +233,22 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
 
   useEffect(() => {
-    if (!watchedCustomerId || !products || products.length === 0) return;
-    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-
-    const currentLineItems = form.getValues('lineItems') || [];
-    const updatedLineItems = currentLineItems.map((item) => {
-      if (item.isNonStock || !item.productId) return item;
-      const product = products.find(p => p.id === item.productId);
-      if (!product) return item;
-      const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-      if (item.unitPrice !== newUnitPrice) return { ...item, unitPrice: newUnitPrice };
-      return item;
-    });
-
-    if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
-        updatedLineItems.forEach((item, index) => update(index, item));
+    if (watchedCustomerId && watchedCustomerId !== prevCustomerIdRef.current) {
+        const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+        const currentItems = form.getValues('lineItems');
+        
+        currentItems.forEach((item, index) => {
+            if (!item.isNonStock && item.productId) {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    const newUnitPrice = calculateUnitPrice(product, currentCustomer);
+                    form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
+                }
+            }
+        });
     }
-  }, [watchedCustomerId, customers, products, form, update]);
+    prevCustomerIdRef.current = watchedCustomerId;
+  }, [watchedCustomerId, customers, products, form]);
 
   const currentInvoiceTotal = useMemo(() => {
     return (watchedLineItems || []).reduce((acc, item) => {

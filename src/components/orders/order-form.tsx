@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -133,6 +133,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
   const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
+  const prevCustomerIdRef = useRef<string | undefined>();
 
   const form = useForm<z.infer<typeof orderFormSchema>>({
     resolver: zodResolver(orderFormSchema),
@@ -227,21 +228,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   useEffect(() => {
-    if (!watchedCustomerId || !products?.length) return;
-    const currentCustomer = customers.find(c => c.id === watchedCustomerId);
-    const currentLineItems = form.getValues('lineItems') || [];
-    const updatedLineItems = currentLineItems.map(item => {
-      if (item.isNonStock || !item.productId) return item;
-      const product = products.find(p => p.id === item.productId);
-      if (!product) return item;
-      const newUnitPrice = calculateUnitPrice(product, currentCustomer);
-      return item.unitPrice !== newUnitPrice ? { ...item, unitPrice: newUnitPrice } : item;
-    });
-
-    if (JSON.stringify(updatedLineItems) !== JSON.stringify(currentLineItems)) {
-      updatedLineItems.forEach((item, index) => update(index, item));
+    if (watchedCustomerId && watchedCustomerId !== prevCustomerIdRef.current) {
+      const currentCustomer = customers.find(c => c.id === watchedCustomerId);
+      const currentItems = form.getValues('lineItems');
+      
+      currentItems.forEach((item, index) => {
+          if (!item.isNonStock && item.productId) {
+              const product = products.find(p => p.id === item.productId);
+              if (product) {
+                  const newUnitPrice = calculateUnitPrice(product, currentCustomer);
+                  form.setValue(`lineItems.${index}.unitPrice`, newUnitPrice, { shouldValidate: true });
+              }
+          }
+      });
     }
-  }, [watchedCustomerId, customers, products, form, update]);
+    prevCustomerIdRef.current = watchedCustomerId;
+  }, [watchedCustomerId, customers, products, form]);
 
   const currentOrderTotal = useMemo(() => {
     return watchedLineItems.reduce((acc, item) => {
