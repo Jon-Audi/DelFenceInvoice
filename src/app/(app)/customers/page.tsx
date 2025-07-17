@@ -14,7 +14,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
 import { PrintableCustomerList } from '@/components/customers/printable-customer-list';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, isValid } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, isValid, type Interval } from 'date-fns';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -461,5 +461,7 @@ export default function CustomersPage() {
   );
 }
 
+
+    
 
     
