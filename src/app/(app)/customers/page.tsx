@@ -87,12 +87,15 @@ export default function CustomersPage() {
     try {
       if (id && customers.some(c => c.id === id)) {
         const customerRef = doc(db, 'customers', id);
+        // For existing customers, we just save the data from the form.
+        // We don't want to update the createdAt date.
         await setDoc(customerRef, customerData, { merge: true });
         toast({
           title: "Customer Updated",
           description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.`,
         });
       } else {
+        // For new customers, we must add the createdAt date.
         const dataToSave = {
           ...customerData,
           createdAt: new Date().toISOString(),
@@ -460,8 +463,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-
-    
-
-    
