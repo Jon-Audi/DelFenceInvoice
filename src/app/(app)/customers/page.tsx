@@ -309,44 +309,6 @@ export default function CustomersPage() {
     reader.readAsText(file);
   };
 
-  const handleBackfillDates = async () => {
-    const customersWithoutDate = customers.filter(c => !c.createdAt);
-    if (customersWithoutDate.length === 0) {
-      toast({
-        title: "No Action Needed",
-        description: "All customers already have a 'Date Added'.",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const batch = writeBatch(db);
-      const backfillDate = new Date().toISOString();
-      
-      customersWithoutDate.forEach(customer => {
-        const customerRef = doc(db, 'customers', customer.id);
-        batch.update(customerRef, { createdAt: backfillDate });
-      });
-
-      await batch.commit();
-      toast({
-        title: "Backfill Complete",
-        description: `${customersWithoutDate.length} customers have been updated with a 'Date Added'. You can now remove the backfill button.`,
-        duration: 8000,
-      });
-    } catch (error) {
-      console.error("Error backfilling customer dates:", error);
-      toast({
-        title: "Backfill Failed",
-        description: "Could not update customer dates. Please check the console for errors.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const filteredCustomers = useMemo(() => {
     let customersToFilter = customers;
 
@@ -454,11 +416,6 @@ export default function CustomersPage() {
           <Button variant="outline" onClick={handlePrint} disabled={isLoading || isLoadingProducts}>
             <Icon name="Printer" className="mr-2 h-4 w-4" />
             Print List
-          </Button>
-           {/* You can remove this button and its onClick handler after using it once */}
-          <Button variant="secondary" onClick={handleBackfillDates} disabled={isLoading}>
-            <Icon name="Calendar" className="mr-2 h-4 w-4" />
-            Backfill Missing Dates
           </Button>
           <CustomerDialog
             triggerButton={
