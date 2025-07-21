@@ -244,31 +244,73 @@ export default function InvoicesPage() {
     }
   }, [products]);
 
-  const handleSaveInvoice = async (invoiceData: Invoice) => {
-    const { id, ...payload } = invoiceData;
-
+  const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     try {
-        if (id) {
-            // Document has an ID, so we are updating it.
-            const invoiceRef = doc(db, 'invoices', id);
-            await setDoc(invoiceRef, payload); 
-            toast({ title: "Invoice Updated", description: `Invoice ${payload.invoiceNumber} has been updated.` });
-        } else {
-            // No ID, so create a new document.
-            const docRef = await addDoc(collection(db, 'invoices'), payload);
-            toast({ title: "Invoice Added", description: `Invoice ${payload.invoiceNumber} has been added with ID: ${docRef.id}.` });
-        }
+        await runTransaction(db, async (transaction) => {
+            const { id, ...invoiceDataFromDialog } = invoiceToSave;
+            let originalInvoice: Invoice | null = null;
+            if (id) {
+                const originalInvoiceRef = doc(db, 'invoices', id);
+                const originalInvoiceSnap = await transaction.get(originalInvoiceRef);
+                if (originalInvoiceSnap.exists()) {
+                    originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
+                }
+            }
+            
+            const inventoryChanges = new Map<string, number>();
+
+            if (originalInvoice) {
+                originalInvoice.lineItems.forEach(item => {
+                    if (item.productId && !item.isNonStock) {
+                        const change = item.isReturn ? -item.quantity : item.quantity;
+                        inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                    }
+                });
+            }
+
+            invoiceDataFromDialog.lineItems.forEach(item => {
+                if (item.productId && !item.isNonStock) {
+                    const change = item.isReturn ? item.quantity : -item.quantity;
+                    inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                }
+            });
+
+            for (const [productId, quantityChange] of inventoryChanges.entries()) {
+                if (quantityChange === 0) continue;
+                const productRef = doc(db, 'products', productId);
+                const productSnap = await transaction.get(productRef);
+                if (!productSnap.exists()) {
+                    throw new Error(`Product with ID ${productId} not found!`);
+                }
+                const currentStock = productSnap.data().quantityInStock || 0;
+                const newStock = currentStock + quantityChange;
+                transaction.update(productRef, { quantityInStock: newStock });
+            }
+
+            if (id) {
+                const invoiceRef = doc(db, 'invoices', id);
+                transaction.set(invoiceRef, invoiceDataFromDialog, { merge: true });
+            } else {
+                const invoiceRef = doc(collection(db, 'invoices'));
+                transaction.set(invoiceRef, invoiceDataFromDialog);
+            }
+        });
+
+        toast({
+            title: invoiceToSave.id ? "Invoice Updated" : "Invoice Added",
+            description: `Invoice ${invoiceToSave.invoiceNumber} and stock levels have been updated.`
+        });
+
     } catch (error: any) {
         console.error("Error saving invoice:", error);
         toast({
             title: "Error Saving Invoice",
-            description: `Could not save invoice to database. Error: ${error.message}`,
+            description: `Could not save invoice: ${error.message}`,
             variant: "destructive",
             duration: 8000
         });
     }
     
-    // This part for handling conversion UI state remains the same.
     if (isConvertingInvoice) {
         setIsConvertingInvoice(false);
         setConversionInvoiceData(null);
@@ -293,7 +335,6 @@ export default function InvoicesPage() {
   
         const snapshot = await getDocs(q);
         
-        // Sort documents by date client-side as `orderBy` is complex with `in` filter on documentId
         const sortedDocs = snapshot.docs.sort((a,b) => {
             const dateA = new Date(a.data().date).getTime();
             const dateB = new Date(b.data().date).getTime();
@@ -304,7 +345,6 @@ export default function InvoicesPage() {
           if (remainingPaymentAmount <= 0) break;
   
           const invoice = invoiceDoc.data() as Invoice;
-          // Ensure we're only paying for invoices belonging to the selected customer
           if (invoice.customerId !== customerId) continue; 
 
           const balanceDue = invoice.balanceDue || 0;
@@ -335,7 +375,7 @@ export default function InvoicesPage() {
           }
         }
   
-        if (remainingPaymentAmount > 0.01) { // Check for unapplied amount
+        if (remainingPaymentAmount > 0.01) {
           throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
         }
       });
@@ -368,7 +408,6 @@ export default function InvoicesPage() {
 
   const handlePrepareAndPrintBulkReceipt = (receiptData: BulkPaymentReceiptData) => {
     setBulkPaymentReceiptToPrint(receiptData);
-    // Use timeout to allow state to update before triggering print
     setTimeout(() => {
         if (printRef.current) {
             const printContents = printRef.current.innerHTML;
@@ -387,7 +426,7 @@ export default function InvoicesPage() {
               toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
             }
           }
-          setBulkPaymentReceiptToPrint(null); // Clear after printing
+          setBulkPaymentReceiptToPrint(null);
     }, 100);
   };
 
@@ -848,5 +887,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
