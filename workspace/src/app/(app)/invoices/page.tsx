@@ -24,15 +24,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoiceEmailDraft } from '@/ai/flows/invoice-email-draft';
-import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact, Payment } from '@/types';
+import type { Invoice, Customer, Product, Estimate, Order, CompanySettings, EmailContact, Payment, BulkPaymentReceiptData } from '@/types';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentData, Timestamp, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
+import { BulkPaymentDialog } from '@/components/invoices/bulk-payment-dialog';
+import { PrintableBulkPaymentReceipt } from '@/components/invoices/printable-bulk-payment-receipt';
+import { BulkPaymentToastAction } from '@/components/invoices/bulk-payment-toast-action';
 import { cn } from '@/lib/utils';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
@@ -71,7 +74,9 @@ export default function InvoicesPage() {
   const printRef = React.useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
+  const [bulkPaymentReceiptToPrint, setBulkPaymentReceiptToPrint] = useState<BulkPaymentReceiptData | null>(null);
   
+  const [isBulkPaymentDialogOpen, setIsBulkPaymentDialogOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -240,71 +245,191 @@ export default function InvoicesPage() {
   }, [products]);
 
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
-    const { id, ...invoiceDataFromDialog } = invoiceToSave;
-
-    const basePayload: any = {
-      invoiceNumber: invoiceDataFromDialog.invoiceNumber,
-      customerId: invoiceDataFromDialog.customerId,
-      customerName: invoiceDataFromDialog.customerName,
-      date: invoiceDataFromDialog.date,
-      status: invoiceDataFromDialog.status,
-      lineItems: invoiceDataFromDialog.lineItems,
-      subtotal: invoiceDataFromDialog.subtotal,
-      taxAmount: invoiceDataFromDialog.taxAmount || 0,
-      total: invoiceDataFromDialog.total,
-      payments: invoiceDataFromDialog.payments || [],
-      amountPaid: invoiceDataFromDialog.amountPaid || 0,
-    };
-    basePayload.balanceDue = (basePayload.total || 0) - (basePayload.amountPaid || 0);
-
-
     try {
-      if (id && invoices.some(i => i.id === id)) {
-        const invoiceRef = doc(db, 'invoices', id);
-        const updatePayload = { ...basePayload };
+        await runTransaction(db, async (transaction) => {
+            const { id, ...invoiceDataFromDialog } = invoiceToSave;
+            let originalInvoice: Invoice | null = null;
+            if (id) {
+                const originalInvoiceRef = doc(db, 'invoices', id);
+                const originalInvoiceSnap = await transaction.get(originalInvoiceRef);
+                if (originalInvoiceSnap.exists()) {
+                    originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
+                }
+            }
+            
+            const inventoryChanges = new Map<string, number>();
 
-        updatePayload.poNumber = (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '')
-                                  ? invoiceDataFromDialog.poNumber.trim()
-                                  : deleteField();
-        updatePayload.dueDate = invoiceDataFromDialog.dueDate ? invoiceDataFromDialog.dueDate : deleteField();
-        updatePayload.paymentTerms = (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '')
-                                     ? invoiceDataFromDialog.paymentTerms.trim()
-                                     : deleteField();
-        updatePayload.notes = (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '')
-                               ? invoiceDataFromDialog.notes.trim()
-                               : deleteField();
+            if (originalInvoice) {
+                originalInvoice.lineItems.forEach(item => {
+                    if (item.productId && !item.isNonStock) {
+                        const change = item.isReturn ? -item.quantity : item.quantity;
+                        inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                    }
+                });
+            }
 
-        await setDoc(invoiceRef, updatePayload, { merge: true });
-        toast({ title: "Invoice Updated", description: `Invoice ${invoiceToSave.invoiceNumber} has been updated.` });
-      } else {
-        const addPayload = { ...basePayload };
+            invoiceDataFromDialog.lineItems.forEach(item => {
+                if (item.productId && !item.isNonStock) {
+                    const change = item.isReturn ? item.quantity : -item.quantity;
+                    inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                }
+            });
 
-        if (invoiceDataFromDialog.poNumber && invoiceDataFromDialog.poNumber.trim() !== '') {
-          addPayload.poNumber = invoiceDataFromDialog.poNumber.trim();
-        }
-        if (invoiceDataFromDialog.dueDate) {
-          addPayload.dueDate = invoiceDataFromDialog.dueDate;
-        }
-        if (invoiceDataFromDialog.paymentTerms && invoiceDataFromDialog.paymentTerms.trim() !== '') {
-          addPayload.paymentTerms = invoiceDataFromDialog.paymentTerms.trim();
-        }
-        if (invoiceDataFromDialog.notes && invoiceDataFromDialog.notes.trim() !== '') {
-          addPayload.notes = invoiceDataFromDialog.notes.trim();
-        }
+            for (const [productId, quantityChange] of inventoryChanges.entries()) {
+                if (quantityChange === 0) continue;
+                const productRef = doc(db, 'products', productId);
+                const productSnap = await transaction.get(productRef);
+                if (!productSnap.exists()) {
+                    throw new Error(`Product with ID ${productId} not found!`);
+                }
+                const currentStock = productSnap.data().quantityInStock || 0;
+                const newStock = currentStock + quantityChange;
+                transaction.update(productRef, { quantityInStock: newStock });
+            }
 
-        const docRef = await addDoc(collection(db, 'invoices'), addPayload);
-        toast({ title: "Invoice Added", description: `Invoice ${invoiceToSave.invoiceNumber} has been added with ID: ${docRef.id}.` });
-      }
+            if (id) {
+                const invoiceRef = doc(db, 'invoices', id);
+                transaction.set(invoiceRef, invoiceDataFromDialog, { merge: true });
+            } else {
+                const invoiceRef = doc(collection(db, 'invoices'));
+                transaction.set(invoiceRef, invoiceDataFromDialog);
+            }
+        });
+
+        toast({
+            title: invoiceToSave.id ? "Invoice Updated" : "Invoice Added",
+            description: `Invoice ${invoiceToSave.invoiceNumber} and stock levels have been updated.`
+        });
+
     } catch (error: any) {
         console.error("Error saving invoice:", error);
-        toast({ title: "Error", description: `Could not save invoice to database. ${error.message}`, variant: "destructive" });
+        toast({
+            title: "Error Saving Invoice",
+            description: `Could not save invoice: ${error.message}`,
+            variant: "destructive",
+            duration: 8000
+        });
     }
-
+    
     if (isConvertingInvoice) {
         setIsConvertingInvoice(false);
         setConversionInvoiceData(null);
     }
   };
+
+  const handleBulkPaymentSave = async (
+    customerId: string,
+    paymentDetails: Omit<Payment, 'id' | 'amount'> & { amount: number },
+    invoiceIdsToPay: string[]
+  ) => {
+    let affectedInvoicesData: { invoiceNumber: string; amountApplied: number }[] = [];
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        let remainingPaymentAmount = paymentDetails.amount;
+        affectedInvoicesData = []; // Reset for this transaction attempt
+  
+        const invoicesRef = collection(db, 'invoices');
+        const q = query(invoicesRef, 
+                        where(documentId(), 'in', invoiceIdsToPay));
+  
+        const snapshot = await getDocs(q);
+        
+        const sortedDocs = snapshot.docs.sort((a,b) => {
+            const dateA = new Date(a.data().date).getTime();
+            const dateB = new Date(b.data().date).getTime();
+            return dateA - dateB;
+        });
+  
+        for (const invoiceDoc of sortedDocs) {
+          if (remainingPaymentAmount <= 0) break;
+  
+          const invoice = invoiceDoc.data() as Invoice;
+          if (invoice.customerId !== customerId) continue; 
+
+          const balanceDue = invoice.balanceDue || 0;
+  
+          if (balanceDue > 0) {
+            const amountToApply = Math.min(remainingPaymentAmount, balanceDue);
+            const newPayment: Payment = {
+              id: crypto.randomUUID(),
+              date: paymentDetails.date,
+              amount: amountToApply,
+              method: paymentDetails.method,
+              notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment)` : `Bulk payment application`,
+            };
+  
+            const newAmountPaid = (invoice.amountPaid || 0) + amountToApply;
+            const newBalanceDue = invoice.total - newAmountPaid;
+            const newStatus = newBalanceDue <= 0.005 ? 'Paid' : 'Partially Paid';
+  
+            transaction.update(invoiceDoc.ref, {
+              payments: [...(invoice.payments || []), newPayment],
+              amountPaid: newAmountPaid,
+              balanceDue: newBalanceDue,
+              status: newStatus,
+            });
+            
+            affectedInvoicesData.push({ invoiceNumber: invoice.invoiceNumber, amountApplied: amountToApply });
+            remainingPaymentAmount -= amountToApply;
+          }
+        }
+  
+        if (remainingPaymentAmount > 0.01) {
+          throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
+        }
+      });
+  
+      const customer = customers.find(c => c.id === customerId);
+      const receiptData: BulkPaymentReceiptData = {
+        paymentDetails: { ...paymentDetails, id: crypto.randomUUID() },
+        customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'N/A',
+        affectedInvoices: affectedInvoicesData,
+        companySettings: (await fetchCompanySettings())!,
+        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      };
+
+      toast({
+        title: "Bulk Payment Successful",
+        description: `Payment of $${paymentDetails.amount.toFixed(2)} applied successfully.`,
+        action: <BulkPaymentToastAction onPrint={() => handlePrepareAndPrintBulkReceipt(receiptData)} />,
+      });
+      setIsBulkPaymentDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error during bulk payment:", error);
+      toast({
+        title: "Bulk Payment Failed",
+        description: error.message || "Could not apply payments. The transaction was rolled back.",
+        variant: "destructive",
+        duration: 10000,
+      });
+    }
+  };
+
+  const handlePrepareAndPrintBulkReceipt = (receiptData: BulkPaymentReceiptData) => {
+    setBulkPaymentReceiptToPrint(receiptData);
+    setTimeout(() => {
+        if (printRef.current) {
+            const printContents = printRef.current.innerHTML;
+            const win = window.open('', '_blank');
+            if (win) {
+              win.document.write('<html><head><title>Print Bulk Payment Receipt</title>');
+              win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+              win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+              win.document.write('</head><body>');
+              win.document.write(printContents);
+              win.document.write('</body></html>');
+              win.document.close();
+              win.focus();
+              setTimeout(() => { win.print(); win.close(); }, 750);
+            } else {
+              toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+            }
+          }
+          setBulkPaymentReceiptToPrint(null);
+    }, 100);
+  };
+
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     try {
@@ -589,19 +714,32 @@ export default function InvoicesPage() {
   return (
     <>
       <PageHeader title="Invoices" description="Create and manage customer invoices.">
-        <InvoiceDialog
-            triggerButton={
-              <Button>
-                <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
-                New Invoice
-              </Button>
-            }
-            onSave={handleSaveInvoice}
-            customers={customers}
-            products={products}
-            productCategories={stableProductCategories}
-          />
+        <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setIsBulkPaymentDialogOpen(true)} disabled={isLoadingCustomers}>
+                <Icon name="ClipboardList" className="mr-2 h-4 w-4" />
+                Record Bulk Payment
+            </Button>
+            <InvoiceDialog
+                triggerButton={
+                  <Button>
+                    <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+                    New Invoice
+                  </Button>
+                }
+                onSave={handleSaveInvoice}
+                customers={customers}
+                products={products}
+                productCategories={stableProductCategories}
+            />
+        </div>
       </PageHeader>
+
+      <BulkPaymentDialog
+        isOpen={isBulkPaymentDialogOpen}
+        onOpenChange={setIsBulkPaymentDialogOpen}
+        customers={customers}
+        onSave={handleBulkPaymentSave}
+      />
 
       {isConvertingInvoice && conversionInvoiceData && (
         <InvoiceDialog
@@ -730,6 +868,7 @@ export default function InvoicesPage() {
       <div style={{ display: 'none' }}>
         {invoiceToPrint && <PrintableInvoice ref={printRef} {...invoiceToPrint} />}
         {packingSlipToPrintForInvoice && <PrintableInvoicePackingSlip ref={printRef} {...packingSlipToPrintForInvoice} />}
+        {bulkPaymentReceiptToPrint && <PrintableBulkPaymentReceipt ref={printRef} receiptData={bulkPaymentReceiptToPrint} />}
       </div>
 
       {invoiceForViewingItems && (
