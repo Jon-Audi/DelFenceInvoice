@@ -14,8 +14,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { PrintableInventorySheet } from '@/components/inventory/printable-inventory-sheet';
-import { PrintableStockValuationSheet } from '@/components/inventory/printable-stock-valuation-sheet';
-import { PrintableValuationSummary } from '@/components/inventory/printable-valuation-summary';
 import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
 
 export default function InventoryPage() {
@@ -30,7 +28,6 @@ export default function InventoryPage() {
   const [newStockQuantity, setNewStockQuantity] = useState<string>('');
   
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
-  const [printMode, setPrintMode] = useState<'countSheet' | 'valuationSheet' | 'valuationSummary' | null>(null);
   const [productsForPrinting, setProductsForPrinting] = useState<Product[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -126,26 +123,19 @@ export default function InventoryPage() {
 
     setTimeout(() => {
       if (printRef.current) {
-        let title = 'Printout';
-        if (printMode === 'valuationSheet') title = 'Stock Valuation';
-        else if (printMode === 'countSheet') title = 'Inventory Count Sheet';
-        else if (printMode === 'valuationSummary') title = 'Valuation Summary';
-
         const printContents = printRef.current.innerHTML;
         const win = window.open('', '_blank');
         if (win) {
           win.document.write(`
             <html>
               <head>
-                <title>${title}</title>
+                <title>Inventory Count Sheet</title>
                 <style>
                   body { font-family: sans-serif; margin: 2rem; }
                   table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
                   th, td { border: 1px solid #ddd; padding: 8px; text-align: left; page-break-inside: avoid; }
                   th { background-color: #f2f2f2; }
-                  h1, h2 { text-align: center; }
-                  tfoot { display: table-footer-group; }
-                  @page { size: auto; margin: 25mm; }
+                  h2 { text-align: center; }
                   section { page-break-after: always; }
                   section:last-child { page-break-after: avoid; }
                 </style>
@@ -166,16 +156,11 @@ export default function InventoryPage() {
         }
       }
       setProductsForPrinting(null);
-      setPrintMode(null);
     }, 100);
 
     setIsSelectCategoriesDialogOpen(false);
   };
   
-  const handleOpenPrintDialog = (mode: 'countSheet' | 'valuationSheet' | 'valuationSummary') => {
-    setPrintMode(mode);
-    setIsSelectCategoriesDialogOpen(true);
-  };
 
   if (isLoading && products.length === 0) {
     return (
@@ -190,20 +175,10 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader title="Inventory Management" description="View and update product stock levels.">
-        <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => handleOpenPrintDialog('countSheet')} disabled={isLoading || products.length === 0}>
-                <Icon name="Printer" className="mr-2 h-4 w-4" />
-                Print Count Sheet
-            </Button>
-            <Button variant="outline" onClick={() => handleOpenPrintDialog('valuationSheet')} disabled={isLoading || products.length === 0}>
-                <Icon name="Calculator" className="mr-2 h-4 w-4" />
-                Print Stock Valuation
-            </Button>
-             <Button variant="outline" onClick={() => handleOpenPrintDialog('valuationSummary')} disabled={isLoading || products.length === 0}>
-                <Icon name="Calculator" className="mr-2 h-4 w-4" />
-                Print Valuation Summary
-            </Button>
-        </div>
+        <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
+            <Icon name="Printer" className="mr-2 h-4 w-4" />
+            Print Count Sheet
+        </Button>
       </PageHeader>
       
       <div className="mb-4">
@@ -263,9 +238,7 @@ export default function InventoryPage() {
       )}
 
       <div style={{ display: 'none' }}>
-        {productsForPrinting && printMode === 'countSheet' && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
-        {productsForPrinting && printMode === 'valuationSheet' && <PrintableStockValuationSheet ref={printRef} products={productsForPrinting} />}
-        {productsForPrinting && printMode === 'valuationSummary' && <PrintableValuationSummary ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
       </div>
     </>
   );
