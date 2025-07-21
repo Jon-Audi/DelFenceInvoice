@@ -1,17 +1,21 @@
 // next.config.ts
+import type { NextConfig } from 'next';
+import type { Configuration as WebpackConfiguration } from 'webpack';
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   // Add a watchOptions configuration to ignore the 'functions' directory.
   // This prevents the Next.js dev server from restarting every time
   // the Cloud Functions are compiled.
-  webpack: (config, { isServer }) => {
+  webpack: (config: WebpackConfiguration, { isServer }: { isServer: boolean }) => {
     if (!isServer) {
       // Don't watch the functions directory
-      config.watchOptions.ignored = [
-        ...(Array.isArray(config.watchOptions.ignored) ? config.watchOptions.ignored : []),
-        '**/functions/**'
-      ];
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: [
+          ...(Array.isArray(config.watchOptions?.ignored) ? config.watchOptions.ignored : []),
+          '**/functions/**'
+        ],
+      };
     }
     return config;
   },
@@ -31,6 +35,6 @@ const nextConfig = {
       }
     ],
   },
-}
+};
 
 module.exports = nextConfig;
