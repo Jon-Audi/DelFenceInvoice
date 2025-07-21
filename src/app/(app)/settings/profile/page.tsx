@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { auth, storage } from '@/lib/firebase';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from "@/hooks/use-toast";
 
@@ -25,6 +25,7 @@ export default function ProfilePage() {
   const [isSavingName, setIsSavingName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
 
   useEffect(() => {
     if (authUser) {
@@ -108,6 +109,27 @@ export default function ProfilePage() {
       if(fileInputRef.current) {
         fileInputRef.current.value = ""; // Reset file input
       }
+    }
+  };
+  
+  const handlePasswordReset = async () => {
+    if (!authUser?.email) {
+      toast({ title: "Error", description: "No email address associated with this account.", variant: "destructive" });
+      return;
+    }
+    setIsSendingResetEmail(true);
+    try {
+      await sendPasswordResetEmail(auth, authUser.email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: `An email has been sent to ${authUser.email} with instructions to reset your password.`,
+        duration: 8000
+      });
+    } catch (error: any) {
+      toast({ title: "Error Sending Email", description: error.message, variant: "destructive" });
+      console.error("Error sending password reset email:", error);
+    } finally {
+      setIsSendingResetEmail(false);
     }
   };
 
@@ -247,9 +269,16 @@ export default function ProfilePage() {
             <div className="pt-6 border-t">
               <h3 className="text-lg font-medium mb-3">More Actions</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Profile editing features (like changing your password) will be available here in the future.
+                Click the button below to receive an email with a secure link to reset your password.
               </p>
-              <Button variant="outline" disabled>Change Password (Soon)</Button>
+              <Button variant="outline" onClick={handlePasswordReset} disabled={isSendingResetEmail}>
+                {isSendingResetEmail ? (
+                  <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Icon name="Mail" className="mr-2 h-4 w-4" />
+                )}
+                Send Password Reset Email
+              </Button>
             </div>
           </div>
         </CardContent>
