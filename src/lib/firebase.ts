@@ -1,4 +1,3 @@
-
 // src/lib/firebase.ts
 
 // Verbose logging for environment variable check
@@ -19,6 +18,7 @@ import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics";
 import { getFirestore, type Firestore }   from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 // ✅ Load config from environment variables
 const firebaseConfig = {
@@ -34,6 +34,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 let authInstance: Auth; // Renamed from 'auth'
+let storage: FirebaseStorage;
 let analytics: Analytics | undefined;
 
 // Prevent re-initialization on hot reload
@@ -46,6 +47,7 @@ if (getApps().length) {
 // Initialize Firebase services
 db = getFirestore(app);
 authInstance = getAuth(app); // Use the renamed variable
+storage = getStorage(app);
 
 if (typeof window !== "undefined") {
   try {
@@ -60,4 +62,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export { app, db, authInstance as auth, analytics }; // Export authInstance as auth
+export { app, db, authInstance as auth, storage, analytics }; // Export authInstance as auth, and storage

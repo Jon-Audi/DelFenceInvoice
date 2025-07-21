@@ -11,25 +11,24 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { auth } from '@/lib/firebase'; // Import auth directly
+import { auth, storage } from '@/lib/firebase';
 import { updateProfile } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
-  const { user: authUser, loading: authLoading } = useAuth();
+  const { user: authUser, loading: authLoading, setUser: setAuthUser } = useAuth(); // Get setUser to manually refresh context if needed
   const { toast } = useToast();
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editableDisplayName, setEditableDisplayName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false); // For future use
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   useEffect(() => {
-    if (authUser?.displayName) {
-      setEditableDisplayName(authUser.displayName);
-    } else if (authUser?.email) {
-      setEditableDisplayName('');
+    if (authUser) {
+      setEditableDisplayName(authUser.displayName || '');
     }
   }, [authUser]);
 
@@ -48,17 +47,23 @@ export default function ProfilePage() {
       toast({ title: "Error", description: "Not logged in.", variant: "destructive" });
       return;
     }
-    if (editableDisplayName.trim() === (authUser?.displayName || '')) {
+    const newName = editableDisplayName.trim();
+    if (newName === (authUser?.displayName || '')) {
         setIsEditingName(false);
-        toast({ title: "No Changes", description: "Display name is the same.", variant: "default" });
         return;
     }
 
     setIsSavingName(true);
     try {
       await updateProfile(auth.currentUser, {
-        displayName: editableDisplayName.trim() === '' ? null : editableDisplayName.trim(),
+        displayName: newName === '' ? null : newName,
       });
+      
+      // Manually update the context user to reflect the change immediately
+      if(setAuthUser) {
+        setAuthUser(auth.currentUser);
+      }
+
       toast({ title: "Profile Updated", description: "Your display name has been updated." });
       setIsEditingName(false);
     } catch (error: any) {
@@ -73,18 +78,33 @@ export default function ProfilePage() {
     fileInputRef.current?.click();
   };
 
-  const handlePhotoSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // console.log("Selected photo:", file.name, file.type);
-      toast({
-        title: "Photo Selected (Simulation)",
-        description: `File: ${file.name}. Next step would be to upload and update profile.`,
-      });
-      // Placeholder for actual upload logic
-      // setIsUploadingPhoto(true);
-      // await uploadPhotoAndSetUrl(file);
-      // setIsUploadingPhoto(false);
+    if (!file || !authUser) return;
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast({ title: "File Too Large", description: "Profile pictures must be under 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const storageRef = ref(storage, `profile-pictures/${authUser.uid}/${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      await updateProfile(auth.currentUser!, { photoURL: downloadURL });
+
+      if (setAuthUser) {
+        setAuthUser(auth.currentUser);
+      }
+      
+      toast({ title: "Photo Updated", description: "Your profile picture has been changed." });
+    } catch (error: any) {
+      console.error("Error uploading photo:", error);
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUploadingPhoto(false);
       if(fileInputRef.current) {
         fileInputRef.current.value = ""; // Reset file input
       }

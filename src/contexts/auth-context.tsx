@@ -19,6 +19,7 @@ import { ROLE_PERMISSIONS } from '@/lib/constants';
 
 interface AuthContextType {
   user: FirebaseUser | null;
+  setUser: React.Dispatch<React.SetStateAction<FirebaseUser | null>>; // Expose setUser
   loading: boolean;
   error: string | null;
   login: (email: string, pass: string) => Promise<void>;
@@ -158,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, signup }}>
+    <AuthContext.Provider value={{ user, setUser, loading, error, login, logout, signup }}>
       {children}
     </AuthContext.Provider>
   );
