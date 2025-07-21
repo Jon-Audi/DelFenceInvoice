@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -13,8 +12,19 @@ import { InventoryTable } from '@/components/inventory/inventory-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PrintableInventorySheet } from '@/components/inventory/printable-inventory-sheet';
+import { PrintableStockValuationSheet } from '@/components/inventory/printable-stock-valuation-sheet';
+import { PrintableValuationSummary } from '@/components/inventory/printable-valuation-summary';
 import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
+
+type PrintType = 'count-sheet' | 'valuation-summary' | 'valuation-detailed';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -28,6 +38,7 @@ export default function InventoryPage() {
   const [newStockQuantity, setNewStockQuantity] = useState<string>('');
   
   const [isSelectCategoriesDialogOpen, setIsSelectCategoriesDialogOpen] = useState(false);
+  const [printType, setPrintType] = useState<PrintType>('count-sheet');
   const [productsForPrinting, setProductsForPrinting] = useState<Product[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +115,11 @@ export default function InventoryPage() {
     }
   };
   
+  const handleOpenPrintDialog = (type: PrintType) => {
+    setPrintType(type);
+    setIsSelectCategoriesDialogOpen(true);
+  };
+  
   const handlePrintRequest = (selectedCategories: string[]) => {
      if (selectedCategories.length === 0) {
       toast({ title: "No Categories Selected", description: "Please select at least one category to print.", variant: "default" });
@@ -129,13 +145,13 @@ export default function InventoryPage() {
           win.document.write(`
             <html>
               <head>
-                <title>Inventory Count Sheet</title>
+                <title>Inventory Report</title>
                 <style>
                   body { font-family: sans-serif; margin: 2rem; }
                   table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
                   th, td { border: 1px solid #ddd; padding: 8px; text-align: left; page-break-inside: avoid; }
                   th { background-color: #f2f2f2; }
-                  h2 { text-align: center; }
+                  h1, h2 { text-align: center; }
                   section { page-break-after: always; }
                   section:last-child { page-break-after: avoid; }
                 </style>
@@ -175,10 +191,30 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader title="Inventory Management" description="View and update product stock levels.">
-        <Button variant="outline" onClick={() => setIsSelectCategoriesDialogOpen(true)} disabled={isLoading || products.length === 0}>
-            <Icon name="Printer" className="mr-2 h-4 w-4" />
-            Print Count Sheet
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={isLoading || products.length === 0}>
+              <Icon name="Printer" className="mr-2 h-4 w-4" />
+              Print Reports
+              <Icon name="ChevronDown" className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => handleOpenPrintDialog('count-sheet')}>
+              <Icon name="ClipboardList" className="mr-2 h-4 w-4" />
+              Inventory Count Sheet
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => handleOpenPrintDialog('valuation-summary')}>
+              <Icon name="TrendingUp" className="mr-2 h-4 w-4" />
+              Stock Valuation (Summary)
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleOpenPrintDialog('valuation-detailed')}>
+              <Icon name="FileText" className="mr-2 h-4 w-4" />
+              Stock Valuation (Detailed)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
       
       <div className="mb-4">
@@ -238,7 +274,9 @@ export default function InventoryPage() {
       )}
 
       <div style={{ display: 'none' }}>
-        {productsForPrinting && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && printType === 'count-sheet' && <PrintableInventorySheet ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && printType === 'valuation-detailed' && <PrintableStockValuationSheet ref={printRef} products={productsForPrinting} />}
+        {productsForPrinting && printType === 'valuation-summary' && <PrintableValuationSummary ref={printRef} products={productsForPrinting} />}
       </div>
     </>
   );
