@@ -44,15 +44,6 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  - variable: FIREBASE_CONFIG
-    value: '{"projectId":"delfenceinvoice"}'
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: GOOGLE_API_KEY
-    secret: Firebase-Delfenceinvkey # Updated to the correct secret name
-    availability:
-      - RUNTIME
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
   # - variable: MESSAGE
