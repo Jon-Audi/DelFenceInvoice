@@ -14,7 +14,7 @@ import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact 
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField, runTransaction, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, WriteBatch, DocumentReference } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -199,6 +199,8 @@ export default function OrdersPage() {
     try {
         await runTransaction(db, async (transaction) => {
             const { id, ...orderDataFromDialog } = orderToSave;
+            
+            // --- Read Phase ---
             let originalOrder: Order | null = null;
             if (id) {
                 const originalOrderRef = doc(db, 'orders', id);
@@ -207,11 +209,10 @@ export default function OrdersPage() {
                     originalOrder = { id, ...originalOrderSnap.data() } as Order;
                 }
             }
-            
-            // Re-calculate inventory changes
+
             const inventoryChanges = new Map<string, number>();
 
-            // If updating, revert previous inventory changes
+            // Calculate changes based on original order
             if (originalOrder) {
                 originalOrder.lineItems.forEach(item => {
                     if (item.productId && !item.isNonStock) {
@@ -221,7 +222,7 @@ export default function OrdersPage() {
                 });
             }
 
-            // Apply new inventory changes
+            // Calculate changes based on new/updated order
             orderDataFromDialog.lineItems.forEach(item => {
                 if (item.productId && !item.isNonStock) {
                     const change = item.isReturn ? item.quantity : -item.quantity;
@@ -229,14 +230,28 @@ export default function OrdersPage() {
                 }
             });
 
-            // Update product quantities in transaction
+            // Pre-fetch all product documents that need updating
+            const productRefs: Map<string, DocumentReference> = new Map();
+            const productSnapshots: Map<string, any> = new Map();
+            for (const [productId] of inventoryChanges.entries()) {
+                const productRef = doc(db, 'products', productId);
+                productRefs.set(productId, productRef);
+                const productSnap = await transaction.get(productRef);
+                productSnapshots.set(productId, productSnap);
+            }
+
+            // --- Write Phase ---
+            // Update product quantities
             for (const [productId, quantityChange] of inventoryChanges.entries()) {
                 if (quantityChange === 0) continue;
-                const productRef = doc(db, 'products', productId);
-                const productSnap = await transaction.get(productRef);
+                
+                const productRef = productRefs.get(productId)!;
+                const productSnap = productSnapshots.get(productId)!;
+                
                 if (!productSnap.exists()) {
                     throw new Error(`Product with ID ${productId} not found!`);
                 }
+                
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
                 transaction.update(productRef, { quantityInStock: newStock });
@@ -246,12 +261,15 @@ export default function OrdersPage() {
             if (id) {
                 const orderRef = doc(db, 'orders', id);
                 transaction.set(orderRef, orderDataFromDialog, { merge: true });
-                toast({ title: "Order Updated", description: `Order ${orderToSave.orderNumber} and stock levels have been updated.` });
             } else {
                 const orderRef = doc(collection(db, 'orders'));
                 transaction.set(orderRef, orderDataFromDialog);
-                toast({ title: "Order Added", description: `Order ${orderToSave.orderNumber} added and stock levels updated.` });
             }
+        });
+
+        toast({
+            title: orderToSave.id ? "Order Updated" : "Order Added",
+            description: `Order ${orderToSave.orderNumber} and stock levels have been updated.`
         });
     } catch (error: any) {
         console.error("Error saving order:", error);
@@ -711,3 +729,5 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    

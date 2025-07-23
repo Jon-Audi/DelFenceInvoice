@@ -29,7 +29,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentData, Timestamp, documentId } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -248,6 +248,8 @@ export default function InvoicesPage() {
     try {
         await runTransaction(db, async (transaction) => {
             const { id, ...invoiceDataFromDialog } = invoiceToSave;
+
+            // --- Read Phase ---
             let originalInvoice: Invoice | null = null;
             if (id) {
                 const originalInvoiceRef = doc(db, 'invoices', id);
@@ -259,6 +261,7 @@ export default function InvoicesPage() {
             
             const inventoryChanges = new Map<string, number>();
 
+            // Calculate changes from original invoice
             if (originalInvoice) {
                 originalInvoice.lineItems.forEach(item => {
                     if (item.productId && !item.isNonStock) {
@@ -268,6 +271,7 @@ export default function InvoicesPage() {
                 });
             }
 
+            // Calculate changes from new/updated invoice
             invoiceDataFromDialog.lineItems.forEach(item => {
                 if (item.productId && !item.isNonStock) {
                     const change = item.isReturn ? item.quantity : -item.quantity;
@@ -275,10 +279,25 @@ export default function InvoicesPage() {
                 }
             });
 
+            // Pre-fetch all product documents needed for updates
+            const productRefs: Map<string, DocumentReference> = new Map();
+            const productSnapshots: Map<string, any> = new Map();
+
+            for (const [productId] of inventoryChanges.entries()) {
+                const productRef = doc(db, 'products', productId);
+                productRefs.set(productId, productRef);
+                const productSnap = await transaction.get(productRef);
+                productSnapshots.set(productId, productSnap);
+            }
+
+            // --- Write Phase ---
+            // Update product quantities
             for (const [productId, quantityChange] of inventoryChanges.entries()) {
                 if (quantityChange === 0) continue;
-                const productRef = doc(db, 'products', productId);
-                const productSnap = await transaction.get(productRef);
+
+                const productRef = productRefs.get(productId)!;
+                const productSnap = productSnapshots.get(productId)!;
+
                 if (!productSnap.exists()) {
                     throw new Error(`Product with ID ${productId} not found!`);
                 }
@@ -287,6 +306,7 @@ export default function InvoicesPage() {
                 transaction.update(productRef, { quantityInStock: newStock });
             }
 
+            // Save the invoice document
             if (id) {
                 const invoiceRef = doc(db, 'invoices', id);
                 transaction.set(invoiceRef, invoiceDataFromDialog, { merge: true });
@@ -887,3 +907,5 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
