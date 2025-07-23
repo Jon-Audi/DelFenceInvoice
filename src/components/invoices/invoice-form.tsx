@@ -12,6 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -36,7 +44,6 @@ import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Ordered', 'Ready for pick up', 'Picked up', 'Partially Paid', 'Paid', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
@@ -68,11 +75,10 @@ const lineItemSchema = z.object({
   }
 });
 
-// Schema for individual payment objects within the form's payments array
 const formPaymentSchema = z.object({
   id: z.string(),
-  date: z.date(), // Store as Date object in form state, convert to ISO string on final submission
-  amount: z.coerce.number().positive("Amount must be positive"),
+  date: z.date(),
+  amount: z.coerce.number().refine(val => val !== 0, { message: "Amount cannot be zero." }),
   method: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]),
   notes: z.string().optional(),
 });
@@ -88,28 +94,25 @@ const invoiceFormSchema = z.object({
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
-  payments: z.array(formPaymentSchema).optional(), // Holds the array of all payments for the invoice
+  payments: z.array(formPaymentSchema).optional(),
   readyForPickUpDate: z.date().optional(),
   pickedUpDate: z.date().optional(),
 
-  // Fields for the "Add/Edit Payment" UI section
-  currentPaymentAmount: z.coerce.number().positive("Amount must be positive").optional(),
+  currentPaymentAmount: z.coerce.number().refine(val => val !== 0, { message: "Amount cannot be zero." }).optional(),
   currentPaymentDate: z.date().optional(),
   currentPaymentMethod: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional(),
   currentPaymentNotes: z.string().optional(),
 }).refine(data => {
-    // Validation for the current payment input section IF an amount is entered
-    if (data.currentPaymentAmount && data.currentPaymentAmount > 0) {
+    if (data.currentPaymentAmount) {
         return !!data.currentPaymentDate && !!data.currentPaymentMethod;
     }
     return true;
 }, {
-    message: "Payment date and method are required if payment amount is entered for the current payment.",
-    path: ["currentPaymentMethod"], // Or another relevant path like currentPaymentDate
+    message: "Payment date and method are required if payment amount is entered.",
+    path: ["currentPaymentMethod"],
 });
 
 export type InvoiceFormData = Omit<z.infer<typeof invoiceFormSchema>, 'payments'> & {
-  // For submission, payments need to be in the format expected by the backend (ISO date string)
   payments?: Payment[];
 };
 export type FormPayment = z.infer<typeof formPaymentSchema>;
@@ -117,7 +120,7 @@ export type FormPayment = z.infer<typeof formPaymentSchema>;
 
 interface InvoiceFormProps {
   invoice?: Invoice;
-  initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null; // Allow partial for conversion
+  initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
   onSubmit: (data: InvoiceFormData) => void;
   onClose?: () => void;
   customers: Customer[];
@@ -130,7 +133,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
   
-  // Local state for managing the list of payments displayed and manipulated in the form
   const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
   const prevCustomerIdRef = useRef<string | undefined>();
 
@@ -145,7 +147,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
 
   const watchedStatus = form.watch('status');
 
-  // Initialize localPayments and form when invoice or initialData props change
   useEffect(() => {
     let defaultValues: z.infer<typeof invoiceFormSchema>;
     let initialLocalPayments: FormPayment[] = [];
@@ -166,7 +167,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
-        payments: invoice.payments?.map(p => ({...p, date: parseISO(p.date)})) || [], // Convert ISO string to Date
+        payments: invoice.payments?.map(p => ({...p, date: parseISO(p.date)})) || [],
         readyForPickUpDate: invoice.readyForPickUpDate ? new Date(invoice.readyForPickUpDate) : undefined,
         pickedUpDate: invoice.pickedUpDate ? new Date(invoice.pickedUpDate) : undefined,
       };
@@ -198,7 +199,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         paymentTerms: 'Due on receipt', notes: '', dueDate: undefined, payments: [],
       };
     }
-    // Explicitly set undefined for currentPayment fields if not editing
     defaultValues.currentPaymentAmount = undefined;
     defaultValues.currentPaymentDate = undefined;
     defaultValues.currentPaymentMethod = undefined;
@@ -254,7 +254,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
         return item;
       }
       const newUnitPrice = calculateUnitPrice(product, customer);
-      if (Math.abs(item.unitPrice - newUnitPrice) > 0.001) { // Compare with tolerance
+      if (Math.abs(item.unitPrice - newUnitPrice) > 0.001) {
         hasChanged = true;
         return { ...item, unitPrice: newUnitPrice };
       }
@@ -289,15 +289,14 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
     const method = form.getValues("currentPaymentMethod");
     const notes = form.getValues("currentPaymentNotes");
 
-    if (amount && amount > 0 && date && method) {
-      if (editingPayment) { // Update existing payment
+    if (amount && date && method) {
+      if (editingPayment) {
         setLocalPayments(prev => prev.map(p => p.id === editingPayment.id ? { ...editingPayment, date, amount, method, notes } : p));
         setEditingPayment(null);
-      } else { // Add new payment
+      } else {
         const newPayment: FormPayment = { id: crypto.randomUUID(), date, amount, method, notes };
         setLocalPayments(prev => [...prev, newPayment]);
       }
-      // Reset current payment input fields
       form.reset({
         ...form.getValues(),
         currentPaymentAmount: undefined,
@@ -307,7 +306,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       });
       form.clearErrors(["currentPaymentAmount", "currentPaymentDate", "currentPaymentMethod"]);
     } else {
-        // Trigger validation for current payment fields if trying to add/update with incomplete info
         form.trigger(["currentPaymentAmount", "currentPaymentDate", "currentPaymentMethod"]);
     }
   };
@@ -315,7 +313,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   const handleEditPayment = (paymentToEdit: FormPayment) => {
     setEditingPayment(paymentToEdit);
     form.setValue("currentPaymentAmount", paymentToEdit.amount);
-    form.setValue("currentPaymentDate", paymentToEdit.date); // date is already a Date object
+    form.setValue("currentPaymentDate", paymentToEdit.date);
     form.setValue("currentPaymentMethod", paymentToEdit.method);
     form.setValue("currentPaymentNotes", paymentToEdit.notes || '');
   };
@@ -343,7 +341,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   };
 
   const handleFormSubmit = (data: z.infer<typeof invoiceFormSchema>) => {
-    // Convert payment dates from Date objects back to ISO strings for submission
     const paymentsForSubmission: Payment[] = localPayments.map(p => ({
       ...p,
       date: p.date.toISOString(),
@@ -353,7 +350,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
       ...data,
       payments: paymentsForSubmission,
     };
-    // Remove the temporary currentPayment fields before submitting
     delete (formDataForSubmission as any).currentPaymentAmount;
     delete (formDataForSubmission as any).currentPaymentDate;
     delete (formDataForSubmission as any).currentPaymentMethod;
@@ -454,7 +450,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-        {/* Invoice Header Fields: Number, Customer, PO, Dates, Status, Terms */}
         <FormField control={form.control} name="invoiceNumber" render={({ field }) => (
           <FormItem><FormLabel>Invoice Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
@@ -558,12 +553,10 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             )} />
         )}
 
-
         <FormField control={form.control} name="paymentTerms" render={({ field }) => (
           <FormItem><FormLabel>Payment Terms (Optional)</FormLabel><FormControl><Input {...field} placeholder="e.g., Due on receipt, NET 30" /></FormControl><FormMessage /></FormItem>
         )} />
 
-        {/* Line Items Section */}
         <Separator /><h3 className="text-lg font-medium">Line Items</h3>
         {fields.map((fieldItem, index) => {
           const currentLineItem = watchedLineItems?.[index];
@@ -660,7 +653,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             <p className="text-sm font-medium text-destructive">{form.formState.errors.lineItems.root.message}</p>
         )}
 
-        {/* Payments Management Section */}
         <Separator />
         <h3 className="text-lg font-medium">Payments</h3>
         {localPayments.length > 0 && (
@@ -672,7 +664,9 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                 {localPayments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>{format(p.date, "PPP")}</TableCell>
-                    <TableCell>${p.amount.toFixed(2)}</TableCell>
+                    <TableCell className={cn(p.amount < 0 && "text-destructive font-semibold")}>
+                      {p.amount < 0 ? `-$${Math.abs(p.amount).toFixed(2)}` : `$${p.amount.toFixed(2)}`}
+                    </TableCell>
                     <TableCell>{p.method}</TableCell>
                     <TableCell>{p.notes || 'N/A'}</TableCell>
                     <TableCell className="space-x-1">
@@ -690,7 +684,13 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             <h4 className="text-md font-medium">{editingPayment ? "Edit Payment" : "Record New Payment"}</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="currentPaymentAmount" render={({ field }) => (
-                    <FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>Payment Amount (use negative for refunds)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="e.g., 50.00 or -25.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                 )} />
                 <FormField control={form.control} name="currentPaymentDate" render={({ field }) => (
                     <FormItem className="flex flex-col"><FormLabel>Payment Date</FormLabel>
@@ -714,7 +714,7 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
                 </FormItem>
             )} />
             <FormField control={form.control} name="currentPaymentNotes" render={({ field }) => (
-              <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Check #123" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel>Payment Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Check #123, Refund for overpayment" {...field} rows={2} /></FormControl><FormMessage /></FormItem>
             )} />
             <div className="flex gap-2">
                 <Button type="button" onClick={handleAddOrUpdatePayment}>
@@ -727,12 +727,11 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
             )}
         </div>
 
-        {/* Invoice Totals and Notes */}
         <Separator />
         <div className="space-y-2 text-right font-medium">
             <div>Invoice Total: <span className="font-semibold">${currentInvoiceTotal.toFixed(2)}</span></div>
-            {totalPaidFromLocalPayments > 0 && (
-                 <div>Total Paid: <span className="text-green-600">(${totalPaidFromLocalPayments.toFixed(2)})</span></div>
+            {totalPaidFromLocalPayments !== 0 && (
+                 <div>Total Paid / Refunded: <span className={cn(totalPaidFromLocalPayments > 0 ? "text-green-600" : "text-destructive")}>(${Math.abs(totalPaidFromLocalPayments).toFixed(2)})</span></div>
             )}
             <div className="text-lg">Balance Due: <span className="font-bold">${balanceDueDisplay.toFixed(2)}</span></div>
         </div>
@@ -741,7 +740,6 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
           <FormItem><FormLabel>Invoice Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Thank you for your business!" {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
 
-        {/* Submit and Cancel Buttons */}
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
           <Button type="submit">{invoice || initialData ? 'Save Changes' : 'Create Invoice'}</Button>
