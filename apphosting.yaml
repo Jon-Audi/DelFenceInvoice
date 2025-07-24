@@ -7,55 +7,10 @@ runConfig:
   minInstances: 0 # Example: 0-100 (0 for scaling to zero)
   concurrency: 80 # Example: 1-1000
 
-# Environment variables and secrets.
-env:
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSyD2-QPCyQBZUvJUGkKtCkLle6i8OITlhXE
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: delfenceinvoice.firebaseapp.com
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: delfenceinvoice
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: delfenceinvoice.appspot.com
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: 755886893480
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: 1:755886893480:web:f020701c36246180abd59d
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-    value: G-T9HNW4B36L
-    availability:
-      - BUILD
-      - RUNTIME
-  # Configure environment variables.
-  # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
-  # - variable: MESSAGE
-  #   value: Hello world!
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
-
-  # Grant access to secrets in Cloud Secret Manager.
-  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  # - variable: RECAPTCHA_SECRET_KEY # Example for your reCAPTCHA secret key
-  #   secret: yourRecaptchaSecret
+# Grant access to secrets in Cloud Secret Manager.
+# See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
+# - variable: RECAPTCHA_SECRET_KEY # Example for your reCAPTCHA secret key
+#   secret: yourRecaptchaSecret
 
 # Settings for the build process.
 # buildConfig:
