@@ -1,57 +1,62 @@
 // src/lib/firebase.ts
-
-// Verbose logging for environment variable check
-console.log("[FirebaseInit] Attempting to read NEXT_PUBLIC_FIREBASE_PROJECT_ID from process.env.");
-const projectIdFromEnv = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-console.log(`[FirebaseInit] Value of NEXT_PUBLIC_FIREBASE_PROJECT_ID: "${projectIdFromEnv}" (Type: ${typeof projectIdFromEnv})`);
-
-// CRITICAL CHECK: Ensure Project ID is available at the very start.
-if (!projectIdFromEnv) { // Use the variable we just logged
-  const errMsg = "CRITICAL STARTUP ERROR: NEXT_PUBLIC_FIREBASE_PROJECT_ID is not defined in the environment. Firebase cannot initialize. Check apphosting.yaml and Cloud Run environment variable configuration.";
-  console.error(errMsg);
-  // This will ensure the application crashes immediately if the projectId is missing.
-  // The error should be prominent in the Cloud Run logs.
-  throw new Error(errMsg);
-}
-
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics";
-import { getFirestore, type Firestore }   from "firebase/firestore";
+import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-// ✅ Load config from environment variables
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: projectIdFromEnv, // Use the checked variable
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-};
+let firebaseConfig: any;
+
+// In a server-side or build environment (like App Hosting), GOOGLE_CLOUD_PROJECT is set.
+// The Firebase Admin SDK and other server-side tools use this.
+// For client-side code, App Hosting injects FIREBASE_CONFIG.
+if (process.env.FIREBASE_CONFIG) {
+  try {
+    firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+     console.log("[FirebaseInit] Loaded config from process.env.FIREBASE_CONFIG.");
+  } catch(e) {
+    console.error("[FirebaseInit] Failed to parse FIREBASE_CONFIG.", e);
+    throw new Error("Firebase configuration from environment is invalid.");
+  }
+} else {
+   // Fallback to client-side environment variables for local development
+   console.log("[FirebaseInit] Loading config from NEXT_PUBLIC_ variables for local dev.");
+   firebaseConfig = {
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+   };
+}
+
+
+if (!firebaseConfig.projectId) {
+  const errMsg = "CRITICAL STARTUP ERROR: Firebase projectId is not defined. Initialization failed. Check environment variables.";
+  console.error(errMsg);
+  throw new Error(errMsg);
+}
 
 let app: FirebaseApp;
 let db: Firestore;
-let authInstance: Auth; // Renamed from 'auth'
+let authInstance: Auth;
 let storage: FirebaseStorage;
 let analytics: Analytics | undefined;
 
-// Prevent re-initialization on hot reload
 if (getApps().length) {
   app = getApp();
 } else {
   app = initializeApp(firebaseConfig);
 }
 
-// Initialize Firebase services
 db = getFirestore(app);
-authInstance = getAuth(app); // Use the renamed variable
+authInstance = getAuth(app);
 storage = getStorage(app);
 
 if (typeof window !== "undefined") {
   try {
-    // Check if measurementId is present before initializing analytics
     if (firebaseConfig.measurementId) {
       analytics = getAnalytics(app);
     } else {
@@ -62,4 +67,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export { app, db, authInstance as auth, storage, analytics }; // Export authInstance as auth, and storage
+export { app, db, authInstance as auth, storage, analytics };
