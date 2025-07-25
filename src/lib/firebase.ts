@@ -9,8 +9,17 @@ let firebaseConfig: any;
 
 // In a server-side or build environment (like App Hosting), GOOGLE_CLOUD_PROJECT is set.
 // The Firebase Admin SDK and other server-side tools use this.
-// For client-side code, App Hosting injects FIREBASE_CONFIG.
-if (process.env.FIREBASE_CONFIG) {
+// For client-side code, App Hosting injects FIREBASE_WEBAPP_CONFIG.
+if (process.env.FIREBASE_WEBAPP_CONFIG) {
+  try {
+    firebaseConfig = JSON.parse(process.env.FIREBASE_WEBAPP_CONFIG);
+     console.log("[FirebaseInit] Loaded config from process.env.FIREBASE_WEBAPP_CONFIG.");
+  } catch(e) {
+    console.error("[FirebaseInit] Failed to parse FIREBASE_WEBAPP_CONFIG.", e);
+    throw new Error("Firebase configuration from environment is invalid.");
+  }
+} else if (process.env.FIREBASE_CONFIG) {
+    // Fallback for environments that might only provide the basic config
   try {
     firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
      console.log("[FirebaseInit] Loaded config from process.env.FIREBASE_CONFIG.");
