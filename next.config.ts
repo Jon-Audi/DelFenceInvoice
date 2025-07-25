@@ -2,6 +2,9 @@
 import type { NextConfig } from 'next';
 import type { Configuration as WebpackConfiguration } from 'webpack';
 
+// Load environment variables from .env file
+require('dotenv').config({ path: './.env' });
+
 const nextConfig: NextConfig = {
   // Add a watchOptions configuration to ignore the 'functions' directory.
   // This prevents the Next.js dev server from restarting every time
@@ -35,6 +38,3 @@ const nextConfig: NextConfig = {
       }
     ],
   },
-};
-
-module.exports = nextConfig;
