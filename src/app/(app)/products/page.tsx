@@ -163,6 +163,36 @@ export default function ProductsPage() {
       setIsLoading(false);
     }
   };
+  
+  const handleBulkUpdateProducts = async (updatedProducts: Product[]) => {
+    setIsLoading(true);
+    const batch = writeBatch(db);
+    updatedProducts.forEach(product => {
+      const { id, ...productData } = product;
+      const productRef = doc(db, "products", id);
+      batch.update(productRef, {
+        price: product.price,
+        cost: product.cost,
+        markupPercentage: product.markupPercentage,
+      });
+    });
+    try {
+      await batch.commit();
+      toast({
+        title: "Bulk Update Successful",
+        description: `${updatedProducts.length} products have been updated.`,
+      });
+    } catch (error) {
+      console.error("Error during bulk product update:", error);
+      toast({
+        title: "Bulk Update Failed",
+        description: `Could not update products. Error: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSaveMultipleProducts = async (productsToSave: Omit<Product, 'id'>[]) => {
     const currentUser = firebaseAuthInstance.currentUser;
@@ -764,6 +794,7 @@ export default function ProductsPage() {
         onApplyCategoryMarkup={handleApplyCategoryMarkup}
         onDeleteCategory={handleDeleteCategory}
         onUpdateStock={handleOpenStockUpdateDialog}
+        onBulkUpdate={handleBulkUpdateProducts}
       />
        {groupedProducts.size === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">

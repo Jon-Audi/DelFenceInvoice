@@ -1,3 +1,5 @@
+// src/lib/firebase.ts
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAnalytics, Analytics } from "firebase/analytics";
@@ -57,6 +59,7 @@ let authInstance: Auth;
 let storage: FirebaseStorage;
 let analytics: Analytics | undefined;
 
+// Check if Firebase app is already initialized before initializing
 if (getApps().length) {
   app = getApp();
 } else {

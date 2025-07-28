@@ -14,6 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
+import { BulkPriceEditorDialog } from './bulk-price-editor-dialog'; // Import new component
 import {
   Accordion,
   AccordionContent,
@@ -60,7 +61,8 @@ interface ProductTableProps {
   isLoading: boolean;
   onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
   onDeleteCategory: (categoryName: string) => void;
-  onUpdateStock: (product: Product) => void; // New prop for updating stock
+  onUpdateStock: (product: Product) => void;
+  onBulkUpdate: (products: Product[]) => Promise<void>; // New prop for bulk updates
 }
 
 export function ProductTable({ 
@@ -73,12 +75,18 @@ export function ProductTable({
   onApplyCategoryMarkup,
   onDeleteCategory,
   onUpdateStock,
+  onBulkUpdate, // Destructure new prop
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
-  const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null); // Renamed to avoid conflict
+  const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null);
   const [selectedCategoryForMarkup, setSelectedCategoryForMarkup] = React.useState<string | null>(null);
   const [isMarkupDialogOpen, setIsMarkupDialogOpen] = React.useState(false);
   const [newMarkupValue, setNewMarkupValue] = React.useState<string>("");
+  
+  // State for the new bulk price editor
+  const [categoryForBulkEdit, setCategoryForBulkEdit] = React.useState<string | null>(null);
+  const [isBulkPriceEditorOpen, setIsBulkPriceEditorOpen] = React.useState(false);
+
 
   const formatCurrency = (amount: number | undefined) => {
     if (typeof amount !== 'number' || isNaN(amount)) return 'N/A';
@@ -89,6 +97,11 @@ export function ProductTable({
     setSelectedCategoryForMarkup(category);
     setNewMarkupValue(""); 
     setIsMarkupDialogOpen(true);
+  };
+  
+  const handleOpenBulkPriceEditor = (category: string) => {
+    setCategoryForBulkEdit(category);
+    setIsBulkPriceEditorOpen(true);
   };
 
   const handleApplyMarkup = () => {
@@ -168,9 +181,13 @@ export function ProductTable({
                       </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => handleOpenBulkPriceEditor(category)}>
+                        <Icon name="Edit" className="mr-2 h-4 w-4" />
+                        Bulk Edit Prices
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => handleOpenMarkupDialog(category)}>
                         <Icon name="TrendingUp" className="mr-2 h-4 w-4" />
-                        Apply Markup to Category
+                        Apply Category Markup
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -261,6 +278,16 @@ export function ProductTable({
           </AccordionItem>
         ))}
       </Accordion>
+
+      {categoryForBulkEdit && (
+        <BulkPriceEditorDialog
+          isOpen={isBulkPriceEditorOpen}
+          onOpenChange={setIsBulkPriceEditorOpen}
+          categoryName={categoryForBulkEdit}
+          products={groupedProducts.get(categoryForBulkEdit) || []}
+          onSave={onBulkUpdate}
+        />
+      )}
 
       {productToDelete && (
         <AlertDialog open={!!productToDelete} onOpenChange={(isOpen) => !isOpen && setProductToDelete(null)}>
