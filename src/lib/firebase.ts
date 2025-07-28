@@ -1,9 +1,10 @@
-// src/lib/firebase.ts
-import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAnalytics, type Analytics } from "firebase/analytics";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getAuth, type Auth } from "firebase/auth";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+// Import the functions you need from the SDKs you need
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getAnalytics, Analytics } from "firebase/analytics";
+import { getFirestore, Firestore, runTransaction, collection, doc, getDoc, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId } from 'firebase/firestore'; // Import Firestore related functions
+import { getAuth, Auth } from 'firebase/auth'; // Import Auth related functions
+import { getStorage, FirebaseStorage } from 'firebase/storage'; // Import Storage related functions
+
 
 let firebaseConfig: any;
 
@@ -43,6 +44,7 @@ if (process.env.FIREBASE_WEBAPP_CONFIG) {
    };
 }
 
+// Ensure projectId is defined after checking all sources
 if (!firebaseConfig.projectId) {
   const errMsg = "CRITICAL STARTUP ERROR: Firebase projectId is not defined after checking all sources. Initialization failed.";
   console.error(errMsg);
@@ -61,10 +63,13 @@ if (getApps().length) {
   app = initializeApp(firebaseConfig);
 }
 
+// Initialize other Firebase services if they are used
 db = getFirestore(app);
 authInstance = getAuth(app);
 storage = getStorage(app);
 
+
+// Initialize Analytics only in the browser
 if (typeof window !== "undefined") {
   try {
     if (firebaseConfig.measurementId) {
@@ -77,4 +82,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export { app, db, authInstance as auth, storage, analytics };
+export { app, db, authInstance as auth, storage, analytics, runTransaction, collection, doc, getDoc, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId }; // Export necessary functions
