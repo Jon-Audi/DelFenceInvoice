@@ -1,4 +1,3 @@
-
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics";
@@ -8,9 +7,7 @@ import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 let firebaseConfig: any;
 
-// In a server-side or build environment (like App Hosting), GOOGLE_CLOUD_PROJECT is set.
-// The Firebase Admin SDK and other server-side tools use this.
-// For client-side code, App Hosting injects FIREBASE_WEBAPP_CONFIG.
+// For server-side rendering and build processes in App Hosting
 if (process.env.FIREBASE_WEBAPP_CONFIG) {
   try {
     firebaseConfig = JSON.parse(process.env.FIREBASE_WEBAPP_CONFIG);
@@ -19,8 +16,7 @@ if (process.env.FIREBASE_WEBAPP_CONFIG) {
     console.error("[FirebaseInit] Failed to parse FIREBASE_WEBAPP_CONFIG.", e);
     throw new Error("Firebase configuration from environment is invalid.");
   }
-} else if (process.env.FIREBASE_CONFIG) {
-    // Fallback for environments that might only provide the basic config
+} else if (process.env.FIREBASE_CONFIG) { // Fallback for basic server-side config
   try {
     firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
      console.log("[FirebaseInit] Loaded config from process.env.FIREBASE_CONFIG.");
@@ -29,8 +25,13 @@ if (process.env.FIREBASE_WEBAPP_CONFIG) {
     throw new Error("Firebase configuration from environment is invalid.");
   }
 } else {
-   // Fallback to client-side environment variables for local development
+   // Fallback for client-side local development using .env file
    console.log("[FirebaseInit] Loading config from NEXT_PUBLIC_ variables for local dev.");
+   if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+      const errMsg = "Firebase project ID is not defined in NEXT_PUBLIC_FIREBASE_PROJECT_ID. Please add your Firebase project configuration to a .env.local file in the root of your project.";
+      console.error(`[FirebaseInit] ${errMsg}`);
+      throw new Error(`CRITICAL STARTUP ERROR: ${errMsg}`);
+   }
    firebaseConfig = {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -42,9 +43,8 @@ if (process.env.FIREBASE_WEBAPP_CONFIG) {
    };
 }
 
-
 if (!firebaseConfig.projectId) {
-  const errMsg = "CRITICAL STARTUP ERROR: Firebase projectId is not defined. Initialization failed. Check environment variables.";
+  const errMsg = "CRITICAL STARTUP ERROR: Firebase projectId is not defined after checking all sources. Initialization failed.";
   console.error(errMsg);
   throw new Error(errMsg);
 }

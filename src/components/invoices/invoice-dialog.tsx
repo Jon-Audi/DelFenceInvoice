@@ -1,6 +1,8 @@
+// src/components/invoices/invoice-dialog.tsx
+
 "use client";
 
-import React, { useState } from 'react'; // Import useState
+import React from 'react';
 import type { Invoice, Customer, Product, LineItem, Payment } from '@/types';
 import { InvoiceForm, type InvoiceFormData } from './invoice-form';
 import {
@@ -10,11 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter, // Import DialogFooter
-  DialogClose, // Import DialogClose
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button"; // Import Button
-import { Icon } from "@/components/icons"; // Import Icon
 
 interface InvoiceDialogProps {
   invoice?: Invoice;
@@ -26,7 +24,7 @@ interface InvoiceDialogProps {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
-  isDataLoading?: boolean; // Add this line
+  isDataLoading?: boolean; // <--- Add this line back
 }
 
 export function InvoiceDialog({
@@ -38,11 +36,9 @@ export function InvoiceDialog({
   productCategories,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
-  initialData, // Add a comma here
-  isDataLoading = false, // Default to false if not provided
+  initialData,
 }: InvoiceDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
-  const [isSaving, setIsSaving] = useState(false); // Add state for saving
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -53,8 +49,7 @@ export function InvoiceDialog({
     }
   }, [initialData, controlledIsOpen]);
 
-  const handleSubmit = async (formDataFromForm: InvoiceFormData) => { // Make handleSubmit async
-    setIsSaving(true); // Start saving
+  const handleSubmit = (formDataFromForm: InvoiceFormData) => {
     const selectedCustomer = customers.find(c => c.id === formDataFromForm.customerId);
     const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
@@ -134,8 +129,8 @@ export function InvoiceDialog({
     if (formDataFromForm.readyForPickUpDate) invoicePayload.readyForPickUpDate = formDataFromForm.readyForPickUpDate.toISOString();
     if (formDataFromForm.pickedUpDate) invoicePayload.pickedUpDate = formDataFromForm.pickedUpDate.toISOString();
 
-    await onSave(invoicePayload as Invoice); // Pass the clean object.
-    setIsSaving(false); // End saving
+
+    onSave(invoicePayload as Invoice); // Pass the clean object.
     setOpen(false);
   };
 
@@ -158,17 +153,7 @@ export function InvoiceDialog({
           customers={customers}
           products={products}
           productCategories={productCategories}
-          isDataLoading={isDataLoading} // Pass loading state to the form
         />
-         {/* Add DialogFooter and Save button */}
-         <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={isSaving}>Cancel</Button>
-          </DialogClose>
-          {/* The InvoiceForm should handle submission, but if you need a button here */}
-          {/* you would need to find a way to trigger the form's onSubmit */}
-          {/* For now, relying on the form's internal submit */}
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

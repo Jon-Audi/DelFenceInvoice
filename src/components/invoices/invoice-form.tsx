@@ -118,6 +118,8 @@ export type InvoiceFormData = Omit<z.infer<typeof invoiceFormSchema>, 'payments'
 export type FormPayment = z.infer<typeof formPaymentSchema>;
 
 
+// src/components/invoices/invoice-form.tsx
+
 interface InvoiceFormProps {
   invoice?: Invoice;
   initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
@@ -126,9 +128,20 @@ interface InvoiceFormProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  isDataLoading?: boolean; // <--- Add this line
 }
 
-export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers, products, productCategories = [] }: InvoiceFormProps) {
+
+export function InvoiceForm({
+  invoice,
+  initialData,
+  onSubmit,
+  onClose,
+  customers,
+  products,
+  productCategories = [],
+  isDataLoading = false, // <--- Accept the prop here
+}: InvoiceFormProps) {
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
@@ -740,9 +753,13 @@ export function InvoiceForm({ invoice, initialData, onSubmit, onClose, customers
           <FormItem><FormLabel>Invoice Notes (Optional)</FormLabel><FormControl><Textarea placeholder="e.g., Thank you for your business!" {...field} rows={3} /></FormControl><FormMessage /></FormItem>
         )} />
 
-        <div className="flex justify-end gap-2 pt-4">
+<div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
-          <Button type="submit">{invoice || initialData ? 'Save Changes' : 'Create Invoice'}</Button>
+          {/* Modify the Save/Create button */}
+          <Button type="submit" disabled={form.formState.isSubmitting || isDataLoading}> {/* <--- Modify this line */}
+            {form.formState.isSubmitting && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+            {invoice || initialData ? 'Save Changes' : 'Create Invoice'}
+          </Button>
         </div>
       </form>
       {isBulkAddDialogOpen && (

@@ -773,6 +773,7 @@ export default function InvoicesPage() {
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
+            isDataLoading={isLoadingCustomers || isLoadingProducts}
         />
       )}
 
