@@ -208,6 +208,12 @@ export interface WeeklySummaryReportItem {
   totalInvoices: number;
 }
 
+export interface PaymentByTypeReportItem {
+  method: PaymentMethod;
+  totalAmount: number;
+  transactionCount: number;
+}
+
 export interface BulkPaymentReceiptData {
   paymentDetails: Payment;
   customerName: string;

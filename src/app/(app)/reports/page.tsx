@@ -15,23 +15,25 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
 import { PrintablePaymentsReport } from '@/components/reports/printable-payments-report';
 import { PrintableWeeklySummaryReport } from '@/components/reports/printable-weekly-summary-report';
+import { PrintablePaymentByTypeReport } from '@/components/reports/printable-payment-by-type-report';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary';
-type DatePreset = 'custom' | 'thisYear' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'last7Days';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType';
+type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
   reportType: ReportType;
-  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[];
+  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[] | PaymentByTypeReportItem[];
   companySettings: CompanySettings;
   logoUrl: string;
   reportTitle?: string;
@@ -46,7 +48,7 @@ export default function ReportsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
-  const [generatedReportData, setGeneratedReportData] = useState<Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[] | null>(null);
+  const [generatedReportData, setGeneratedReportData] = useState<any[] | null>(null);
   const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
   
   const [isLoading, setIsLoading] = useState(false);
@@ -101,9 +103,9 @@ export default function ReportsPage() {
         newStart = startOfMonth(lastMonthDate);
         newEnd = endOfMonth(lastMonthDate);
         break;
-      case 'last7Days':
-        newStart = subDays(today, 6);
-        newEnd = today;
+       case 'thisWeek':
+        newStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday as start of week
+        newEnd = endOfWeek(today, { weekStartsOn: 1 });
         break;
       case 'custom':
       default:
@@ -239,6 +241,42 @@ export default function ReportsPage() {
         });
         data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime());
       
+      } else if (reportType === 'paymentByType') {
+        currentReportTitle = `Payments by Type (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
+        const paymentSummary = new Map<Payment['method'], { totalAmount: number; transactionCount: number }>();
+        
+        // Initialize map with all possible payment methods
+        PAYMENT_METHODS.forEach(method => {
+            paymentSummary.set(method, { totalAmount: 0, transactionCount: 0 });
+        });
+
+        const [paymentsInvoicesSnapshot, paymentsOrdersSnapshot] = await Promise.all([
+            getDocs(query(collection(db, 'invoices'), where('status', 'in', ['Paid', 'Partially Paid']))),
+            getDocs(query(collection(db, 'orders'), where('amountPaid', '>', 0)))
+        ]);
+
+        const processDocPayments = (doc: Invoice | Order) => {
+            if (!doc.payments) return;
+            for (const payment of doc.payments) {
+                const paymentDate = new Date(payment.date);
+                if (paymentDate >= rangeStart && paymentDate <= rangeEnd) {
+                    const current = paymentSummary.get(payment.method) || { totalAmount: 0, transactionCount: 0 };
+                    current.totalAmount += payment.amount;
+                    current.transactionCount += 1;
+                    paymentSummary.set(payment.method, current);
+                }
+            }
+        };
+
+        paymentsInvoicesSnapshot.docs.forEach(d => processDocPayments(d.data() as Invoice));
+        paymentsOrdersSnapshot.docs.forEach(d => processDocPayments(d.data() as Order));
+        
+        data = Array.from(paymentSummary.entries()).map(([method, summary]) => ({
+            method,
+            totalAmount: summary.totalAmount,
+            transactionCount: summary.transactionCount,
+        })).sort((a, b) => b.totalAmount - a.totalAmount);
+    
       } else if (reportType === 'weeklySummary') {
         currentReportTitle = `Weekly Summary Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
 
@@ -341,7 +379,7 @@ export default function ReportsPage() {
       
       const dataForPrint: ReportToPrintData = {
         reportType: reportType,
-        data: generatedReportData,
+        data: generatedReportData as any, // Cast because TypeScript can't narrow down the union type here easily
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
         reportTitle: reportTitleForSummary,
@@ -388,6 +426,11 @@ export default function ReportsPage() {
   const renderReportSummary = () => {
     if (!generatedReportData) return null;
 
+    if (reportType === 'paymentByType') {
+      const paymentItems = generatedReportData as PaymentByTypeReportItem[];
+      const grandTotalAmount = paymentItems.reduce((sum, item) => sum + item.totalAmount, 0);
+      return <p>Total Payments Received: <span className="font-semibold">${grandTotalAmount.toFixed(2)}</span></p>;
+    }
     if (reportType === 'payments') {
         const paymentItems = generatedReportData as PaymentReportItem[];
         const totalPaymentsReceived = paymentItems.reduce((sum, item) => sum + item.totalPaidForDocument, 0);
@@ -425,31 +468,76 @@ export default function ReportsPage() {
   };
 
   const renderReportTable = () => {
-    if (!generatedReportData || reportType !== 'weeklySummary') return null;
+    if (!generatedReportData) return null;
 
-    return (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Week</TableHead>
-              <TableHead className="text-right">Payments Collected</TableHead>
-              <TableHead className="text-right">Total Orders</TableHead>
-              <TableHead className="text-right">Total Invoices</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(generatedReportData as WeeklySummaryReportItem[]).map(item => (
-              <TableRow key={item.weekIdentifier}>
-                <TableCell>{format(new Date(item.weekStartDate), "MMM d")} - {format(new Date(item.weekEndDate), "MMM d, yyyy")}</TableCell>
-                <TableCell className="text-right">${item.totalPayments.toFixed(2)}</TableCell>
-                <TableCell className="text-right">${item.totalOrders.toFixed(2)}</TableCell>
-                <TableCell className="text-right">${item.totalInvoices.toFixed(2)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-    );
+    if (reportType === 'weeklySummary') {
+        return (
+            <Table>
+            <TableHeader>
+                <TableRow>
+                <TableHead>Week</TableHead>
+                <TableHead className="text-right">Payments Collected</TableHead>
+                <TableHead className="text-right">Total Orders</TableHead>
+                <TableHead className="text-right">Total Invoices</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {(generatedReportData as WeeklySummaryReportItem[]).map(item => (
+                <TableRow key={item.weekIdentifier}>
+                    <TableCell>{format(new Date(item.weekStartDate), "MMM d")} - {format(new Date(item.weekEndDate), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-right">${item.totalPayments.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${item.totalOrders.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${item.totalInvoices.toFixed(2)}</TableCell>
+                </TableRow>
+                ))}
+            </TableBody>
+            </Table>
+        );
+    }
+
+    if (reportType === 'paymentByType') {
+        const grandTotalAmount = (generatedReportData as PaymentByTypeReportItem[]).reduce((sum, item) => sum + item.totalAmount, 0);
+        const grandTotalCount = (generatedReportData as PaymentByTypeReportItem[]).reduce((sum, item) => sum + item.transactionCount, 0);
+        return (
+            <Table>
+            <TableHeader>
+                <TableRow>
+                <TableHead>Payment Method</TableHead>
+                <TableHead className="text-right">Total Amount</TableHead>
+                <TableHead className="text-right"># of Transactions</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {(generatedReportData as PaymentByTypeReportItem[]).map(item => (
+                <TableRow key={item.method}>
+                    <TableCell>{item.method}</TableCell>
+                    <TableCell className="text-right">${item.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{item.transactionCount}</TableCell>
+                </TableRow>
+                ))}
+            </TableBody>
+             <tfoot>
+                <TableRow className="font-bold bg-muted/50">
+                    <TableCell className="text-right">Totals:</TableCell>
+                    <TableCell className="text-right">${grandTotalAmount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{grandTotalCount}</TableCell>
+                </TableRow>
+             </tfoot>
+            </Table>
+        );
+    }
+    
+    return null;
   };
+
+  const getActiveDatePresets = () => {
+    const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'thisYear', 'custom'];
+    if (reportType === 'weeklySummary' || reportType === 'paymentByType') {
+        return ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
+    }
+    return commonPresets;
+  }
+  const datePresetsToRender = getActiveDatePresets();
 
   return (
     <>
@@ -465,33 +553,30 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6">
               <TabsTrigger value="sales">Sales</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
               <TabsTrigger value="payments">Payments</TabsTrigger>
               <TabsTrigger value="weeklySummary">Weekly Summary</TabsTrigger>
+              <TabsTrigger value="paymentByType">By Payment Type</TabsTrigger>
             </TabsList>
           </Tabs>
 
           {reportType !== 'customerBalances' && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {reportType === 'weeklySummary' ? (
-                  <>
-                    <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
-                    <Button variant={activeDatePreset === 'lastMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('lastMonth')} disabled={isLoading}>Last Month</Button>
-                    <Button variant={activeDatePreset === 'thisQuarter' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisQuarter')} disabled={isLoading}>This Quarter</Button>
-                    <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant={activeDatePreset === 'thisMonth' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisMonth')} disabled={isLoading}>This Month</Button>
-                    <Button variant={activeDatePreset === 'thisYear' ? "default" : "outline"} onClick={() => handleDatePresetChange('thisYear')} disabled={isLoading}>This Year</Button>
-                    <Button variant={activeDatePreset === 'last7Days' ? "default" : "outline"} onClick={() => handleDatePresetChange('last7Days')} disabled={isLoading}>Last 7 Days</Button>
-                  </>
-                )}
-                 <Button variant={activeDatePreset === 'custom' ? "default" : "outline"} onClick={() => setActiveDatePreset('custom')} disabled={isLoading}>Custom Range</Button>
+                 {datePresetsToRender.map(preset => (
+                    <Button 
+                        key={preset}
+                        variant={activeDatePreset === preset ? "default" : "outline"} 
+                        onClick={() => preset === 'custom' ? setActiveDatePreset('custom') : handleDatePresetChange(preset)} 
+                        disabled={isLoading}
+                        className="capitalize"
+                    >
+                        {preset.replace(/([A-Z])/g, ' $1').trim()}
+                    </Button>
+                ))}
               </div>
               {activeDatePreset === 'custom' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
@@ -567,7 +652,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             {renderReportSummary()}
-            {reportType === 'weeklySummary' && <div className="mt-4">{renderReportTable()}</div>}
+            <div className="mt-4">{renderReportTable()}</div>
           </CardContent>
         </Card>
       )}
@@ -587,6 +672,9 @@ export default function ReportsPage() {
         )}
         {reportToPrintData && reportToPrintData.reportType === 'weeklySummary' && (
           <PrintableWeeklySummaryReport ref={printRef} reportItems={reportToPrintData.data as WeeklySummaryReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
+        )}
+        {reportToPrintData && reportToPrintData.reportType === 'paymentByType' && (
+          <PrintablePaymentByTypeReport ref={printRef} reportItems={reportToPrintData.data as PaymentByTypeReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
       </div>
     </>
