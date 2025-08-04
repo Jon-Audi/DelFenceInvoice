@@ -301,7 +301,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
   };
 
   const currentSubtotal = useMemo(() => {
-    return watchedLineItems.reduce((acc, item) => {
+    return (watchedLineItems || []).reduce((acc, item) => {
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const quantity = item.quantity || 0;
       const itemTotal = price * quantity;
