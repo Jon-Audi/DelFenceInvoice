@@ -41,6 +41,7 @@ import {
   Layers,
   PackageCheck,
   ClipboardList,
+  Copy,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -88,6 +89,7 @@ const iconComponents = {
   Layers,
   PackageCheck,
   ClipboardList,
+  Copy,
 };
 
 interface IconProps extends LucideProps {
@@ -102,5 +104,3 @@ export const Icon = ({ name, ...props }: IconProps) => {
   }
   return <LucideIcon {...props} />;
 };
-
-    

@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { estimateEmailDraft } from '@/ai/flows/estimate-email-draft';
 import type { Estimate, Product, Customer, CompanySettings, EmailContact } from '@/types';
 import { EstimateDialog } from '@/components/estimates/estimate-dialog';
+import type { EstimateFormData } from '@/components/estimates/estimate-form';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, deleteField } from 'firebase/firestore';
 import PrintableEstimate from '@/components/estimates/printable-estimate';
@@ -94,6 +95,10 @@ export default function EstimatesPage() {
 
   const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  
+  const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
+  const [clonedEstimateData, setClonedEstimateData] = useState<Partial<EstimateFormData> | null>(null);
+
 
   // Removed Firebase Functions instance: const functionsInstance = getFunctions();
   // Removed callable function: const sendEmailFunction = httpsCallable(functionsInstance, 'sendEmailWithMailerSend');
@@ -242,6 +247,22 @@ export default function EstimatesPage() {
     }
     setEstimateToDelete(null);
   };
+  
+  const handleCloneEstimate = (estimateToClone: Estimate) => {
+    const newEstimateData: Partial<EstimateFormData> = {
+      ...estimateToClone,
+      id: undefined, // This will be a new document
+      estimateNumber: `EST-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+      customerId: '', // Clear customer so user has to select a new one
+      customerName: '',
+      date: new Date(),
+      status: 'Draft',
+      validUntil: undefined, // Or adjust as needed, e.g., date + 30 days
+    };
+    setClonedEstimateData(newEstimateData);
+    setIsCloneDialogOpen(true);
+  };
+
 
   const handleGenerateEmail = async (estimate: Estimate) => {
     setSelectedEstimateForEmail(estimate);
@@ -498,6 +519,19 @@ export default function EstimatesPage() {
           productCategories={stableProductCategories}
         />
       </PageHeader>
+      
+      {clonedEstimateData && (
+        <EstimateDialog
+          isOpen={isCloneDialogOpen}
+          onOpenChange={setIsCloneDialogOpen}
+          initialData={clonedEstimateData}
+          onSave={handleSaveEstimate}
+          onSaveCustomer={handleSaveCustomer}
+          products={products}
+          customers={customers}
+          productCategories={stableProductCategories}
+        />
+       )}
 
       <Card>
         <CardHeader>
@@ -569,6 +603,9 @@ export default function EstimatesPage() {
                             customers={customers}
                             productCategories={stableProductCategories}
                           />
+                          <DropdownMenuItem onClick={() => handleCloneEstimate(estimate)}>
+                            <Icon name="Copy" className="mr-2 h-4 w-4" /> Clone Estimate
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleGenerateEmail(estimate)}>
                             <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft
                           </DropdownMenuItem>
@@ -697,11 +734,11 @@ export default function EstimatesPage() {
         </AlertDialog>
       )}
 
-      {estimateToPrint && (
-        <div style={{ display: 'none' }}>
+      <div style={{ display: 'none' }}>
+        {estimateToPrint && (
           <PrintableEstimate ref={printRef} {...estimateToPrint} />
-        </div>
-      )}
+        )}
+      </div>
 
       {estimateForViewingItems && (
         <LineItemsViewerDialog
@@ -719,5 +756,3 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    

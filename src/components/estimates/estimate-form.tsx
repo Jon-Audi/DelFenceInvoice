@@ -85,6 +85,7 @@ export type EstimateFormData = z.infer<typeof estimateFormSchema>;
 
 interface EstimateFormProps {
   estimate?: Estimate;
+  initialData?: Partial<EstimateFormData>;
   onSubmit: (data: EstimateFormData) => void;
   onClose?: () => void;
   products: Product[];
@@ -93,18 +94,23 @@ interface EstimateFormProps {
   onSaveCustomer: (customerToSave: Customer) => Promise<string | void>;
 }
 
-export function EstimateForm({ estimate, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
+export function EstimateForm({ estimate, initialData, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const prevCustomerIdRef = useRef<string | undefined>();
 
-  useEffect(() => {
-    setCustomers(initialCustomers);
-  }, [initialCustomers]);
+  const form = useForm<EstimateFormData>({
+    resolver: zodResolver(estimateFormSchema),
+  });
 
-  const defaultFormValues = useMemo((): EstimateFormData => {
-    return estimate ? {
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: "lineItems",
+  });
+  
+  useEffect(() => {
+    const defaultValues = estimate ? {
       ...estimate,
       date: new Date(estimate.date),
       validUntil: estimate.validUntil ? new Date(estimate.validUntil) : undefined,
@@ -121,7 +127,10 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         isNonStock: li.isNonStock || false,
       })),
       notes: estimate.notes || '',
-    } : {
+    } : initialData ? { // For cloning
+      ...initialData,
+      date: initialData.date || new Date(),
+    } : { // For new
       estimateNumber: `EST-${new Date().getFullYear()}-${String(Math.floor(Math.random()*900)+100).padStart(3, '0')}`,
       customerId: '',
       customerName: '',
@@ -131,23 +140,16 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
       lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
       notes: '',
     };
-  }, [estimate]);
+    
+    form.reset(defaultValues as EstimateFormData);
+  }, [estimate, initialData, form]);
 
-  const form = useForm<EstimateFormData>({
-    resolver: zodResolver(estimateFormSchema),
-    defaultValues: defaultFormValues,
-  });
-
-  const { fields, append, remove, update } = useFieldArray({
-    control: form.control,
-    name: "lineItems",
-  });
 
   const watchedLineItems = form.watch('lineItems');
   const watchedCustomerId = form.watch('customerId');
 
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>(
-    defaultFormValues.lineItems.map(item => {
+    (estimate?.lineItems || initialData?.lineItems || []).map(item => {
         if (!item.isNonStock && item.productId) {
             const product = products.find(p => p.id === item.productId);
             return product?.category;
@@ -155,19 +157,11 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
         return undefined;
     })
   );
-
+  
   useEffect(() => {
-    form.reset(defaultFormValues);
-     setLineItemCategoryFilters(
-        defaultFormValues.lineItems.map(item => {
-            if (!item.isNonStock && item.productId) {
-                const product = products.find(p => p.id === item.productId);
-                return product?.category;
-            }
-            return undefined;
-        })
-     );
-  }, [defaultFormValues, form, products]);
+    setCustomers(initialCustomers);
+  }, [initialCustomers]);
+
 
   const calculateUnitPrice = (product: Product, customer?: Customer): number => {
     let finalPrice = product.price; 
@@ -653,7 +647,7 @@ export function EstimateForm({ estimate, onSubmit, onClose, products, customers:
 
         <div className="flex justify-end gap-2 pt-4">
           {onClose && <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>}
-          <Button type="submit">{estimate ? 'Save Changes' : 'Create Estimate'}</Button>
+          <Button type="submit">{estimate || initialData ? 'Save Changes' : 'Create Estimate'}</Button>
         </div>
       </form>
 

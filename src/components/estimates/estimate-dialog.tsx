@@ -15,16 +15,40 @@ import {
 
 interface EstimateDialogProps {
   estimate?: Estimate;
-  triggerButton: React.ReactElement;
+  triggerButton?: React.ReactElement;
   onSave: (estimate: Estimate) => void;
   onSaveCustomer: (customer: Customer) => Promise<string | void>;
   products: Product[];
   customers: Customer[];
   productCategories: string[];
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialData?: Partial<EstimateFormData>;
 }
 
-export function EstimateDialog({ estimate, triggerButton, onSave, onSaveCustomer, products, customers, productCategories }: EstimateDialogProps) {
-  const [open, setOpen] = React.useState(false);
+export function EstimateDialog({ 
+    estimate, 
+    triggerButton, 
+    onSave, 
+    onSaveCustomer, 
+    products, 
+    customers, 
+    productCategories,
+    isOpen: controlledIsOpen,
+    onOpenChange: controlledOnOpenChange,
+    initialData,
+}: EstimateDialogProps) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
+  
+  React.useEffect(() => {
+    if (initialData && controlledIsOpen === undefined) {
+      setInternalOpen(true);
+    }
+  }, [initialData, controlledIsOpen]);
+
 
   const handleSubmit = (formData: EstimateFormData) => {
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
@@ -83,21 +107,22 @@ export function EstimateDialog({ estimate, triggerButton, onSave, onSaveCustomer
     onSave(estimateToSave);
     setOpen(false);
   };
+  
+  const dialogTitle = estimate ? 'Edit Estimate' : (initialData ? 'Clone Estimate' : 'New Estimate');
+  const dialogDescription = estimate ? 'Update the details of this estimate.' : (initialData ? 'Review the cloned details and select a new customer.' : 'Fill in the details for the new estimate.');
+
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {triggerButton}
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setOpen}>
+      {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{estimate ? 'Edit Estimate' : 'New Estimate'}</DialogTitle>
-          <DialogDescription>
-            {estimate ? 'Update the details of this estimate.' : 'Fill in the details for the new estimate.'}
-          </DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <EstimateForm
           estimate={estimate}
+          initialData={initialData}
           onSubmit={handleSubmit}
           onClose={() => setOpen(false)}
           products={products}
