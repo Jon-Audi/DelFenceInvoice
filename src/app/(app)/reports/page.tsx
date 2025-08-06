@@ -570,7 +570,7 @@ export default function ReportsPage() {
                     <Button 
                         key={preset}
                         variant={activeDatePreset === preset ? "default" : "outline"} 
-                        onClick={() => preset === 'custom' ? setActiveDatePreset('custom') : handleDatePresetChange(preset)} 
+                        onClick={() => preset === 'custom' ? setActiveDatePreset('custom') : handleDatePresetChange(preset as DatePreset)} 
                         disabled={isLoading}
                         className="capitalize"
                     >
@@ -655,7 +655,7 @@ export default function ReportsPage() {
             <div className="mt-4">{renderReportTable()}</div>
           </CardContent>
         </Card>
-      )}
+      </Card>
 
       <div style={{ display: 'none' }}>
         {reportToPrintData && reportToPrintData.reportType === 'sales' && (
