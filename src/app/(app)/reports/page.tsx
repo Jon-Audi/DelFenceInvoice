@@ -655,7 +655,7 @@ export default function ReportsPage() {
             <div className="mt-4">{renderReportTable()}</div>
           </CardContent>
         </Card>
-      </Card>
+      )}
 
       <div style={{ display: 'none' }}>
         {reportToPrintData && reportToPrintData.reportType === 'sales' && (
