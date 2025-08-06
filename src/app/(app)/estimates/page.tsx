@@ -257,6 +257,11 @@ export default function EstimatesPage() {
       date: new Date(),
       status: 'Draft',
       validUntil: undefined, // Or adjust as needed, e.g., date + 30 days
+      lineItems: estimateToClone.lineItems.map(li => ({
+        ...li,
+        isNonStock: li.isNonStock || false,
+        isReturn: li.isReturn || false,
+      })),
     };
     setClonedEstimateData(newEstimateData);
     setIsCloneDialogOpen(true);
