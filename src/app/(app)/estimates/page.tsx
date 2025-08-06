@@ -251,7 +251,6 @@ export default function EstimatesPage() {
   const handleCloneEstimate = (estimateToClone: Estimate) => {
     const newEstimateData: Partial<EstimateFormData> = {
       ...estimateToClone,
-      id: undefined, // This will be a new document
       estimateNumber: `EST-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
       customerId: '', // Clear customer so user has to select a new one
       customerName: '',
