@@ -531,11 +531,11 @@ export default function ReportsPage() {
   };
 
   const getActiveDatePresets = () => {
-    const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'thisYear', 'custom'];
-    if (reportType === 'weeklySummary' || reportType === 'paymentByType') {
-        return ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
+    const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
+    if (reportType === 'weeklySummary' || reportType === 'paymentByType' || reportType === 'sales' || reportType === 'orders' || reportType === 'payments') {
+        return commonPresets;
     }
-    return commonPresets;
+    return ['custom']; // Should not happen with current setup but as a fallback
   }
   const datePresetsToRender = getActiveDatePresets();
 
