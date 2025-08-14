@@ -200,27 +200,23 @@ export default function OrdersPage() {
         await runTransaction(db, async (transaction) => {
             const { id, ...orderDataFromDialog } = orderToSave;
             
-            // --- Phase 1: Read all necessary data ---
+            // --- Phase 1: Pre-computation and ID collection ---
+            const inventoryChanges = new Map<string, number>();
             let originalOrder: Order | null = null;
+            
             if (id) {
                 const originalOrderRef = doc(db, 'orders', id);
                 const originalOrderSnap = await transaction.get(originalOrderRef);
                 if (originalOrderSnap.exists()) {
                     originalOrder = { id, ...originalOrderSnap.data() } as Order;
+                    // Revert stock changes from the original order
+                    originalOrder.lineItems.forEach(item => {
+                        if (item.productId && !item.isNonStock) {
+                            const change = item.isReturn ? -item.quantity : item.quantity;
+                            inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+                        }
+                    });
                 }
-            }
-
-            // --- Phase 2: Calculate inventory changes ---
-            const inventoryChanges = new Map<string, number>();
-
-            // Revert stock changes from the original order if it exists
-            if (originalOrder) {
-                originalOrder.lineItems.forEach(item => {
-                    if (item.productId && !item.isNonStock) {
-                        const change = item.isReturn ? -item.quantity : item.quantity;
-                        inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
-                    }
-                });
             }
 
             // Apply stock changes for the new/updated order
@@ -231,41 +227,38 @@ export default function OrdersPage() {
                 }
             });
 
-            // --- Phase 3: Read all product documents to be updated ---
-            const productRefs: DocumentReference[] = [];
-            inventoryChanges.forEach((_, productId) => {
-                if (productId) productRefs.push(doc(db, 'products', productId));
-            });
-            
-            const productSnapshots = productRefs.length > 0 ? await Promise.all(productRefs.map(ref => transaction.get(ref))) : [];
+            const productIdsToUpdate = Array.from(inventoryChanges.keys());
 
+            if (productIdsToUpdate.length === 0) {
+                // If no inventory changes, just save the order
+                const orderRef = id ? doc(db, 'orders', id) : doc(collection(db, 'orders'));
+                transaction.set(orderRef, orderDataFromDialog, id ? { merge: true } : {});
+                return;
+            }
 
-            // --- Phase 4: Perform all writes ---
-            // Update product quantities
-            productSnapshots.forEach((productSnap, index) => {
-                 const productId = productRefs[index].id;
+            // --- Phase 2: Batch Read ---
+            const productRefsToGet = productIdsToUpdate.map(pid => doc(db, 'products', pid));
+            const productSnapshots = await transaction.getAll(...productRefsToGet);
+
+            // --- Phase 3: Write ---
+            productSnapshots.forEach((productSnap) => {
+                const productId = productSnap.id;
                 const quantityChange = inventoryChanges.get(productId);
 
-                if (quantityChange === 0 || quantityChange === undefined) return;
+                if (!quantityChange) return;
 
                 if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productId} not found! The transaction will be rolled back.`);
+                    throw new Error(`Product with ID ${productId} not found during transaction!`);
                 }
                 
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
-                transaction.update(productRefs[index], { quantityInStock: newStock });
+                transaction.update(productSnap.ref, { quantityInStock: newStock });
             });
 
-
             // Save the order document itself
-            if (id) {
-                const orderRef = doc(db, 'orders', id);
-                transaction.set(orderRef, orderDataFromDialog, { merge: true });
-            } else {
-                const orderRef = doc(collection(db, 'orders'));
-                transaction.set(orderRef, orderDataFromDialog);
-            }
+            const orderRef = id ? doc(db, 'orders', id) : doc(collection(db, 'orders'));
+            transaction.set(orderRef, orderDataFromDialog, id ? { merge: true } : {});
         });
 
         toast({
@@ -730,7 +723,3 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
-
-    
