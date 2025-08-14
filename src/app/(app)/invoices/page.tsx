@@ -29,7 +29,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -286,20 +286,20 @@ export default function InvoicesPage() {
             }
             
             // --- Phase 2: Batch Read ---
-            const productRefsToGet = productIdsToUpdate.map(pid => doc(db, 'products', pid));
-            const productSnapshots = await transaction.getAll(...productRefsToGet);
+            const productRefs = productIdsToUpdate.map(pid => doc(db, 'products', pid));
+            const productReadPromises = productRefs.map(ref => transaction.get(ref));
+            const productSnapshots = await Promise.all(productReadPromises);
 
             // --- Phase 3: Write ---
-            productSnapshots.forEach((productSnap, index) => {
+            productSnapshots.forEach((productSnap) => {
+                if (!productSnap.exists()) {
+                    throw new Error(`Product with ID ${productSnap.id} not found during transaction!`);
+                }
                 const productId = productSnap.id;
                 const quantityChange = inventoryChanges.get(productId);
 
                 if (!quantityChange) return;
 
-                if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productId} not found during transaction!`);
-                }
-                
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
                 transaction.update(productSnap.ref, { quantityInStock: newStock });

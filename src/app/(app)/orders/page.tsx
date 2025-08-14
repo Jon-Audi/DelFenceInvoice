@@ -14,7 +14,7 @@ import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact 
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, WriteBatch, DocumentReference } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -237,19 +237,20 @@ export default function OrdersPage() {
             }
 
             // --- Phase 2: Batch Read ---
-            const productRefsToGet = productIdsToUpdate.map(pid => doc(db, 'products', pid));
-            const productSnapshots = await transaction.getAll(...productRefsToGet);
+            const productRefs = productIdsToUpdate.map(pid => doc(db, 'products', pid));
+            const productReadPromises = productRefs.map(ref => transaction.get(ref));
+            const productSnapshots = await Promise.all(productReadPromises);
+
 
             // --- Phase 3: Write ---
             productSnapshots.forEach((productSnap) => {
+                if (!productSnap.exists()) {
+                    throw new Error(`Product with ID ${productSnap.id} not found during transaction!`);
+                }
                 const productId = productSnap.id;
                 const quantityChange = inventoryChanges.get(productId);
 
                 if (!quantityChange) return;
-
-                if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productId} not found during transaction!`);
-                }
                 
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
