@@ -248,8 +248,8 @@ export default function InvoicesPage() {
     try {
         await runTransaction(db, async (transaction) => {
             const { id, ...invoiceDataFromDialog } = invoiceToSave;
-
-            // --- Read Phase ---
+            
+            // --- Phase 1: Read all necessary data ---
             let originalInvoice: Invoice | null = null;
             if (id) {
                 const originalInvoiceRef = doc(db, 'invoices', id);
@@ -258,10 +258,11 @@ export default function InvoicesPage() {
                     originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
                 }
             }
-            
+
+            // --- Phase 2: Calculate inventory changes ---
             const inventoryChanges = new Map<string, number>();
 
-            // Calculate changes from original invoice
+            // Revert stock changes from the original invoice if it exists
             if (originalInvoice) {
                 originalInvoice.lineItems.forEach(item => {
                     if (item.productId && !item.isNonStock) {
@@ -271,7 +272,7 @@ export default function InvoicesPage() {
                 });
             }
 
-            // Calculate changes from new/updated invoice
+            // Apply stock changes for the new/updated invoice
             invoiceDataFromDialog.lineItems.forEach(item => {
                 if (item.productId && !item.isNonStock) {
                     const change = item.isReturn ? item.quantity : -item.quantity;
@@ -279,34 +280,31 @@ export default function InvoicesPage() {
                 }
             });
 
-            // Pre-fetch all product documents needed for updates
-            const productRefs: Map<string, DocumentReference> = new Map();
-            const productSnapshots: Map<string, any> = new Map();
+            // --- Phase 3: Read all product documents to be updated ---
+            const productRefs: DocumentReference[] = [];
+            inventoryChanges.forEach((_, productId) => {
+                if (productId) productRefs.push(doc(db, 'products', productId));
+            });
+            const productSnapshots = productRefs.length > 0 ? await Promise.all(productRefs.map(ref => transaction.get(ref))) : [];
 
-            for (const [productId] of inventoryChanges.entries()) {
-                const productRef = doc(db, 'products', productId);
-                productRefs.set(productId, productRef);
-                const productSnap = await transaction.get(productRef);
-                productSnapshots.set(productId, productSnap);
-            }
-
-            // --- Write Phase ---
+            // --- Phase 4: Perform all writes ---
             // Update product quantities
-            for (const [productId, quantityChange] of inventoryChanges.entries()) {
-                if (quantityChange === 0) continue;
+            productSnapshots.forEach((productSnap, index) => {
+                const productId = productRefs[index].id;
+                const quantityChange = inventoryChanges.get(productId);
 
-                const productRef = productRefs.get(productId)!;
-                const productSnap = productSnapshots.get(productId)!;
+                if (quantityChange === 0 || quantityChange === undefined) return;
 
                 if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productId} not found!`);
+                    throw new Error(`Product with ID ${productId} not found! The transaction will be rolled back.`);
                 }
+                
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
-                transaction.update(productRef, { quantityInStock: newStock });
-            }
+                transaction.update(productRefs[index], { quantityInStock: newStock });
+            });
 
-            // Save the invoice document
+            // Save the invoice document itself
             if (id) {
                 const invoiceRef = doc(db, 'invoices', id);
                 transaction.set(invoiceRef, invoiceDataFromDialog, { merge: true });
@@ -322,7 +320,7 @@ export default function InvoicesPage() {
         });
 
     } catch (error: any) {
-        console.error("Error saving invoice:", error);
+        console.error("Error saving invoice in transaction:", error);
         toast({
             title: "Error Saving Invoice",
             description: `Could not save invoice: ${error.message}`,
@@ -908,5 +906,7 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
 
     
