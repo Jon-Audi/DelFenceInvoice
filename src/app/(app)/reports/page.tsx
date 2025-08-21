@@ -15,25 +15,26 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, Product } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
 import { PrintablePaymentsReport } from '@/components/reports/printable-payments-report';
 import { PrintableWeeklySummaryReport } from '@/components/reports/printable-weekly-summary-report';
 import { PrintablePaymentByTypeReport } from '@/components/reports/printable-payment-by-type-report';
+import { PrintableProfitReport } from '@/components/reports/printable-profit-report';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
   reportType: ReportType;
-  data: Invoice[] | Order[] | CustomerInvoiceDetail[] | PaymentReportItem[] | WeeklySummaryReportItem[] | PaymentByTypeReportItem[];
+  data: any[]; // Simplified to any[] for generic handling
   companySettings: CompanySettings;
   logoUrl: string;
   reportTitle?: string;
@@ -134,7 +135,49 @@ export default function ReportsPage() {
     try {
       let data: any[] = [];
       
-      if (reportType === 'sales') {
+      if (reportType === 'profitability') {
+        currentReportTitle = `Profitability Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
+        const invoicesRef = collection(db, 'invoices');
+        const q = query(invoicesRef, 
+                        where('date', '>=', rangeStart.toISOString()), 
+                        where('date', '<=', rangeEnd.toISOString()));
+        
+        const [invoiceSnapshot, productsSnapshot] = await Promise.all([
+            getDocs(q),
+            getDocs(collection(db, 'products'))
+        ]);
+
+        const productsMap = new Map<string, Product>();
+        productsSnapshot.forEach(doc => productsMap.set(doc.id, { id: doc.id, ...doc.data() } as Product));
+
+        const profitReportItems: ProfitReportItem[] = [];
+        invoiceSnapshot.forEach(docSnap => {
+            const invoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
+            if (invoice.status === 'Voided') return;
+
+            let totalCostOfGoods = 0;
+            invoice.lineItems.forEach(item => {
+                if (item.productId && !item.isNonStock) {
+                    const product = productsMap.get(item.productId);
+                    if (product) {
+                        const itemCost = product.cost * item.quantity;
+                        totalCostOfGoods += item.isReturn ? -itemCost : itemCost;
+                    }
+                }
+            });
+
+            profitReportItems.push({
+                invoiceId: invoice.id,
+                invoiceNumber: invoice.invoiceNumber,
+                invoiceDate: invoice.date,
+                customerName: invoice.customerName || 'N/A',
+                invoiceTotal: invoice.total,
+                totalCostOfGoods: totalCostOfGoods,
+                profit: invoice.total - totalCostOfGoods,
+            });
+        });
+        data = profitReportItems.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+      } else if (reportType === 'sales') {
         currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
@@ -379,7 +422,7 @@ export default function ReportsPage() {
       
       const dataForPrint: ReportToPrintData = {
         reportType: reportType,
-        data: generatedReportData as any, // Cast because TypeScript can't narrow down the union type here easily
+        data: generatedReportData,
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
         reportTitle: reportTitleForSummary,
@@ -426,6 +469,19 @@ export default function ReportsPage() {
   const renderReportSummary = () => {
     if (!generatedReportData) return null;
 
+    if (reportType === 'profitability') {
+        const profitItems = generatedReportData as ProfitReportItem[];
+        const grandTotalRevenue = profitItems.reduce((sum, item) => sum + item.invoiceTotal, 0);
+        const grandTotalCost = profitItems.reduce((sum, item) => sum + item.totalCostOfGoods, 0);
+        const grandTotalProfit = profitItems.reduce((sum, item) => sum + item.profit, 0);
+        return (
+          <div className="space-y-1">
+            <p>Total Revenue: <span className="font-semibold">${grandTotalRevenue.toFixed(2)}</span></p>
+            <p>Total Cost of Goods: <span className="font-semibold">${grandTotalCost.toFixed(2)}</span></p>
+            <p>Total Profit: <span className="font-semibold">${grandTotalProfit.toFixed(2)}</span></p>
+          </div>
+        );
+    }
     if (reportType === 'paymentByType') {
       const paymentItems = generatedReportData as PaymentByTypeReportItem[];
       const grandTotalAmount = paymentItems.reduce((sum, item) => sum + item.totalAmount, 0);
@@ -469,6 +525,35 @@ export default function ReportsPage() {
 
   const renderReportTable = () => {
     if (!generatedReportData) return null;
+
+    if (reportType === 'profitability') {
+        return (
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead className="text-right">Total Sale</TableHead>
+                        <TableHead className="text-right">Total Cost</TableHead>
+                        <TableHead className="text-right">Profit</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {(generatedReportData as ProfitReportItem[]).map(item => (
+                        <TableRow key={item.invoiceId}>
+                            <TableCell>{item.invoiceNumber}</TableCell>
+                            <TableCell>{format(new Date(item.invoiceDate), 'P')}</TableCell>
+                            <TableCell>{item.customerName}</TableCell>
+                            <TableCell className="text-right">${item.invoiceTotal.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">${item.totalCostOfGoods.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold">${item.profit.toFixed(2)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        );
+    }
 
     if (reportType === 'weeklySummary') {
         return (
@@ -532,10 +617,10 @@ export default function ReportsPage() {
 
   const getActiveDatePresets = () => {
     const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
-    if (reportType === 'weeklySummary' || reportType === 'paymentByType' || reportType === 'sales' || reportType === 'orders' || reportType === 'payments') {
-        return commonPresets;
+    if (reportType === 'customerBalances') {
+        return ['custom']; // Should not be visible but as fallback
     }
-    return ['custom']; // Should not happen with current setup but as a fallback
+    return commonPresets;
   }
   const datePresetsToRender = getActiveDatePresets();
 
@@ -553,13 +638,14 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7">
               <TabsTrigger value="sales">Sales</TabsTrigger>
+              <TabsTrigger value="profitability">Profitability</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
               <TabsTrigger value="payments">Payments</TabsTrigger>
-              <TabsTrigger value="weeklySummary">Weekly Summary</TabsTrigger>
-              <TabsTrigger value="paymentByType">By Payment Type</TabsTrigger>
+              <TabsTrigger value="weeklySummary">Weekly</TabsTrigger>
+              <TabsTrigger value="paymentByType">By Type</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -675,6 +761,9 @@ export default function ReportsPage() {
         )}
         {reportToPrintData && reportToPrintData.reportType === 'paymentByType' && (
           <PrintablePaymentByTypeReport ref={printRef} reportItems={reportToPrintData.data as PaymentByTypeReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
+        )}
+         {reportToPrintData && reportToPrintData.reportType === 'profitability' && (
+          <PrintableProfitReport ref={printRef} reportItems={reportToPrintData.data as ProfitReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
       </div>
     </>
