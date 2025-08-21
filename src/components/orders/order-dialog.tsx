@@ -73,6 +73,11 @@ export function OrderDialog({
           isNonStock: item.isNonStock || false,
       };
 
+      if (item.isNonStock) {
+        lineItemForDb.cost = item.cost;
+        lineItemForDb.markupPercentage = item.markupPercentage;
+      }
+      
       if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }

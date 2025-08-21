@@ -157,13 +157,19 @@ export default function ReportsPage() {
 
             let totalCostOfGoods = 0;
             invoice.lineItems.forEach(item => {
-                if (item.productId && !item.isNonStock) {
+                let itemCost = 0;
+                if (item.isNonStock) {
+                    // For non-stock items, use the cost stored on the line item itself
+                    itemCost = item.cost || 0;
+                } else if (item.productId) {
+                    // For stock items, look up the product cost from the map
                     const product = productsMap.get(item.productId);
                     if (product) {
-                        const itemCost = product.cost * item.quantity;
-                        totalCostOfGoods += item.isReturn ? -itemCost : itemCost;
+                        itemCost = product.cost;
                     }
                 }
+                const totalItemCost = itemCost * item.quantity;
+                totalCostOfGoods += item.isReturn ? -totalItemCost : totalItemCost;
             });
 
             profitReportItems.push({

@@ -1,3 +1,4 @@
+
 // src/components/invoices/invoice-dialog.tsx
 
 "use client";
@@ -24,7 +25,7 @@ interface InvoiceDialogProps {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
-  isDataLoading?: boolean; // <--- Add this line back
+  isDataLoading?: boolean;
 }
 
 export function InvoiceDialog({
@@ -37,6 +38,7 @@ export function InvoiceDialog({
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
   initialData,
+  isDataLoading,
 }: InvoiceDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
 
@@ -73,6 +75,11 @@ export function InvoiceDialog({
           total: isReturn ? -itemBaseTotal : itemBaseTotal,
           isNonStock: item.isNonStock || false,
       };
+
+      if (item.isNonStock) {
+        lineItemForDb.cost = item.cost;
+        lineItemForDb.markupPercentage = item.markupPercentage;
+      }
 
       if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
@@ -153,6 +160,7 @@ export function InvoiceDialog({
           customers={customers}
           products={products}
           productCategories={productCategories}
+          isDataLoading={isDataLoading}
         />
       </DialogContent>
     </Dialog>

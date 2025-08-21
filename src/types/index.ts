@@ -73,6 +73,8 @@ export interface LineItem {
   total: number;
   isReturn?: boolean;
   isNonStock?: boolean; // Flag to indicate if it's a non-stock item
+  cost?: number; // Optional: for non-stock items to track profitability
+  markupPercentage?: number; // Optional: for non-stock items
 }
 
 

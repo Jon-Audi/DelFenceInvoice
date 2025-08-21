@@ -72,6 +72,11 @@ export function EstimateDialog({
           isNonStock: item.isNonStock || false,
       };
 
+      if (item.isNonStock) {
+        lineItemForDb.cost = item.cost;
+        lineItemForDb.markupPercentage = item.markupPercentage;
+      }
+
       if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }
@@ -115,7 +120,7 @@ export function EstimateDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
       {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
