@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
   { href: '/orders', label: 'Orders', icon: 'ShoppingCart' },
   { href: '/invoices', label: 'Invoices', icon: 'FileDigit' },
   { href: '/reports', label: 'Reports', icon: 'TrendingUp' },
+  { href: '/costing-review', label: 'Costing Review', icon: 'Calculator' },
 ];
 
 export const MATERIAL_CALCULATOR_LINK = {
