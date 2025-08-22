@@ -73,8 +73,8 @@ export function EstimateDialog({
       };
 
       if (item.isNonStock) {
-        lineItemForDb.cost = item.cost;
-        lineItemForDb.markupPercentage = item.markupPercentage;
+        lineItemForDb.cost = item.cost || 0; // Default to 0 if undefined
+        lineItemForDb.markupPercentage = item.markupPercentage || 0; // Default to 0 if undefined
       }
 
       if (!item.isNonStock && item.productId) {

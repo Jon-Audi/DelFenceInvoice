@@ -47,6 +47,8 @@ const lineItemSchema = z.object({
   productName: z.string().optional(), // For non-stock items, name is entered directly
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
   unitPrice: z.coerce.number().min(0, "Unit price must be non-negative"),
+  cost: z.coerce.number().optional(),
+  markupPercentage: z.coerce.number().optional(),
   isReturn: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.isNonStock) {
@@ -125,6 +127,8 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         unitPrice: li.unitPrice,
         isReturn: li.isReturn || false,
         isNonStock: li.isNonStock || false,
+        cost: li.cost,
+        markupPercentage: li.markupPercentage,
       })),
       notes: estimate.notes || '',
     } : initialData ? { // For cloning
@@ -137,7 +141,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
       date: new Date(),
       status: 'Draft',
       poNumber: '',
-      lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+      lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, cost: 0, markupPercentage: 0 }],
       notes: '',
     };
     
@@ -245,7 +249,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
   };
 
   const addLineItem = () => {
-    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
+    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, cost: 0, markupPercentage: 0 });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -272,6 +276,8 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         unitPrice: finalPrice,
         isReturn: false,
         isNonStock: false,
+        cost: productDetails.cost,
+        markupPercentage: productDetails.markupPercentage,
       });
       newFilterEntries.push(productDetails?.category);
     });
@@ -292,13 +298,38 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined); // Clear productId if non-stock
       form.setValue(`lineItems.${index}.unitPrice`, 0); // Reset unit price for manual entry
+      form.setValue(`lineItems.${index}.cost`, 0);
+      form.setValue(`lineItems.${index}.markupPercentage`, 0);
       form.trigger(`lineItems.${index}.productName`); // Trigger validation if needed
       form.trigger(`lineItems.${index}.unitPrice`);
     } else {
       form.setValue(`lineItems.${index}.productName`, ''); // Clear manual name if stock
+      form.setValue(`lineItems.${index}.cost`, undefined);
+      form.setValue(`lineItems.${index}.markupPercentage`, undefined);
       // Let product selection repopulate unit price
     }
   };
+  
+  const handleNonStockPriceChange = (index: number, value: number, field: 'cost' | 'markup' | 'price') => {
+    const cost = form.getValues(`lineItems.${index}.cost`) || 0;
+    const markup = form.getValues(`lineItems.${index}.markupPercentage`) || 0;
+    const price = form.getValues(`lineItems.${index}.unitPrice`) || 0;
+
+    if (field === 'cost') {
+        const newPrice = value * (1 + markup / 100);
+        form.setValue(`lineItems.${index}.cost`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'markup') {
+        const newPrice = cost * (1 + value / 100);
+        form.setValue(`lineItems.${index}.markupPercentage`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'price') {
+        const newMarkup = cost > 0 ? ((value / cost) - 1) * 100 : 0;
+        form.setValue(`lineItems.${index}.unitPrice`, value);
+        form.setValue(`lineItems.${index}.markupPercentage`, parseFloat(newMarkup.toFixed(2)));
+    }
+  };
+
 
   const currentSubtotal = useMemo(() => {
     return (watchedLineItems || []).reduce((acc, item) => {
@@ -481,17 +512,30 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
               </div>
 
               {isNonStock ? (
-                <FormField
-                  control={form.control}
-                  name={`lineItems.${index}.productName`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product/Service Name</FormLabel>
-                      <FormControl><Input {...field} placeholder="Enter item name" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <>
+                  <FormField
+                    control={form.control}
+                    name={`lineItems.${index}.productName`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product/Service Name</FormLabel>
+                        <FormControl><Input {...field} placeholder="Enter item name" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField control={form.control} name={`lineItems.${index}.cost`} render={({ field }) => (
+                          <FormItem><FormLabel>Cost</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'cost')} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name={`lineItems.${index}.markupPercentage`} render={({ field }) => (
+                          <FormItem><FormLabel>Markup (%)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'markup')} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
+                          <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'price')} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                  </div>
+                </>
               ) : (
                 <>
                   <FormItem>
@@ -575,7 +619,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
                             const num = parseFloat(val);
                             priceField.onChange(isNaN(num) ? undefined : num);
                           }}
-                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
+                          disabled={!isNonStock}
                           placeholder="0.00"
                         />
                       </FormControl>
