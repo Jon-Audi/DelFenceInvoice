@@ -58,6 +58,9 @@ const lineItemSchema = z.object({
   cost: z.coerce.number().optional(),
   markupPercentage: z.coerce.number().optional(),
   isReturn: z.boolean().optional(),
+  addToProductList: z.boolean().optional().default(false),
+  newProductCategory: z.string().optional(),
+  unit: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.isNonStock) {
     if (!data.productName || data.productName.trim() === "") {
@@ -65,6 +68,13 @@ const lineItemSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "Product name is required for non-stock items.",
         path: ["productName"],
+      });
+    }
+     if (data.addToProductList && (!data.newProductCategory || data.newProductCategory.trim() === '')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Category is required to add this item to the product list.",
+        path: ["newProductCategory"],
       });
     }
   } else {
@@ -542,6 +552,32 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                                 <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'price')} /></FormControl><FormMessage /></FormItem>
                             )} />
                         </div>
+                        <FormField
+                            control={form.control}
+                            name={`lineItems.${index}.addToProductList`}
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-2 pt-2">
+                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                <FormLabel className="font-normal">Add this item to the main product list</FormLabel>
+                                </FormItem>
+                            )}
+                        />
+                        {currentLineItem.addToProductList && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 ml-2">
+                            <FormField control={form.control} name={`lineItems.${index}.newProductCategory`} render={({ field }) => (
+                                <FormItem><FormLabel>New Product Category</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
+                                    <SelectContent>{productCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+                                </Select>
+                                <FormMessage />
+                                </FormItem>
+                            )} />
+                            <FormField control={form.control} name={`lineItems.${index}.unit`} render={({ field }) => (
+                                <FormItem><FormLabel>Unit</FormLabel><FormControl><Input {...field} placeholder="e.g., piece, hour" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                        </div>
+                        )}
                     </>
                 ) : (
                     <><FormItem><FormLabel>Category Filter</FormLabel>
@@ -631,7 +667,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
             </div>
             <FormField control={form.control} name="currentPaymentMethod" render={({ field }) => (
                 <FormItem><FormLabel>Method</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger></FormControl>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
+                <FormControl><SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger></FormControl>
                 <SelectContent>{PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage />
                 </FormItem>
             )} />
