@@ -16,7 +16,7 @@ import {
 interface EstimateDialogProps {
   estimate?: Estimate;
   triggerButton?: React.ReactElement;
-  onSave: (estimate: Estimate, productsToAdd?: Omit<Product, 'id'>[]) => void;
+  onSave: (estimate: Estimate) => void;
   onSaveCustomer: (customer: Customer) => Promise<string | void>;
   onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   products: Product[];
