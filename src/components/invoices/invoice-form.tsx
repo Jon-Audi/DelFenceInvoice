@@ -54,6 +54,8 @@ const lineItemSchema = z.object({
   productName: z.string().optional(),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
   unitPrice: z.coerce.number().min(0, "Unit price must be non-negative"),
+  cost: z.coerce.number().optional(),
+  markupPercentage: z.coerce.number().optional(),
   isReturn: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.isNonStock) {
@@ -177,6 +179,7 @@ export function InvoiceForm({
             id: li.id, productId: li.productId, productName: li.productName,
             quantity: li.quantity, unitPrice: li.unitPrice,
             isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
+            cost: li.cost, markupPercentage: li.markupPercentage
         })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
@@ -427,11 +430,15 @@ export function InvoiceForm({
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined);
       form.setValue(`lineItems.${index}.unitPrice`, 0);
-      form.trigger(`lineItems.${index}.productName`);
-      form.trigger(`lineItems.${index}.unitPrice`);
+      form.setValue(`lineItems.${index}.cost`, 0);
+      form.setValue(`lineItems.${index}.markupPercentage`, 0);
     } else {
       form.setValue(`lineItems.${index}.productName`, '');
+      form.setValue(`lineItems.${index}.cost`, undefined);
+      form.setValue(`lineItems.${index}.markupPercentage`, undefined);
     }
+    form.trigger(`lineItems.${index}.productId`);
+    form.trigger(`lineItems.${index}.unitPrice`);
   };
 
   const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
@@ -459,6 +466,27 @@ export function InvoiceForm({
     setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
     setIsBulkAddDialogOpen(false);
   };
+  
+  const handleNonStockPriceChange = (index: number, value: number, field: 'cost' | 'markup' | 'price') => {
+    const cost = form.getValues(`lineItems.${index}.cost`) || 0;
+    const markup = form.getValues(`lineItems.${index}.markupPercentage`) || 0;
+    const price = form.getValues(`lineItems.${index}.unitPrice`) || 0;
+
+    if (field === 'cost') {
+        const newPrice = value * (1 + markup / 100);
+        form.setValue(`lineItems.${index}.cost`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'markup') {
+        const newPrice = cost * (1 + value / 100);
+        form.setValue(`lineItems.${index}.markupPercentage`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'price') {
+        const newMarkup = cost > 0 ? ((value / cost) - 1) * 100 : 0;
+        form.setValue(`lineItems.${index}.unitPrice`, value);
+        form.setValue(`lineItems.${index}.markupPercentage`, parseFloat(newMarkup.toFixed(2)));
+    }
+  };
+
 
   return (
     <Form {...form}>
@@ -599,9 +627,22 @@ export function InvoiceForm({
                 )} />
               </div>
               {isNonStock ? (
-                 <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
-                    <FormItem><FormLabel>Product/Service Name</FormLabel><FormControl><Input {...field} placeholder="Enter item name" /></FormControl><FormMessage /></FormItem>
-                  )} />
+                 <>
+                    <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
+                        <FormItem><FormLabel>Product/Service Name</FormLabel><FormControl><Input {...field} placeholder="Enter item name" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField control={form.control} name={`lineItems.${index}.cost`} render={({ field }) => (
+                            <FormItem><FormLabel>Cost</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'cost')} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name={`lineItems.${index}.markupPercentage`} render={({ field }) => (
+                            <FormItem><FormLabel>Markup (%)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'markup')} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
+                            <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'price')} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                    </div>
+                </>
               ) : ( <>
                   <FormItem><FormLabel>Category Filter</FormLabel>
                     <Select value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE} onValueChange={(value) => handleCategoryFilterChange(index, value)}>
@@ -634,16 +675,42 @@ export function InvoiceForm({
                   )} /> </>
               )}
               <div className="grid grid-cols-3 gap-4 items-end">
-                <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field: priceField }) => (
-                    <FormItem><FormLabel>Unit Price</FormLabel><FormControl>
-                        <Input type="number" step="0.01" {...priceField} value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
-                           onChange={(e) => { const val = e.target.value; const num = parseFloat(val); priceField.onChange(isNaN(num) ? undefined : num); }}
-                          disabled={!isNonStock && !watchedLineItems?.[index]?.productId} placeholder="0.00" />
-                    </FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field: qtyField }) => (
-                    <FormItem><FormLabel>Quantity</FormLabel><FormControl>
-                        <Input type="number" {...qtyField} value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.unitPrice`}
+                  render={({ field: priceField }) => (
+                    <FormItem>
+                      <FormLabel>Unit Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...priceField}
+                          value={priceField.value === undefined || priceField.value === null || isNaN(Number(priceField.value)) ? '' : String(priceField.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const num = parseFloat(val);
+                            priceField.onChange(isNaN(num) ? undefined : num);
+                          }}
+                          disabled={!isNonStock}
+                          placeholder="0.00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`lineItems.${index}.quantity`}
+                  render={({ field: qtyField }) => (
+                    <FormItem>
+                      <FormLabel>Quantity</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...qtyField}
+                          value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
                             onChange={(e) => { const val = e.target.value; const num = parseInt(val, 10); qtyField.onChange(isNaN(num) ? undefined : num); }}
                             min="1" disabled={!isNonStock && !watchedLineItems?.[index]?.productId} />
                     </FormControl><FormMessage /></FormItem>

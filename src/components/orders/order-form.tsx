@@ -55,6 +55,8 @@ const lineItemSchema = z.object({
   productName: z.string().optional(),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1."),
   unitPrice: z.coerce.number().min(0, "Unit price must be non-negative"),
+  cost: z.coerce.number().optional(),
+  markupPercentage: z.coerce.number().optional(),
   isReturn: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.isNonStock) {
@@ -160,6 +162,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 id: li.id, productId: li.productId, productName: li.productName,
                 quantity: li.quantity, unitPrice: li.unitPrice,
                 isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
+                cost: li.cost, markupPercentage: li.markupPercentage
             })),
             notes: order.notes || '',
             payments: order.payments?.map(p => ({...p, date: parseISO(p.date)})) || [],
@@ -370,8 +373,12 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     if (checked) {
       form.setValue(`lineItems.${index}.productId`, undefined);
       form.setValue(`lineItems.${index}.unitPrice`, 0);
+      form.setValue(`lineItems.${index}.cost`, 0);
+      form.setValue(`lineItems.${index}.markupPercentage`, 0);
     } else {
       form.setValue(`lineItems.${index}.productName`, '');
+      form.setValue(`lineItems.${index}.cost`, undefined);
+      form.setValue(`lineItems.${index}.markupPercentage`, undefined);
     }
     form.trigger(`lineItems.${index}.productId`);
     form.trigger(`lineItems.${index}.unitPrice`);
@@ -392,6 +399,26 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
       }
     });
     setIsBulkAddDialogOpen(false);
+  };
+  
+  const handleNonStockPriceChange = (index: number, value: number, field: 'cost' | 'markup' | 'price') => {
+    const cost = form.getValues(`lineItems.${index}.cost`) || 0;
+    const markup = form.getValues(`lineItems.${index}.markupPercentage`) || 0;
+    const price = form.getValues(`lineItems.${index}.unitPrice`) || 0;
+
+    if (field === 'cost') {
+        const newPrice = value * (1 + markup / 100);
+        form.setValue(`lineItems.${index}.cost`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'markup') {
+        const newPrice = cost * (1 + value / 100);
+        form.setValue(`lineItems.${index}.markupPercentage`, value);
+        form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+    } else if (field === 'price') {
+        const newMarkup = cost > 0 ? ((value / cost) - 1) * 100 : 0;
+        form.setValue(`lineItems.${index}.unitPrice`, value);
+        form.setValue(`lineItems.${index}.markupPercentage`, parseFloat(newMarkup.toFixed(2)));
+    }
   };
 
   return (
@@ -500,9 +527,22 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                     )} />
                 </div>
                 {currentLineItem?.isNonStock ? (
-                    <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
-                        <FormItem><FormLabel>Product/Service Name</FormLabel><FormControl><Input {...field} placeholder="Enter item name" /></FormControl><FormMessage /></FormItem>
-                    )} />
+                    <>
+                        <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
+                            <FormItem><FormLabel>Product/Service Name</FormLabel><FormControl><Input {...field} placeholder="Enter item name" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <FormField control={form.control} name={`lineItems.${index}.cost`} render={({ field }) => (
+                                <FormItem><FormLabel>Cost</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'cost')} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name={`lineItems.${index}.markupPercentage`} render={({ field }) => (
+                                <FormItem><FormLabel>Markup (%)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'markup')} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                             <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
+                                <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'price')} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                        </div>
+                    </>
                 ) : (
                     <><FormItem><FormLabel>Category Filter</FormLabel>
                         <Select value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE} onValueChange={value => handleCategoryFilterChange(index, value)}>
@@ -534,7 +574,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 )}
                 <div className="grid grid-cols-3 gap-4 items-end">
                     <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
-                        <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} placeholder="0.00" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} placeholder="0.00" disabled={!currentLineItem?.isNonStock} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field }) => (
                         <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" {...field} min="1" /></FormControl><FormMessage /></FormItem>
