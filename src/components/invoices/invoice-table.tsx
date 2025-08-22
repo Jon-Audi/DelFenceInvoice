@@ -41,6 +41,7 @@ type SortableInvoiceKeys =
 interface InvoiceTableProps {
   invoices: Invoice[];
   onSave: (invoice: Invoice) => void;
+  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
@@ -58,6 +59,7 @@ interface InvoiceTableProps {
 export function InvoiceTable({ 
   invoices, 
   onSave, 
+  onSaveProduct,
   onDelete, 
   onGenerateEmail, 
   onPrint, 
@@ -176,6 +178,7 @@ export function InvoiceTable({
                         </DropdownMenuItem>
                       }
                       onSave={onSave}
+                      onSaveProduct={onSaveProduct}
                       customers={customers}
                       products={products}
                       productCategories={productCategories}

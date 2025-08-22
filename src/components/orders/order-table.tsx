@@ -42,6 +42,7 @@ export type SortableOrderKeys =
 interface OrderTableProps {
   orders: Order[];
   onSave: (order: Order) => void;
+  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   onDelete: (orderId: string) => void;
   onGenerateEmail: (order: Order) => void;
   onPrint: (order: Order) => void;
@@ -60,6 +61,7 @@ interface OrderTableProps {
 export function OrderTable({
   orders,
   onSave,
+  onSaveProduct,
   onDelete,
   onGenerateEmail,
   onPrint,
@@ -181,6 +183,7 @@ export function OrderTable({
                         </DropdownMenuItem>
                       }
                       onSave={onSave}
+                      onSaveProduct={onSaveProduct}
                       customers={customers}
                       products={products}
                       productCategories={productCategories}

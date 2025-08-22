@@ -16,8 +16,9 @@ import {
 interface EstimateDialogProps {
   estimate?: Estimate;
   triggerButton?: React.ReactElement;
-  onSave: (estimate: Estimate) => void;
+  onSave: (estimate: Estimate, productsToAdd?: Omit<Product, 'id'>[]) => void;
   onSaveCustomer: (customer: Customer) => Promise<string | void>;
+  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   products: Product[];
   customers: Customer[];
   productCategories: string[];
@@ -31,6 +32,7 @@ export function EstimateDialog({
     triggerButton, 
     onSave, 
     onSaveCustomer, 
+    onSaveProduct,
     products, 
     customers, 
     productCategories,
@@ -50,7 +52,28 @@ export function EstimateDialog({
   }, [initialData, controlledIsOpen]);
 
 
-  const handleSubmit = (formData: EstimateFormData) => {
+  const handleSubmit = async (formData: EstimateFormData) => {
+    const productsToCreate: Omit<Product, 'id'>[] = [];
+    
+    // First, identify any new products that need to be created.
+    for (const item of formData.lineItems) {
+      if (item.isNonStock && item.addToProductList) {
+        productsToCreate.push({
+          name: item.productName || 'Unnamed Product',
+          category: item.newProductCategory || 'Uncategorized',
+          unit: item.unit || 'unit', // Add a default or make it required in the form
+          price: item.unitPrice,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
+          quantityInStock: 0,
+        });
+      }
+    }
+
+    // Sequentially create the products and get their new IDs.
+    const createdProductIds = await Promise.all(productsToCreate.map(p => onSaveProduct(p)));
+
+    let newProductIndex = 0;
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
       const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
@@ -70,17 +93,20 @@ export function EstimateDialog({
           isReturn: isReturn,
           total: isReturn ? -itemBaseTotal : itemBaseTotal,
           isNonStock: item.isNonStock || false,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
       };
-
-      if (item.isNonStock) {
-        lineItemForDb.cost = item.cost || 0; // Default to 0 if undefined
-        lineItemForDb.markupPercentage = item.markupPercentage || 0; // Default to 0 if undefined
-      }
-
-      if (!item.isNonStock && item.productId) {
+      
+      if (item.isNonStock && item.addToProductList) {
+          const newId = createdProductIds[newProductIndex];
+          if (newId) {
+            lineItemForDb.productId = newId;
+            lineItemForDb.isNonStock = false; // It's now a stock item
+          }
+          newProductIndex++;
+      } else if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }
-      // For non-stock items, productId field is omitted
 
       return lineItemForDb as LineItem;
     });

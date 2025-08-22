@@ -14,7 +14,7 @@ import type { Order, Customer, Product, Estimate, CompanySettings, EmailContact 
 import { OrderDialog } from '@/components/orders/order-dialog';
 import type { OrderFormData } from '@/components/orders/order-form';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, DocumentReference } from 'firebase/firestore';
 import { PrintableOrder } from '@/components/orders/printable-order';
 import { PrintableOrderPackingSlip } from '@/components/orders/printable-order-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -209,7 +209,6 @@ export default function OrdersPage() {
                 const originalOrderSnap = await transaction.get(originalOrderRef);
                 if (originalOrderSnap.exists()) {
                     originalOrder = { id, ...originalOrderSnap.data() } as Order;
-                    // Revert stock changes from the original order
                     originalOrder.lineItems.forEach(item => {
                         if (item.productId && !item.isNonStock) {
                             const change = item.isReturn ? -item.quantity : item.quantity;
@@ -219,7 +218,6 @@ export default function OrdersPage() {
                 }
             }
 
-            // Apply stock changes for the new/updated order
             orderDataFromDialog.lineItems.forEach(item => {
                 if (item.productId && !item.isNonStock) {
                     const change = item.isReturn ? item.quantity : -item.quantity;
@@ -228,9 +226,7 @@ export default function OrdersPage() {
             });
 
             const productIdsToUpdate = Array.from(inventoryChanges.keys());
-
             if (productIdsToUpdate.length === 0) {
-                // If no inventory changes, just save the order
                 const orderRef = id ? doc(db, 'orders', id) : doc(collection(db, 'orders'));
                 transaction.set(orderRef, orderDataFromDialog, id ? { merge: true } : {});
                 return;
@@ -241,23 +237,20 @@ export default function OrdersPage() {
             const productReadPromises = productRefs.map(ref => transaction.get(ref));
             const productSnapshots = await Promise.all(productReadPromises);
 
-
             // --- Phase 3: Write ---
-            productSnapshots.forEach((productSnap) => {
+            productSnapshots.forEach((productSnap, index) => {
                 if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productSnap.id} not found during transaction!`);
+                    throw new Error(`Product with ID ${productRefs[index].id} not found during transaction!`);
                 }
                 const productId = productSnap.id;
                 const quantityChange = inventoryChanges.get(productId);
+                if (quantityChange === undefined) return;
 
-                if (!quantityChange) return;
-                
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
                 transaction.update(productSnap.ref, { quantityInStock: newStock });
             });
-
-            // Save the order document itself
+            
             const orderRef = id ? doc(db, 'orders', id) : doc(collection(db, 'orders'));
             transaction.set(orderRef, orderDataFromDialog, id ? { merge: true } : {});
         });
@@ -275,6 +268,24 @@ export default function OrdersPage() {
             setConversionOrderData(null);
         }
     }
+  };
+
+  const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
+      try {
+        const docRef = await addDoc(collection(db, 'products'), productToSave);
+        toast({
+          title: "Product Added",
+          description: `Product ${productToSave.name} has been added to the product list.`,
+        });
+        return docRef.id;
+      } catch (error) {
+        console.error("Error saving new product from order:", error);
+        toast({
+          title: "Error Saving Product",
+          description: "Could not save the new item to the product list.",
+          variant: "destructive",
+        });
+      }
   };
 
 
@@ -572,6 +583,7 @@ export default function OrdersPage() {
             </Button>
           }
           onSave={handleSaveOrder}
+          onSaveProduct={handleSaveProduct}
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
@@ -587,6 +599,7 @@ export default function OrdersPage() {
             }}
             initialData={conversionOrderData}
             onSave={handleSaveOrder}
+            onSaveProduct={handleSaveProduct}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}

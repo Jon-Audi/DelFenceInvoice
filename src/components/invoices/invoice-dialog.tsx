@@ -1,3 +1,4 @@
+
 // src/components/invoices/invoice-dialog.tsx
 
 "use client";
@@ -18,6 +19,7 @@ interface InvoiceDialogProps {
   invoice?: Invoice;
   triggerButton?: React.ReactElement;
   onSave: (invoice: Invoice) => void;
+  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   customers: Customer[];
   products: Product[];
   productCategories: string[];
@@ -31,6 +33,7 @@ export function InvoiceDialog({
   invoice,
   triggerButton,
   onSave,
+  onSaveProduct,
   customers,
   products,
   productCategories,
@@ -50,10 +53,26 @@ export function InvoiceDialog({
     }
   }, [initialData, controlledIsOpen]);
 
-  const handleSubmit = (formDataFromForm: InvoiceFormData) => {
-    const selectedCustomer = customers.find(c => c.id === formDataFromForm.customerId);
-    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
+  const handleSubmit = async (formDataFromForm: InvoiceFormData) => {
+    
+    const productsToCreate: Omit<Product, 'id'>[] = [];
+    for (const item of formDataFromForm.lineItems) {
+      if (item.isNonStock && item.addToProductList) {
+        productsToCreate.push({
+          name: item.productName || 'Unnamed Product',
+          category: item.newProductCategory || 'Uncategorized',
+          unit: item.unit || 'unit',
+          price: item.unitPrice,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
+          quantityInStock: 0,
+        });
+      }
+    }
 
+    const createdProductIds = await Promise.all(productsToCreate.map(p => onSaveProduct(p)));
+    
+    let newProductIndex = 0;
     const lineItems: LineItem[] = formDataFromForm.lineItems.map((item) => {
       const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
       const finalUnitPrice = parseFloat((typeof item.unitPrice === 'number' ? item.unitPrice : 0).toFixed(2));
@@ -73,19 +92,26 @@ export function InvoiceDialog({
           isReturn: isReturn,
           total: isReturn ? -itemBaseTotal : itemBaseTotal,
           isNonStock: item.isNonStock || false,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
       };
 
-      if (item.isNonStock) {
-        lineItemForDb.cost = item.cost || 0; // Default to 0 if undefined
-        lineItemForDb.markupPercentage = item.markupPercentage || 0; // Default to 0 if undefined
-      }
-
-      if (!item.isNonStock && item.productId) {
+      if (item.isNonStock && item.addToProductList) {
+        const newId = createdProductIds[newProductIndex];
+        if (newId) {
+          lineItemForDb.productId = newId;
+          lineItemForDb.isNonStock = false;
+        }
+        newProductIndex++;
+      } else if (!item.isNonStock && item.productId) {
           lineItemForDb.productId = item.productId;
       }
       return lineItemForDb as LineItem;
     });
 
+    const selectedCustomer = customers.find(c => c.id === formDataFromForm.customerId);
+    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
+    
     const currentSubtotal = parseFloat(lineItems.reduce((acc, item) => acc + item.total, 0).toFixed(2));
     const currentTaxAmount = 0; // Assuming no tax for now
     const currentTotal = parseFloat((currentSubtotal + currentTaxAmount).toFixed(2));
@@ -108,9 +134,8 @@ export function InvoiceDialog({
       determinedStatus = formDataFromForm.status;
     }
 
-    // Build the final, clean payload for Firestore
     const invoicePayload: Omit<Invoice, 'id'> & { id?: string } = {
-        id: invoice?.id || initialData?.id || formDataFromForm.id, // Keep id for onSave logic
+        id: invoice?.id || initialData?.id || formDataFromForm.id,
         invoiceNumber: formDataFromForm.invoiceNumber,
         customerId: formDataFromForm.customerId,
         customerName: customerName,
@@ -125,7 +150,6 @@ export function InvoiceDialog({
         balanceDue: roundedBalanceDue,
     };
 
-    // Only add optional fields if they have a truthy value
     if (formDataFromForm.dueDate) invoicePayload.dueDate = formDataFromForm.dueDate.toISOString();
     if (formDataFromForm.poNumber) invoicePayload.poNumber = formDataFromForm.poNumber;
     if (formDataFromForm.paymentTerms) invoicePayload.paymentTerms = formDataFromForm.paymentTerms;
@@ -135,8 +159,7 @@ export function InvoiceDialog({
     if (formDataFromForm.readyForPickUpDate) invoicePayload.readyForPickUpDate = formDataFromForm.readyForPickUpDate.toISOString();
     if (formDataFromForm.pickedUpDate) invoicePayload.pickedUpDate = formDataFromForm.pickedUpDate.toISOString();
 
-
-    onSave(invoicePayload as Invoice); // Pass the clean object.
+    onSave(invoicePayload as Invoice);
     setOpen(false);
   };
 

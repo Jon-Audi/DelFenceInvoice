@@ -17,6 +17,7 @@ interface OrderDialogProps {
   order?: Order;
   triggerButton?: React.ReactElement; 
   onSave: (order: Order) => void;
+  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
   customers: Customer[];
   products: Product[]; 
   productCategories: string[];
@@ -29,6 +30,7 @@ export function OrderDialog({
   order, 
   triggerButton, 
   onSave, 
+  onSaveProduct,
   customers, 
   products,
   productCategories,
@@ -48,10 +50,26 @@ export function OrderDialog({
   }, [initialData, controlledIsOpen]);
 
 
-  const handleSubmit = (formData: OrderFormData) => {
-    const selectedCustomer = customers.find(c => c.id === formData.customerId);
-    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
+  const handleSubmit = async (formData: OrderFormData) => {
+    const productsToCreate: Omit<Product, 'id'>[] = [];
+    
+    for (const item of formData.lineItems) {
+      if (item.isNonStock && item.addToProductList) {
+        productsToCreate.push({
+          name: item.productName || 'Unnamed Product',
+          category: item.newProductCategory || 'Uncategorized',
+          unit: item.unit || 'unit',
+          price: item.unitPrice,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
+          quantityInStock: 0,
+        });
+      }
+    }
 
+    const createdProductIds = await Promise.all(productsToCreate.map(p => onSaveProduct(p)));
+
+    let newProductIndex = 0;
     const lineItems: LineItem[] = formData.lineItems.map((item) => {
       const product = !item.isNonStock && item.productId ? products.find(p => p.id === item.productId) : undefined;
       const finalUnitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
@@ -71,18 +89,26 @@ export function OrderDialog({
           isReturn: isReturn,
           total: isReturn ? -itemBaseTotal : itemBaseTotal,
           isNonStock: item.isNonStock || false,
+          cost: item.cost || 0,
+          markupPercentage: item.markupPercentage || 0,
       };
 
-      if (item.isNonStock) {
-        lineItemForDb.cost = item.cost || 0; // Default to 0 if undefined
-        lineItemForDb.markupPercentage = item.markupPercentage || 0; // Default to 0 if undefined
+      if (item.isNonStock && item.addToProductList) {
+        const newId = createdProductIds[newProductIndex];
+        if (newId) {
+          lineItemForDb.productId = newId;
+          lineItemForDb.isNonStock = false;
+        }
+        newProductIndex++;
+      } else if (!item.isNonStock && item.productId) {
+        lineItemForDb.productId = item.productId;
       }
       
-      if (!item.isNonStock && item.productId) {
-          lineItemForDb.productId = item.productId;
-      }
       return lineItemForDb as LineItem;
     });
+
+    const selectedCustomer = customers.find(c => c.id === formData.customerId);
+    const customerName = selectedCustomer ? (selectedCustomer.companyName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`) : 'Unknown Customer';
 
     const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
     const taxAmount = 0; 

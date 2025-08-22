@@ -75,6 +75,9 @@ export interface LineItem {
   isNonStock?: boolean; // Flag to indicate if it's a non-stock item
   cost?: number; // Optional: for non-stock items to track profitability
   markupPercentage?: number; // Optional: for non-stock items
+  unit?: string; // For creating new products from non-stock items
+  addToProductList?: boolean; // UI flag for form
+  newProductCategory?: string; // UI field for form
 }
 
 

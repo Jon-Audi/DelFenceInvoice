@@ -238,6 +238,25 @@ export default function EstimatesPage() {
     }
   };
 
+  const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
+      try {
+        const docRef = await addDoc(collection(db, 'products'), productToSave);
+        toast({
+          title: "Product Added",
+          description: `Product ${productToSave.name} has been added to the product list.`,
+        });
+        return docRef.id;
+      } catch (error) {
+        console.error("Error saving new product from estimate:", error);
+        toast({
+          title: "Error Saving Product",
+          description: "Could not save the new item to the product list.",
+          variant: "destructive",
+        });
+      }
+  };
+
+
   const handleDeleteEstimate = async (estimateId: string) => {
     try {
       await deleteDoc(doc(db, 'estimates', estimateId));
@@ -518,6 +537,7 @@ export default function EstimatesPage() {
           }
           onSave={handleSaveEstimate}
           onSaveCustomer={handleSaveCustomer}
+          onSaveProduct={handleSaveProduct}
           products={products}
           customers={customers}
           productCategories={stableProductCategories}
@@ -531,6 +551,7 @@ export default function EstimatesPage() {
           initialData={clonedEstimateData}
           onSave={handleSaveEstimate}
           onSaveCustomer={handleSaveCustomer}
+          onSaveProduct={handleSaveProduct}
           products={products}
           customers={customers}
           productCategories={stableProductCategories}
@@ -603,6 +624,7 @@ export default function EstimatesPage() {
                             }
                             onSave={handleSaveEstimate}
                             onSaveCustomer={handleSaveCustomer}
+                            onSaveProduct={handleSaveProduct}
                             products={products}
                             customers={customers}
                             productCategories={stableProductCategories}

@@ -29,7 +29,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, documentId } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -253,13 +253,11 @@ export default function InvoicesPage() {
             const inventoryChanges = new Map<string, number>();
             let originalInvoice: Invoice | null = null;
             
-            // If editing, first read the original invoice to calculate stock changes.
             if (id) {
                 const originalInvoiceRef = doc(db, 'invoices', id);
                 const originalInvoiceSnap = await transaction.get(originalInvoiceRef);
                 if (originalInvoiceSnap.exists()) {
                     originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
-                    // Revert stock changes from the original invoice if it exists
                     originalInvoice.lineItems.forEach(item => {
                         if (item.productId && !item.isNonStock) {
                             const change = item.isReturn ? -item.quantity : item.quantity;
@@ -269,7 +267,6 @@ export default function InvoicesPage() {
                 }
             }
 
-            // Apply stock changes for the new/updated invoice
             invoiceDataFromDialog.lineItems.forEach(item => {
                 if (item.productId && !item.isNonStock) {
                     const change = item.isReturn ? item.quantity : -item.quantity;
@@ -279,7 +276,6 @@ export default function InvoicesPage() {
 
             const productIdsToUpdate = Array.from(inventoryChanges.keys());
             if (productIdsToUpdate.length === 0) {
-                // If no inventory changes, just save the invoice and finish.
                 const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
                 transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
                 return;
@@ -291,21 +287,19 @@ export default function InvoicesPage() {
             const productSnapshots = await Promise.all(productReadPromises);
 
             // --- Phase 3: Write ---
-            productSnapshots.forEach((productSnap) => {
+            productSnapshots.forEach((productSnap, index) => {
                 if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productSnap.id} not found during transaction!`);
+                    throw new Error(`Product with ID ${productRefs[index].id} not found during transaction!`);
                 }
                 const productId = productSnap.id;
                 const quantityChange = inventoryChanges.get(productId);
-
-                if (!quantityChange) return;
+                if (quantityChange === undefined) return;
 
                 const currentStock = productSnap.data().quantityInStock || 0;
                 const newStock = currentStock + quantityChange;
                 transaction.update(productSnap.ref, { quantityInStock: newStock });
             });
 
-            // Finally, save the invoice document itself
             const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
             transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
         });
@@ -330,6 +324,25 @@ export default function InvoicesPage() {
         setConversionInvoiceData(null);
     }
   };
+
+  const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
+      try {
+        const docRef = await addDoc(collection(db, 'products'), productToSave);
+        toast({
+          title: "Product Added",
+          description: `Product ${productToSave.name} has been added to the product list.`,
+        });
+        return docRef.id;
+      } catch (error) {
+        console.error("Error saving new product from invoice:", error);
+        toast({
+          title: "Error Saving Product",
+          description: "Could not save the new item to the product list.",
+          variant: "destructive",
+        });
+      }
+  };
+
 
   const handleBulkPaymentSave = async (
     customerId: string,
@@ -741,6 +754,7 @@ export default function InvoicesPage() {
                   </Button>
                 }
                 onSave={handleSaveInvoice}
+                onSaveProduct={handleSaveProduct}
                 customers={customers}
                 products={products}
                 productCategories={stableProductCategories}
@@ -764,6 +778,7 @@ export default function InvoicesPage() {
             }}
             initialData={conversionInvoiceData}
             onSave={handleSaveInvoice}
+            onSaveProduct={handleSaveProduct}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
