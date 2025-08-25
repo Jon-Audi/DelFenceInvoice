@@ -280,6 +280,7 @@ export default function EstimatesPage() {
         ...li,
         isNonStock: li.isNonStock || false,
         isReturn: li.isReturn || false,
+        addToProductList: li.addToProductList ?? false, // Ensure boolean value
       })),
     };
     setClonedEstimateData(newEstimateData);
