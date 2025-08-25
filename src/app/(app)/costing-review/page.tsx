@@ -8,22 +8,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Order, Invoice, Customer, Product, DocumentStatus } from '@/types';
+import type { Order, Invoice, Customer, Product, LineItem } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, runTransaction } from 'firebase/firestore';
 import { OrderDialog } from '@/components/orders/order-dialog';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
-import { runTransaction } from 'firebase/firestore';
 
-// Define a unified type for the items list
-type ReviewableDocument = (Partial<Order> & Partial<Invoice>) & { 
-    id: string; 
-    docType: 'Order' | 'Invoice'; 
-    date: string; 
-    customerName: string; 
-    lineItems: any[];
-    status: DocumentStatus; // Unified status property
+// Define a unified type for the items list that is compatible with both Orders and Invoices.
+type ReviewableDocument = {
+    id: string;
+    docType: 'Order' | 'Invoice';
+    number: string;
+    customerName: string;
+    date: string;
+    lineItems: LineItem[];
+    // Include the original document for editing purposes
+    originalDoc: Order | Invoice;
 };
 
 
@@ -65,7 +66,6 @@ export default function CostingReviewPage() {
       }));
     });
 
-    // Simplified loading state management
     const allCollections = ['orders', 'invoices', 'customers', 'products'];
     const loadingPromises = allCollections.map(path => 
         new Promise(resolve => {
@@ -93,13 +93,29 @@ export default function CostingReviewPage() {
 
     orders.forEach(order => {
       if (order.lineItems.some(hasMissingCost)) {
-        docs.push({ ...order, docType: 'Order' });
+        docs.push({
+          id: order.id,
+          docType: 'Order',
+          number: order.orderNumber,
+          customerName: order.customerName || 'N/A',
+          date: order.date,
+          lineItems: order.lineItems,
+          originalDoc: order,
+        });
       }
     });
 
     invoices.forEach(invoice => {
       if (invoice.lineItems.some(hasMissingCost)) {
-        docs.push({ ...invoice, docType: 'Invoice' });
+         docs.push({
+          id: invoice.id,
+          docType: 'Invoice',
+          number: invoice.invoiceNumber,
+          customerName: invoice.customerName || 'N/A',
+          date: invoice.date,
+          lineItems: invoice.lineItems,
+          originalDoc: invoice,
+        });
       }
     });
 
@@ -176,7 +192,7 @@ export default function CostingReviewPage() {
                       {doc.docType}
                     </Badge>
                   </TableCell>
-                  <TableCell>{doc.docType === 'Order' ? (doc as Order).orderNumber : (doc as Invoice).invoiceNumber}</TableCell>
+                  <TableCell>{doc.number}</TableCell>
                   <TableCell>{doc.customerName}</TableCell>
                   <TableCell>{new Date(doc.date).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
@@ -201,7 +217,7 @@ export default function CostingReviewPage() {
         <OrderDialog 
             isOpen={!!editingDoc}
             onOpenChange={() => setEditingDoc(null)}
-            order={editingDoc as Order}
+            order={editingDoc.originalDoc as Order}
             onSave={handleSaveOrder}
             onSaveProduct={() => Promise.resolve()}
             customers={customers}
@@ -214,7 +230,7 @@ export default function CostingReviewPage() {
         <InvoiceDialog 
             isOpen={!!editingDoc}
             onOpenChange={() => setEditingDoc(null)}
-            invoice={editingDoc as Invoice}
+            invoice={editingDoc.originalDoc as Invoice}
             onSave={handleSaveInvoice}
             onSaveProduct={() => Promise.resolve()}
             customers={customers}
