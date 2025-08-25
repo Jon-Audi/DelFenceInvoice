@@ -113,6 +113,7 @@ export default function InvoicesPage() {
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
+            addToProductList: li.addToProductList ?? false,
           })),
           notes: estimateToConvert.notes || '',
           paymentTerms: 'Due upon receipt',
