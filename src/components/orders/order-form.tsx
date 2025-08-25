@@ -172,7 +172,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                 id: li.id, productId: li.productId, productName: li.productName,
                 quantity: li.quantity, unitPrice: li.unitPrice,
                 isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
-                cost: li.cost, markupPercentage: li.markupPercentage
+                cost: li.cost, markupPercentage: li.markupPercentage,
+                addToProductList: li.addToProductList ?? false,
             })),
             notes: order.notes || '',
             payments: order.payments?.map(p => ({...p, date: parseISO(p.date)})) || [],
@@ -198,7 +199,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         defaultValues = {
             id: undefined, orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
             customerId: '', date: new Date(), status: 'Draft', orderState: 'Open', poNumber: '',
-            lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+            lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false }],
             notes: '', expectedDeliveryDate: undefined, readyForPickUpDate: undefined, pickedUpDate: undefined, payments: [],
         };
     }
@@ -369,7 +370,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   };
 
   const addLineItem = () => {
-    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
+    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -404,6 +405,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
           productName: product.name, quantity: item.quantity,
           unitPrice: calculateUnitPrice(product, customer),
           isReturn: false, isNonStock: false,
+          addToProductList: false,
         });
         setLineItemCategoryFilters(prev => [...prev, product.category]);
       }

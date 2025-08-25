@@ -41,7 +41,7 @@ type SortableInvoiceKeys =
 interface InvoiceTableProps {
   invoices: Invoice[];
   onSave: (invoice: Invoice) => void;
-  onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
+  onSaveProduct?: (product: Omit<Product, 'id'>) => Promise<string | void>;
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
@@ -59,7 +59,7 @@ interface InvoiceTableProps {
 export function InvoiceTable({ 
   invoices, 
   onSave, 
-  onSaveProduct,
+  onSaveProduct = async () => {},   // safe default,
   onDelete, 
   onGenerateEmail, 
   onPrint, 

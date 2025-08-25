@@ -27,7 +27,8 @@
           "*.local",
           "firebase-debug.log",
           "firebase-debug.*.log",
-          ".runtimeconfig.json"
+          ".runtimeconfig.json",
+          "workspace/**"
         ],
         "predeploy": [
           "npm --prefix \"$RESOURCE_DIR\" run lint",

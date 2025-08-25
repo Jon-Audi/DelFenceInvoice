@@ -259,7 +259,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
   };
 
   const addLineItem = () => {
-    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, cost: 0, markupPercentage: 0 });
+    append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false, cost: 0, markupPercentage: 0 });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -288,6 +288,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         isNonStock: false,
         cost: productDetails.cost,
         markupPercentage: productDetails.markupPercentage,
+        addToProductList: true
       });
       newFilterEntries.push(productDetails?.category);
     });

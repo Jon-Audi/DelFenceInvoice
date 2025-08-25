@@ -88,13 +88,14 @@ export default function OrdersPage() {
           orderState: 'Open',
           poNumber: estimateToConvert.poNumber || '',
           lineItems: estimateToConvert.lineItems.map(li => ({
-            id: crypto.randomUUID(),
+            id: li.id,
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
+            addToProductList: li.addToProductList ?? false,
           })),
           notes: `Converted from Estimate #${estimateToConvert.estimateNumber}. ${estimateToConvert.notes || ''}`.trim(),
           expectedDeliveryDate: undefined,
@@ -109,6 +110,24 @@ export default function OrdersPage() {
       }
     }
   }, [toast]);
+
+  const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
+    try {
+      const docRef = await addDoc(collection(db, 'products'), productToSave);
+      toast({
+        title: "Product Added",
+        description: `Product ${productToSave.name} has been added to the product list.`,
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error saving new product from invoice:", error);
+      toast({
+        title: "Error Saving Product",
+        description: "Could not save the new item to the product list.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (conversionOrderData && !isLoadingProducts && !isLoadingCustomers) {
@@ -269,25 +288,6 @@ export default function OrdersPage() {
         }
     }
   };
-
-  const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
-      try {
-        const docRef = await addDoc(collection(db, 'products'), productToSave);
-        toast({
-          title: "Product Added",
-          description: `Product ${productToSave.name} has been added to the product list.`,
-        });
-        return docRef.id;
-      } catch (error) {
-        console.error("Error saving new product from order:", error);
-        toast({
-          title: "Error Saving Product",
-          description: "Could not save the new item to the product list.",
-          variant: "destructive",
-        });
-      }
-  };
-
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
@@ -634,6 +634,7 @@ export default function OrdersPage() {
             sortConfig={sortConfig}
             requestSort={requestSort}
             renderSortArrow={renderSortArrow}
+            onSaveProduct={handleSaveProduct}
           />
            {sortedAndFilteredOrders.length === 0 && (
              <p className="p-4 text-center text-muted-foreground">

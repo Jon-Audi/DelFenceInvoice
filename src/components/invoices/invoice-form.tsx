@@ -189,7 +189,8 @@ export function InvoiceForm({
             id: li.id, productId: li.productId, productName: li.productName,
             quantity: li.quantity, unitPrice: li.unitPrice,
             isReturn: li.isReturn || false, isNonStock: li.isNonStock || false,
-            cost: li.cost, markupPercentage: li.markupPercentage
+            cost: li.cost, markupPercentage: li.markupPercentage,
+            addToProductList: li.addToProductList ?? false,
         })),
         paymentTerms: invoice.paymentTerms || 'Due on receipt',
         notes: invoice.notes || '',
@@ -221,7 +222,7 @@ export function InvoiceForm({
         id: undefined,
         invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000)+1000).padStart(4, '0')}`,
         customerId: '', date: new Date(), status: 'Draft', poNumber: '',
-        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false }],
+        lineItems: [{ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false }],
         paymentTerms: 'Due on receipt', notes: '', dueDate: undefined, payments: [],
       };
     }
@@ -426,7 +427,7 @@ export function InvoiceForm({
   };
 
   const addLineItem = () => {
-    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false });
+    append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
   };
 
@@ -470,6 +471,7 @@ export function InvoiceForm({
         unitPrice: finalPrice,
         isReturn: false,
         isNonStock: false,
+        addToProductList: false,
       });
       newFilterEntries.push(productDetails?.category);
     });
