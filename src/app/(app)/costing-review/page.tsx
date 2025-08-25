@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Order, Invoice, Customer, Product } from '@/types';
+import type { Order, Invoice, Customer, Product, DocumentStatus } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, writeBatch } from 'firebase/firestore';
@@ -17,7 +17,14 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import { runTransaction } from 'firebase/firestore';
 
 // Define a unified type for the items list
-type ReviewableDocument = (Partial<Order> & Partial<Invoice>) & { id: string; docType: 'Order' | 'Invoice'; date: string; customerName: string; lineItems: any[] };
+type ReviewableDocument = (Partial<Order> & Partial<Invoice>) & { 
+    id: string; 
+    docType: 'Order' | 'Invoice'; 
+    date: string; 
+    customerName: string; 
+    lineItems: any[];
+    status: DocumentStatus; // Unified status property
+};
 
 
 export default function CostingReviewPage() {
