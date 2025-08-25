@@ -17,7 +17,8 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import { runTransaction } from 'firebase/firestore';
 
 // Define a unified type for the items list
-type ReviewableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
+type ReviewableDocument = (Partial<Order> & Partial<Invoice>) & { id: string; docType: 'Order' | 'Invoice'; date: string; customerName: string; lineItems: any[] };
+
 
 export default function CostingReviewPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -50,7 +51,7 @@ export default function CostingReviewPage() {
     Object.entries(collections).forEach(([path, setStateCallback]) => {
       unsubscribes.push(onSnapshot(collection(db, path), (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        setStateCallback(items);
+        setStateCallback(items as any[]);
       }, (error) => {
         console.error(`Error fetching ${path}:`, error);
         toast({ title: "Error", description: `Could not fetch ${path}.`, variant: "destructive" });
@@ -168,7 +169,7 @@ export default function CostingReviewPage() {
                       {doc.docType}
                     </Badge>
                   </TableCell>
-                  <TableCell>{doc.docType === 'Order' ? doc.orderNumber : doc.invoiceNumber}</TableCell>
+                  <TableCell>{doc.docType === 'Order' ? (doc as Order).orderNumber : (doc as Invoice).invoiceNumber}</TableCell>
                   <TableCell>{doc.customerName}</TableCell>
                   <TableCell>{new Date(doc.date).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
@@ -195,6 +196,7 @@ export default function CostingReviewPage() {
             onOpenChange={() => setEditingDoc(null)}
             order={editingDoc as Order}
             onSave={handleSaveOrder}
+            onSaveProduct={() => Promise.resolve()}
             customers={customers}
             products={products}
             productCategories={productCategories}
@@ -207,6 +209,7 @@ export default function CostingReviewPage() {
             onOpenChange={() => setEditingDoc(null)}
             invoice={editingDoc as Invoice}
             onSave={handleSaveInvoice}
+            onSaveProduct={() => Promise.resolve()}
             customers={customers}
             products={products}
             productCategories={productCategories}
