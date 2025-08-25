@@ -20,12 +20,6 @@ import { runTransaction } from 'firebase/firestore';
 type ReviewableDocument = (Partial<Order> & Partial<Invoice>) & { 
     id: string; 
     docType: 'Order' | 'Invoice'; 
-    date: string; 
-    customerName: string; 
-    lineItems: any[];
-    status: DocumentStatus; // Unified status property
-    orderNumber?: string;
-    invoiceNumber?: string;
 };
 
 
