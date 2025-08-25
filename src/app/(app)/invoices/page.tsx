@@ -1,8 +1,6 @@
-
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -29,7 +27,7 @@ import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
 import type { InvoiceFormData } from '@/components/invoices/invoice-form';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, writeBatch, query, where, orderBy, getDocs, DocumentReference, documentId } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, getDoc, runTransaction, query, where, orderBy, getDocs, documentId } from 'firebase/firestore';
 import { PrintableInvoice } from '@/components/invoices/printable-invoice';
 import { PrintableInvoicePackingSlip } from '@/components/invoices/printable-invoice-packing-slip';
 import { LineItemsViewerDialog } from '@/components/shared/line-items-viewer-dialog';
@@ -66,12 +64,11 @@ export default function InvoicesPage() {
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
-  const router = useRouter();
 
   const [isConvertingInvoice, setIsConvertingInvoice] = useState(false);
   const [conversionInvoiceData, setConversionInvoiceData] = useState<Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] } | null>(null);
 
-  const printRef = React.useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [packingSlipToPrintForInvoice, setPackingSlipToPrintForInvoice] = useState<any | null>(null);
   const [bulkPaymentReceiptToPrint, setBulkPaymentReceiptToPrint] = useState<BulkPaymentReceiptData | null>(null);
@@ -80,7 +77,6 @@ export default function InvoicesPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableInvoiceKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
-
 
   const [invoiceForViewingItems, setInvoiceForViewingItems] = useState<Invoice | null>(null);
   const [isLineItemsViewerOpen, setIsLineItemsViewerOpen] = useState(false);
@@ -93,7 +89,6 @@ export default function InvoicesPage() {
     const pendingEstimateRaw = localStorage.getItem('estimateToConvert_invoice');
     const pendingOrderRaw = localStorage.getItem('orderToConvert_invoice');
     let newInvoiceData: (Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'], payments?: Payment[] }) | null = null;
-
 
     if (pendingEstimateRaw) {
       localStorage.removeItem('estimateToConvert_invoice');
@@ -128,7 +123,7 @@ export default function InvoicesPage() {
       localStorage.removeItem('orderToConvert_invoice');
       try {
         const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
-         newInvoiceData = {
+        newInvoiceData = {
           invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
           customerId: orderToConvert.customerId,
           date: new Date(),
@@ -156,7 +151,7 @@ export default function InvoicesPage() {
     }
 
     if (newInvoiceData) {
-        setConversionInvoiceData(newInvoiceData);
+      setConversionInvoiceData(newInvoiceData);
     }
   }, [toast]);
 
@@ -166,22 +161,21 @@ export default function InvoicesPage() {
     }
   }, [conversionInvoiceData, isLoadingProducts, isLoadingCustomers]);
 
-
   useEffect(() => {
     setIsLoadingInvoices(true);
     const unsubscribe = onSnapshot(collection(db, 'invoices'), (snapshot) => {
       const fetchedInvoices: Invoice[] = [];
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
+        const data = docSnap.data() as any;
         fetchedInvoices.push({
-             ...data as Omit<Invoice, 'id' | 'total' | 'amountPaid' | 'balanceDue'>,
-             id: docSnap.id,
-             total: data.total || 0,
-             amountPaid: data.amountPaid || 0,
-             balanceDue: data.balanceDue !== undefined ? data.balanceDue : (data.total || 0) - (data.amountPaid || 0),
-             payments: data.payments || [],
-             poNumber: data.poNumber || undefined,
-           });
+          ...(data as Omit<Invoice, 'id' | 'total' | 'amountPaid' | 'balanceDue'>),
+          id: docSnap.id,
+          total: data.total || 0,
+          amountPaid: data.amountPaid || 0,
+          balanceDue: data.balanceDue !== undefined ? data.balanceDue : (data.total || 0) - (data.amountPaid || 0),
+          payments: data.payments || [],
+          poNumber: data.poNumber || undefined,
+        });
       });
       setInvoices(fetchedInvoices);
       setIsLoadingInvoices(false);
@@ -229,122 +223,120 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (products && products.length > 0) {
-        const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
-        setStableProductCategories(currentStableCategories => {
-            if (JSON.stringify(newCategories) !== JSON.stringify(currentStableCategories)) {
-                return newCategories;
-            }
-            return currentStableCategories;
-        });
+      const newCategories = Array.from(new Set(products.map(p => p.category))).sort();
+      setStableProductCategories(currentStableCategories => {
+        if (JSON.stringify(newCategories) !== JSON.stringify(currentStableCategories)) {
+          return newCategories;
+        }
+        return currentStableCategories;
+      });
     } else {
-        setStableProductCategories(currentStableCategories => {
-            if (currentStableCategories.length > 0) {
-                return [];
-            }
-            return currentStableCategories;
-        });
+      setStableProductCategories(currentStableCategories => {
+        if (currentStableCategories.length > 0) {
+          return [];
+        }
+        return currentStableCategories;
+      });
     }
   }, [products]);
 
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     try {
-        await runTransaction(db, async (transaction) => {
-            const { id, ...invoiceDataFromDialog } = invoiceToSave;
-            
-            // --- Phase 1: Pre-computation and ID collection ---
-            const inventoryChanges = new Map<string, number>();
-            let originalInvoice: Invoice | null = null;
-            
-            if (id) {
-                const originalInvoiceRef = doc(db, 'invoices', id);
-                const originalInvoiceSnap = await transaction.get(originalInvoiceRef);
-                if (originalInvoiceSnap.exists()) {
-                    originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
-                    originalInvoice.lineItems.forEach(item => {
-                        if (item.productId && !item.isNonStock) {
-                            const change = item.isReturn ? -item.quantity : item.quantity;
-                            inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
-                        }
-                    });
-                }
-            }
+      await runTransaction(db, async (transaction) => {
+        const { id, ...invoiceDataFromDialog } = invoiceToSave;
 
-            invoiceDataFromDialog.lineItems.forEach(item => {
-                if (item.productId && !item.isNonStock) {
-                    const change = item.isReturn ? item.quantity : -item.quantity;
-                    inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
-                }
+        // --- Phase 1: Pre-computation and ID collection ---
+        const inventoryChanges = new Map<string, number>();
+        let originalInvoice: Invoice | null = null;
+
+        if (id) {
+          const originalInvoiceRef = doc(db, 'invoices', id);
+          const originalInvoiceSnap = await transaction.get(originalInvoiceRef);
+          if (originalInvoiceSnap.exists()) {
+            originalInvoice = { id, ...originalInvoiceSnap.data() } as Invoice;
+            originalInvoice.lineItems.forEach(item => {
+              if (item.productId && !item.isNonStock) {
+                const change = item.isReturn ? -item.quantity : item.quantity;
+                inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+              }
             });
+          }
+        }
 
-            const productIdsToUpdate = Array.from(inventoryChanges.keys());
-            if (productIdsToUpdate.length === 0) {
-                const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
-                transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
-                return;
-            }
-            
-            // --- Phase 2: Batch Read ---
-            const productRefs = productIdsToUpdate.map(pid => doc(db, 'products', pid));
-            const productReadPromises = productRefs.map(ref => transaction.get(ref));
-            const productSnapshots = await Promise.all(productReadPromises);
-
-            // --- Phase 3: Write ---
-            productSnapshots.forEach((productSnap, index) => {
-                if (!productSnap.exists()) {
-                    throw new Error(`Product with ID ${productRefs[index].id} not found during transaction!`);
-                }
-                const productId = productSnap.id;
-                const quantityChange = inventoryChanges.get(productId);
-                if (quantityChange === undefined) return;
-
-                const currentStock = productSnap.data().quantityInStock || 0;
-                const newStock = currentStock + quantityChange;
-                transaction.update(productSnap.ref, { quantityInStock: newStock });
-            });
-
-            const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
-            transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
+        invoiceDataFromDialog.lineItems.forEach(item => {
+          if (item.productId && !item.isNonStock) {
+            const change = item.isReturn ? item.quantity : -item.quantity;
+            inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + change);
+          }
         });
 
-        toast({
-            title: invoiceToSave.id ? "Invoice Updated" : "Invoice Added",
-            description: `Invoice ${invoiceToSave.invoiceNumber} and stock levels have been updated.`
+        const productIdsToUpdate = Array.from(inventoryChanges.keys());
+        if (productIdsToUpdate.length === 0) {
+          const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
+          transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
+          return;
+        }
+
+        // --- Phase 2: Batch Read ---
+        const productRefs = productIdsToUpdate.map(pid => doc(db, 'products', pid));
+        const productSnapshots = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+        // --- Phase 3: Write ---
+        productSnapshots.forEach((productSnap, index) => {
+          if (!productSnap.exists()) {
+            throw new Error(`Product with ID ${productRefs[index].id} not found during transaction!`);
+          }
+          const productId = productSnap.id;
+          const quantityChange = inventoryChanges.get(productId);
+          if (quantityChange === undefined) return;
+
+          const currentStock = (productSnap.data() as any).quantityInStock || 0;
+          const newStock = currentStock + quantityChange;
+          transaction.update(productSnap.ref, { quantityInStock: newStock });
         });
+
+        const invoiceRef = id ? doc(db, 'invoices', id) : doc(collection(db, 'invoices'));
+        transaction.set(invoiceRef, invoiceDataFromDialog, id ? { merge: true } : {});
+      });
+
+      toast({
+        title: invoiceToSave.id ? "Invoice Updated" : "Invoice Added",
+        description: `Invoice ${invoiceToSave.invoiceNumber} and stock levels have been updated.`
+      });
 
     } catch (error: any) {
-        console.error("Error saving invoice in transaction:", error);
-        toast({
-            title: "Error Saving Invoice",
-            description: `Could not save invoice: ${error.message}`,
-            variant: "destructive",
-            duration: 8000
-        });
+      console.error("Error saving invoice in transaction:", error);
+      toast({
+        title: "Error Saving Invoice",
+        description: `Could not save invoice: ${error.message}`,
+        variant: "destructive",
+        duration: 8000
+      });
     }
-    
+
     if (isConvertingInvoice) {
-        setIsConvertingInvoice(false);
-        setConversionInvoiceData(null);
+      setIsConvertingInvoice(false);
+      setConversionInvoiceData(null);
     }
   };
 
   const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
-      try {
-        const docRef = await addDoc(collection(db, 'products'), productToSave);
-        toast({
-          title: "Product Added",
-          description: `Product ${productToSave.name} has been added to the product list.`,
-        });
-        return docRef.id;
-      } catch (error) {
-        console.error("Error saving new product from invoice:", error);
-        toast({
-          title: "Error Saving Product",
-          description: "Could not save the new item to the product list.",
-          variant: "destructive",
-        });
-      }
+    try {
+      const docRef = await addDoc(collection(db, 'products'), productToSave);
+      toast({
+        title: "Product Added",
+        description: `Product ${productToSave.name} has been added to the product list.`,
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error saving new product from invoice:", error);
+      toast({
+        title: "Error Saving Product",
+        description: "Could not save the new item to the product list.",
+        variant: "destructive",
+      });
+    }
   };
-
 
   const handleBulkPaymentSave = async (
     customerId: string,
@@ -356,28 +348,26 @@ export default function InvoicesPage() {
     try {
       await runTransaction(db, async (transaction) => {
         let remainingPaymentAmount = paymentDetails.amount;
-        affectedInvoicesData = []; // Reset for this transaction attempt
-  
+        affectedInvoicesData = [];
+
         const invoicesRef = collection(db, 'invoices');
-        const q = query(invoicesRef, 
-                        where(documentId(), 'in', invoiceIdsToPay));
-  
+        const q = query(invoicesRef, where(documentId(), 'in', invoiceIdsToPay));
         const snapshot = await getDocs(q);
-        
-        const sortedDocs = snapshot.docs.sort((a,b) => {
-            const dateA = new Date(a.data().date).getTime();
-            const dateB = new Date(b.data().date).getTime();
-            return dateA - dateB;
+
+        const sortedDocs = snapshot.docs.sort((a, b) => {
+          const dateA = new Date((a.data() as any).date).getTime();
+          const dateB = new Date((b.data() as any).date).getTime();
+          return dateA - dateB;
         });
-  
+
         for (const invoiceDoc of sortedDocs) {
           if (remainingPaymentAmount <= 0) break;
-  
+
           const invoice = invoiceDoc.data() as Invoice;
-          if (invoice.customerId !== customerId) continue; 
+          if (invoice.customerId !== customerId) continue;
 
           const balanceDue = invoice.balanceDue || 0;
-  
+
           if (balanceDue > 0) {
             const amountToApply = Math.min(remainingPaymentAmount, balanceDue);
             const newPayment: Payment = {
@@ -387,28 +377,28 @@ export default function InvoicesPage() {
               method: paymentDetails.method,
               notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment)` : `Bulk payment application`,
             };
-  
+
             const newAmountPaid = (invoice.amountPaid || 0) + amountToApply;
             const newBalanceDue = invoice.total - newAmountPaid;
             const newStatus = newBalanceDue <= 0.005 ? 'Paid' : 'Partially Paid';
-  
+
             transaction.update(invoiceDoc.ref, {
               payments: [...(invoice.payments || []), newPayment],
               amountPaid: newAmountPaid,
               balanceDue: newBalanceDue,
               status: newStatus,
             });
-            
+
             affectedInvoicesData.push({ invoiceNumber: invoice.invoiceNumber, amountApplied: amountToApply });
             remainingPaymentAmount -= amountToApply;
           }
         }
-  
+
         if (remainingPaymentAmount > 0.01) {
           throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
         }
       });
-  
+
       const customer = customers.find(c => c.id === customerId);
       const receiptData: BulkPaymentReceiptData = {
         paymentDetails: { ...paymentDetails, id: crypto.randomUUID() },
@@ -438,27 +428,26 @@ export default function InvoicesPage() {
   const handlePrepareAndPrintBulkReceipt = (receiptData: BulkPaymentReceiptData) => {
     setBulkPaymentReceiptToPrint(receiptData);
     setTimeout(() => {
-        if (printRef.current) {
-            const printContents = printRef.current.innerHTML;
-            const win = window.open('', '_blank');
-            if (win) {
-              win.document.write('<html><head><title>Print Bulk Payment Receipt</title>');
-              win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
-              win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
-              win.document.write('</head><body>');
-              win.document.write(printContents);
-              win.document.write('</body></html>');
-              win.document.close();
-              win.focus();
-              setTimeout(() => { win.print(); win.close(); }, 750);
-            } else {
-              toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
-            }
-          }
-          setBulkPaymentReceiptToPrint(null);
+      if (printRef.current) {
+        const printContents = printRef.current.innerHTML;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write('<html><head><title>Print Bulk Payment Receipt</title>');
+          win.document.write('<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">');
+          win.document.write('<style>body { margin: 0; } .print-only-container { width: 100%; min-height: 100vh; } @media print { body { size: auto; margin: 0; } .print-only { display: block !important; } .print-only-container { display: block !important; } }</style>');
+          win.document.write('</head><body>');
+          win.document.write(printContents);
+          win.document.write('</body></html>');
+          win.document.close();
+          win.focus();
+          setTimeout(() => { win.print(); win.close(); }, 750);
+        } else {
+          toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+        }
+      }
+      setBulkPaymentReceiptToPrint(null);
     }, 100);
   };
-
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     try {
@@ -470,10 +459,12 @@ export default function InvoicesPage() {
     }
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'N/A';
-    if (!isClient) return new Date(dateString).toISOString().split('T')[0];
-    return new Date(dateString).toLocaleDateString();
+  // Accept optional options param so it matches InvoiceTable's signature
+  const formatDate = (dateInput: string | Date | undefined, options?: Intl.DateTimeFormatOptions) => {
+    if (!dateInput) return 'N/A';
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (!isClient) return d.toISOString().split('T')[0];
+    return d.toLocaleDateString(undefined, options);
   };
 
   const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
@@ -492,11 +483,11 @@ export default function InvoicesPage() {
     }
   };
 
- const handlePrepareAndPrintInvoice = async (invoice: Invoice) => {
+  const handlePrepareAndPrintInvoice = async (invoice: Invoice) => {
     const settings = await fetchCompanySettings();
     if (settings) {
       setInvoiceToPrint({
-        invoice: invoice,
+        invoice,
         companySettings: settings,
         logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
       });
@@ -530,7 +521,7 @@ export default function InvoicesPage() {
     const settings = await fetchCompanySettings();
     if (settings) {
       setPackingSlipToPrintForInvoice({
-        invoice: invoice,
+        invoice,
         companySettings: settings,
         logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
       });
@@ -560,7 +551,6 @@ export default function InvoicesPage() {
     }
   };
 
-
   const handleGenerateEmail = async (invoice: Invoice) => {
     setSelectedInvoiceForEmail(invoice);
     const customer = customers.find(c => c.id === invoice.customerId);
@@ -583,7 +573,6 @@ export default function InvoicesPage() {
       ).join('\n') || 'Services/Products as per invoice.';
 
       const companyNameForDisplay = (await fetchCompanySettings())?.companyName || "Delaware Fence Pro";
-
 
       const result = await generateInvoiceEmailDraft({
         customerName: customerDisplayName,
@@ -612,24 +601,24 @@ export default function InvoicesPage() {
 
   const handleSendEmail = async () => {
     if (!selectedInvoiceForEmail || !editableSubject || !editableBody) {
-        toast({ title: "Error", description: "Email content or invoice details missing.", variant: "destructive"});
-        return;
+      toast({ title: "Error", description: "Email content or invoice details missing.", variant: "destructive"});
+      return;
     }
 
     const finalRecipients: { email: string; name: string }[] = [];
     if (targetCustomerForEmail && targetCustomerForEmail.emailContacts) {
-        selectedRecipientEmails.forEach(selEmail => {
-            const contact = targetCustomerForEmail.emailContacts.find(ec => ec.email === selEmail);
-            if (contact) {
-                finalRecipients.push({ email: contact.email, name: contact.name || '' });
-            }
-        });
+      selectedRecipientEmails.forEach(selEmail => {
+        const contact = targetCustomerForEmail.emailContacts.find(ec => ec.email === selEmail);
+        if (contact) {
+          finalRecipients.push({ email: contact.email, name: contact.name || '' });
+        }
+      });
     }
     if (additionalRecipientEmail.trim() !== "") {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(additionalRecipientEmail.trim())) {
-          if (!finalRecipients.some(r => r.email === additionalRecipientEmail.trim())) {
-              finalRecipients.push({ email: additionalRecipientEmail.trim(), name: '' });
-          }
+        if (!finalRecipients.some(r => r.email === additionalRecipientEmail.trim())) {
+          finalRecipients.push({ email: additionalRecipientEmail.trim(), name: '' });
+        }
       } else {
         toast({ title: "Invalid Email", description: "The additional email address is not valid.", variant: "destructive" });
         return;
@@ -687,17 +676,17 @@ export default function InvoicesPage() {
 
   const sortedAndFilteredInvoices = useMemo(() => {
     let sortableItems = invoices.filter(invoice => {
-        if (!searchTerm.trim()) return true;
-        const lowercasedFilter = searchTerm.toLowerCase();
-        const searchFields = [
-            invoice.invoiceNumber,
-            invoice.customerName,
-            invoice.poNumber,
-            invoice.status,
-        ];
-        return searchFields.some(field =>
-            field && field.toLowerCase().includes(lowercasedFilter)
-        );
+      if (!searchTerm.trim()) return true;
+      const lowercasedFilter = searchTerm.toLowerCase();
+      const searchFields = [
+        invoice.invoiceNumber,
+        invoice.customerName,
+        invoice.poNumber,
+        invoice.status,
+      ];
+      return searchFields.some(field =>
+        field && field.toLowerCase().includes(lowercasedFilter)
+      );
     });
 
     if (sortConfig.key) {
@@ -712,7 +701,7 @@ export default function InvoicesPage() {
         else if (sortConfig.key === 'date' || sortConfig.key === 'dueDate') {
           comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
         } else if (typeof valA === 'number' && typeof valB === 'number') {
-          comparison = valA - valB;
+          comparison = (valA as number) - (valB as number);
         } else {
           comparison = String(valA).toLowerCase().localeCompare(String(valB).toLowerCase());
         }
@@ -729,7 +718,6 @@ export default function InvoicesPage() {
     return null;
   };
 
-
   if (isLoadingInvoices || isLoadingCustomers || isLoadingProducts) {
     return (
       <PageHeader title="Invoices" description="Loading invoices database...">
@@ -744,23 +732,23 @@ export default function InvoicesPage() {
     <>
       <PageHeader title="Invoices" description="Create and manage customer invoices.">
         <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setIsBulkPaymentDialogOpen(true)} disabled={isLoadingCustomers}>
-                <Icon name="ClipboardList" className="mr-2 h-4 w-4" />
-                Record Bulk Payment
-            </Button>
-            <InvoiceDialog
-                triggerButton={
-                  <Button>
-                    <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
-                    New Invoice
-                  </Button>
-                }
-                onSave={handleSaveInvoice}
-                onSaveProduct={handleSaveProduct}
-                customers={customers}
-                products={products}
-                productCategories={stableProductCategories}
-            />
+          <Button variant="secondary" onClick={() => setIsBulkPaymentDialogOpen(true)} disabled={isLoadingCustomers}>
+            <Icon name="ClipboardList" className="mr-2 h-4 w-4" />
+            Record Bulk Payment
+          </Button>
+          <InvoiceDialog
+            triggerButton={
+              <Button>
+                <Icon name="PlusCircle" className="mr-2 h-4 w-4" />
+                New Invoice
+              </Button>
+            }
+            onSave={handleSaveInvoice}
+            onSaveProduct={handleSaveProduct}
+            customers={customers}
+            products={products}
+            productCategories={stableProductCategories}
+          />
         </div>
       </PageHeader>
 
@@ -773,18 +761,18 @@ export default function InvoicesPage() {
 
       {isConvertingInvoice && conversionInvoiceData && (
         <InvoiceDialog
-            isOpen={isConvertingInvoice}
-            onOpenChange={(open) => {
-                setIsConvertingInvoice(open);
-                if (!open) setConversionInvoiceData(null);
-            }}
-            initialData={conversionInvoiceData}
-            onSave={handleSaveInvoice}
-            onSaveProduct={handleSaveProduct}
-            customers={customers}
-            products={products}
-            productCategories={stableProductCategories}
-            isDataLoading={isLoadingCustomers || isLoadingProducts}
+          isOpen={isConvertingInvoice}
+          onOpenChange={(open) => {
+            setIsConvertingInvoice(open);
+            if (!open) setConversionInvoiceData(null);
+          }}
+          initialData={conversionInvoiceData}
+          onSave={handleSaveInvoice}
+          onSaveProduct={handleSaveProduct}
+          customers={customers}
+          products={products}
+          productCategories={stableProductCategories}
+          isDataLoading={isLoadingCustomers || isLoadingProducts}
         />
       )}
 
@@ -802,12 +790,13 @@ export default function InvoicesPage() {
           />
           <InvoiceTable
             invoices={sortedAndFilteredInvoices}
-            onSave={handleSaveInvoice}
+            // Wrap async fns so they match (..)=>void prop types expected by InvoiceTable
+            onSave={(inv) => { void handleSaveInvoice(inv); }}
             onSaveProduct={handleSaveProduct}
-            onDelete={handleDeleteInvoice}
-            onGenerateEmail={handleGenerateEmail}
-            onPrint={handlePrepareAndPrintInvoice}
-            onPrintPackingSlip={handlePrepareAndPrintInvoicePackingSlip}
+            onDelete={(id) => { void handleDeleteInvoice(id); }}
+            onGenerateEmail={(inv) => { void handleGenerateEmail(inv); }}
+            onPrint={(inv) => { void handlePrepareAndPrintInvoice(inv); }}
+            onPrintPackingSlip={(inv) => { void handlePrepareAndPrintInvoicePackingSlip(inv); }}
             formatDate={formatDate}
             customers={customers}
             products={products}
@@ -817,7 +806,7 @@ export default function InvoicesPage() {
             requestSort={requestSort}
             renderSortArrow={renderSortArrow}
           />
-           {sortedAndFilteredInvoices.length === 0 && (
+          {sortedAndFilteredInvoices.length === 0 && (
             <p className="p-4 text-center text-muted-foreground">
               {invoices.length === 0 ? "No invoices found." : "No invoices match your search."}
             </p>
@@ -836,8 +825,8 @@ export default function InvoicesPage() {
             </DialogHeader>
             {isLoadingEmail && !emailDraft ? (
               <div className="flex flex-col justify-center items-center h-60 space-y-2">
-                 <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
-                 <p>Loading email draft...</p>
+                <Icon name="Loader2" className="h-8 w-8 animate-spin text-primary" />
+                <p>Loading email draft...</p>
               </div>
             ) : emailDraft ? (
               <div className="space-y-4 py-4">
