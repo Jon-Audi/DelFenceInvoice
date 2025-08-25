@@ -36,37 +36,43 @@ export default function CostingReviewPage() {
     setIsLoading(true);
 
     const collections = {
-      orders: setOrders,
-      invoices: setInvoices,
-      customers: setCustomers,
-      products: setProducts,
+      orders: (items: any[]) => setOrders(items as Order[]),
+      invoices: (items: any[]) => setInvoices(items as Invoice[]),
+      customers: (items: any[]) => setCustomers(items as Customer[]),
+      products: (items: any[]) => {
+          const productItems = items as Product[];
+          setProducts(productItems);
+          const categories = Array.from(new Set(productItems.map(p => p.category))).sort();
+          setProductCategories(categories);
+      },
     };
 
-    Object.entries(collections).forEach(([path, setState]) => {
+    Object.entries(collections).forEach(([path, setStateCallback]) => {
       unsubscribes.push(onSnapshot(collection(db, path), (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        // Correctly type setState to avoid TS errors
-        (setState as React.Dispatch<React.SetStateAction<any[]>>)(items);
-        
-        if (path === 'products') {
-            const categories = Array.from(new Set(items.map(p => p.category))).sort();
-            setProductCategories(categories);
-        }
-
+        setStateCallback(items);
       }, (error) => {
         console.error(`Error fetching ${path}:`, error);
         toast({ title: "Error", description: `Could not fetch ${path}.`, variant: "destructive" });
       }));
     });
 
-    Promise.all(
-        Object.keys(collections).map(path => new Promise(resolve => {
-            const unsub = onSnapshot(collection(db, path), () => {
-                resolve(true);
-                unsub();
-            });
-        }))
-    ).then(() => setIsLoading(false));
+    // Simplified loading state management
+    const allCollections = ['orders', 'invoices', 'customers', 'products'];
+    const loadingPromises = allCollections.map(path => 
+        new Promise(resolve => {
+            const unsub = onSnapshot(collection(db, path), snapshot => {
+                if (!snapshot.metadata.fromCache) {
+                    resolve(true);
+                    unsub();
+                }
+            }, () => resolve(true)); // Resolve on error too
+        })
+    );
+
+    Promise.all(loadingPromises).then(() => {
+        setIsLoading(false);
+    });
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
