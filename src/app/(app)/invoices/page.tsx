@@ -142,7 +142,7 @@ export default function InvoicesPage() {
             unitPrice: li.unitPrice,
             isReturn: li.isReturn || false,
             isNonStock: li.isNonStock || false,
-            addToProductList: li.addToProductList ?? false, // Add this line
+            addToProductList: li.addToProductList ?? false,
           })),
           notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ''}`.trim(),
           paymentTerms: 'Due upon receipt',
@@ -803,6 +803,7 @@ export default function InvoicesPage() {
           <InvoiceTable
             invoices={sortedAndFilteredInvoices}
             onSave={handleSaveInvoice}
+            onSaveProduct={handleSaveProduct}
             onDelete={handleDeleteInvoice}
             onGenerateEmail={handleGenerateEmail}
             onPrint={handlePrepareAndPrintInvoice}
