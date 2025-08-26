@@ -14,19 +14,10 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, runTransaction } from 'firebase/firestore';
 import { OrderDialog } from '@/components/orders/order-dialog';
 import { InvoiceDialog } from '@/components/invoices/invoice-dialog';
+import { ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 
-// Define a unified type for the items list that is compatible with both Orders and Invoices.
-type ReviewableDocument = {
-    id: string;
-    docType: 'Order' | 'Invoice';
-    number: string;
-    customerName: string;
-    date: string;
-    lineItems: LineItem[];
-    // Include the original document for editing purposes
-    originalDoc: Order | Invoice;
-};
-
+// A unified type for displaying documents in the review list.
+type ReviewableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 export default function CostingReviewPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -36,6 +27,7 @@ export default function CostingReviewPage() {
   const [productCategories, setProductCategories] = useState<string[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null); // For loading state on auto-cost button
   const { toast } = useToast();
 
   const [editingDoc, setEditingDoc] = useState<ReviewableDocument | null>(null);
@@ -45,13 +37,12 @@ export default function CostingReviewPage() {
     setIsLoading(true);
 
     const collections = {
-      orders: (items: any[]) => setOrders(items as Order[]),
-      invoices: (items: any[]) => setInvoices(items as Invoice[]),
-      customers: (items: any[]) => setCustomers(items as Customer[]),
-      products: (items: any[]) => {
-          const productItems = items as Product[];
-          setProducts(productItems);
-          const categories = Array.from(new Set(productItems.map(p => p.category))).sort();
+      orders: (items: Order[]) => setOrders(items),
+      invoices: (items: Invoice[]) => setInvoices(items),
+      customers: (items: Customer[]) => setCustomers(items),
+      products: (items: Product[]) => {
+          setProducts(items);
+          const categories = Array.from(new Set(items.map(p => p.category))).sort();
           setProductCategories(categories);
       },
     };
@@ -66,19 +57,13 @@ export default function CostingReviewPage() {
       }));
     });
 
-    const allCollections = ['orders', 'invoices', 'customers', 'products'];
-    const loadingPromises = allCollections.map(path => 
-        new Promise(resolve => {
-            const unsub = onSnapshot(collection(db, path), snapshot => {
-                if (!snapshot.metadata.fromCache) {
-                    resolve(true);
-                    unsub();
-                }
-            }, () => resolve(true)); // Resolve on error too
-        })
-    );
-
-    Promise.all(loadingPromises).then(() => {
+    // A simple way to determine initial loading state
+    Promise.all([
+        new Promise(res => onSnapshot(collection(db, 'orders'), () => res(true))),
+        new Promise(res => onSnapshot(collection(db, 'invoices'), () => res(true))),
+        new Promise(res => onSnapshot(collection(db, 'customers'), () => res(true))),
+        new Promise(res => onSnapshot(collection(db, 'products'), () => res(true))),
+    ]).then(() => {
         setIsLoading(false);
     });
 
@@ -87,35 +72,17 @@ export default function CostingReviewPage() {
 
   const documentsToReview = useMemo((): ReviewableDocument[] => {
     const docs: ReviewableDocument[] = [];
-
-    const hasMissingCost = (item: { isNonStock?: boolean; cost?: number }) => 
-        item.isNonStock && (item.cost === undefined || item.cost === null || item.cost === 0);
+    const hasMissingCost = (item: LineItem) => item.isNonStock && (!item.cost || item.cost === 0);
 
     orders.forEach(order => {
       if (order.lineItems.some(hasMissingCost)) {
-        docs.push({
-          id: order.id,
-          docType: 'Order',
-          number: order.orderNumber,
-          customerName: order.customerName || 'N/A',
-          date: order.date,
-          lineItems: order.lineItems,
-          originalDoc: order,
-        });
+        docs.push({ ...order, docType: 'Order' });
       }
     });
 
     invoices.forEach(invoice => {
       if (invoice.lineItems.some(hasMissingCost)) {
-         docs.push({
-          id: invoice.id,
-          docType: 'Invoice',
-          number: invoice.invoiceNumber,
-          customerName: invoice.customerName || 'N/A',
-          date: invoice.date,
-          lineItems: invoice.lineItems,
-          originalDoc: invoice,
-        });
+         docs.push({ ...invoice, docType: 'Invoice' });
       }
     });
 
@@ -123,34 +90,91 @@ export default function CostingReviewPage() {
   }, [orders, invoices]);
   
   const handleSaveOrder = async (order: Order) => {
+    setIsProcessing(order.id);
     try {
       await runTransaction(db, async (transaction) => {
           const { id, ...orderData } = order;
           const orderRef = doc(db, 'orders', id);
           transaction.set(orderRef, orderData, { merge: true });
       });
-      toast({ title: "Order Updated", description: `Order ${order.orderNumber} has been updated.` });
-      setEditingDoc(null);
+      toast({ title: "Order Updated", description: `Order #${(order as any).orderNumber} has been updated.` });
+      if (editingDoc?.id === order.id) setEditingDoc(null);
     } catch (error) {
        console.error("Error saving order:", error);
        toast({ title: "Error", description: "Could not save order.", variant: "destructive" });
+    } finally {
+      setIsProcessing(null);
     }
   };
   
   const handleSaveInvoice = async (invoice: Invoice) => {
+    setIsProcessing(invoice.id);
     try {
       await runTransaction(db, async (transaction) => {
           const { id, ...invoiceData } = invoice;
           const invoiceRef = doc(db, 'invoices', id);
           transaction.set(invoiceRef, invoiceData, { merge: true });
       });
-      toast({ title: "Invoice Updated", description: `Invoice ${invoice.invoiceNumber} has been updated.` });
-      setEditingDoc(null);
+      toast({ title: "Invoice Updated", description: `Invoice #${(invoice as any).invoiceNumber} has been updated.` });
+      if (editingDoc?.id === invoice.id) setEditingDoc(null);
     } catch (error) {
        console.error("Error saving invoice:", error);
        toast({ title: "Error", description: "Could not save invoice.", variant: "destructive" });
+    } finally {
+      setIsProcessing(null);
     }
   };
+
+  const handleAutoCost = async (docToCost: ReviewableDocument) => {
+    const customer = customers.find(c => c.id === docToCost.customerId);
+    if (!customer) {
+        toast({ title: "Customer not found", description: "Cannot auto-cost without customer data.", variant: "destructive"});
+        return;
+    }
+
+    const DEFAULT_MARKUP_PERCENT = 35; // Default markup if no specific rule applies.
+
+    const getMarkupForCategory = (categoryName?: string): number => {
+        const specificRule = customer.specificMarkups?.find(m => m.categoryName === categoryName);
+        const allCategoriesRule = customer.specificMarkups?.find(m => m.categoryName === ALL_CATEGORIES_MARKUP_KEY);
+
+        if (specificRule) return specificRule.markupPercentage;
+        if (allCategoriesRule) return allCategoriesRule.markupPercentage;
+        return DEFAULT_MARKUP_PERCENT;
+    };
+    
+    const updatedLineItems = docToCost.lineItems.map(item => {
+      if (item.isNonStock && (!item.cost || item.cost === 0)) {
+        // Find the associated product category if the item was added to the list, or use a default.
+        const product = products.find(p => p.id === item.productId);
+        const categoryForMarkup = item.newProductCategory || product?.category || undefined;
+        
+        const markupPercent = getMarkupForCategory(categoryForMarkup);
+        const calculatedCost = item.unitPrice / (1 + markupPercent / 100);
+
+        return {
+          ...item,
+          cost: parseFloat(calculatedCost.toFixed(2)),
+          markupPercentage: markupPercent,
+        };
+      }
+      return item;
+    });
+    
+    // Create a new document object with the updated line items to be saved.
+    const updatedDoc = {
+        ...docToCost,
+        lineItems: updatedLineItems,
+    };
+    
+    // Call the appropriate save function.
+    if (updatedDoc.docType === 'Order') {
+        await handleSaveOrder(updatedDoc as Order);
+    } else {
+        await handleSaveInvoice(updatedDoc as Invoice);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -170,7 +194,7 @@ export default function CostingReviewPage() {
           <CardTitle>Documents Requiring Costing</CardTitle>
           <CardDescription>
             The following documents contain non-stock items that do not have a cost associated. 
-            Please edit them to ensure accurate profitability reporting.
+            Edit them manually or use the "Auto-Cost" feature to calculate costs based on customer markup.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -192,11 +216,15 @@ export default function CostingReviewPage() {
                       {doc.docType}
                     </Badge>
                   </TableCell>
-                  <TableCell>{doc.number}</TableCell>
+                  <TableCell>{(doc as Order).orderNumber || (doc as Invoice).invoiceNumber}</TableCell>
                   <TableCell>{doc.customerName}</TableCell>
                   <TableCell>{new Date(doc.date).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => setEditingDoc(doc)}>
+                  <TableCell className="text-right space-x-2">
+                     <Button variant="secondary" size="sm" onClick={() => handleAutoCost(doc)} disabled={isProcessing === doc.id}>
+                      {isProcessing === doc.id ? <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" /> : <Icon name="Calculator" className="mr-2 h-4 w-4" />}
+                       Auto-Cost
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditingDoc(doc)} disabled={!!isProcessing}>
                       <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit
                     </Button>
                   </TableCell>
@@ -215,9 +243,9 @@ export default function CostingReviewPage() {
       
       {editingDoc?.docType === 'Order' && (
         <OrderDialog 
-            isOpen={!!editingDoc}
+            isOpen={!!editingDoc && editingDoc.docType === 'Order'}
             onOpenChange={() => setEditingDoc(null)}
-            order={editingDoc.originalDoc as Order}
+            order={editingDoc as Order}
             onSave={handleSaveOrder}
             onSaveProduct={() => Promise.resolve()}
             customers={customers}
@@ -228,9 +256,9 @@ export default function CostingReviewPage() {
       
        {editingDoc?.docType === 'Invoice' && (
         <InvoiceDialog 
-            isOpen={!!editingDoc}
+            isOpen={!!editingDoc && editingDoc.docType === 'Invoice'}
             onOpenChange={() => setEditingDoc(null)}
-            invoice={editingDoc.originalDoc as Invoice}
+            invoice={editingDoc as Invoice}
             onSave={handleSaveInvoice}
             onSaveProduct={() => Promise.resolve()}
             customers={customers}
