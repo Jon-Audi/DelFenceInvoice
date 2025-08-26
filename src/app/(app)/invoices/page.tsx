@@ -344,82 +344,110 @@ export default function InvoicesPage() {
     invoiceIdsToPay: string[]
   ) => {
     let affectedInvoicesData: { invoiceNumber: string; amountApplied: number }[] = [];
-
+  
     try {
       await runTransaction(db, async (transaction) => {
         let remainingPaymentAmount = paymentDetails.amount;
         affectedInvoicesData = [];
-
-        const invoicesRef = collection(db, 'invoices');
-        const q = query(invoicesRef, where(documentId(), 'in', invoiceIdsToPay));
-        const snapshot = await getDocs(q);
-
-        const sortedDocs = snapshot.docs.sort((a, b) => {
-          const dateA = new Date((a.data() as any).date).getTime();
-          const dateB = new Date((b.data() as any).date).getTime();
-          return dateA - dateB;
-        });
-
-        for (const invoiceDoc of sortedDocs) {
+  
+        // READS: load all invoices via transaction.get BEFORE any writes
+        const refs = invoiceIdsToPay.map((id) => doc(db, 'invoices', id));
+        const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
+  
+        const docs = snaps
+          .filter((snap) => snap.exists())
+          .map((snap) => ({ snap, data: snap.data() as Invoice }));
+  
+        // Apply oldest invoices first
+        docs.sort(
+          (a, b) => new Date(a.data.date).getTime() - new Date(b.data.date).getTime()
+        );
+  
+        // WRITES: only after all reads completed
+        for (const { snap, data: invoice } of docs) {
           if (remainingPaymentAmount <= 0) break;
-
-          const invoice = invoiceDoc.data() as Invoice;
           if (invoice.customerId !== customerId) continue;
-
-          const balanceDue = invoice.balanceDue || 0;
-
-          if (balanceDue > 0) {
-            const amountToApply = Math.min(remainingPaymentAmount, balanceDue);
-            const newPayment: Payment = {
-              id: crypto.randomUUID(),
-              date: paymentDetails.date,
-              amount: amountToApply,
-              method: paymentDetails.method,
-              notes: paymentDetails.notes ? `${paymentDetails.notes} (Applied from bulk payment)` : `Bulk payment application`,
-            };
-
-            const newAmountPaid = (invoice.amountPaid || 0) + amountToApply;
-            const newBalanceDue = invoice.total - newAmountPaid;
-            const newStatus = newBalanceDue <= 0.005 ? 'Paid' : 'Partially Paid';
-
-            transaction.update(invoiceDoc.ref, {
-              payments: [...(invoice.payments || []), newPayment],
-              amountPaid: newAmountPaid,
-              balanceDue: newBalanceDue,
-              status: newStatus,
-            });
-
-            affectedInvoicesData.push({ invoiceNumber: invoice.invoiceNumber, amountApplied: amountToApply });
-            remainingPaymentAmount -= amountToApply;
-          }
+  
+          // derive balance if missing
+          const paid = invoice.amountPaid ?? 0;
+          const total = invoice.total ?? 0;
+          const balanceDue = (invoice.balanceDue ?? total - paid) || 0;
+          if (balanceDue <= 0) continue;
+  
+          const amountToApply = Math.min(remainingPaymentAmount, balanceDue);
+          const newPayment: Payment = {
+            id: crypto.randomUUID(),
+            date: paymentDetails.date,
+            amount: amountToApply,
+            method: paymentDetails.method,
+            notes: paymentDetails.notes
+              ? `${paymentDetails.notes} (Applied from bulk payment)`
+              : `Bulk payment application`,
+          };
+  
+          const newAmountPaid = paid + amountToApply;
+          const newBalanceDue = Math.max(0, total - newAmountPaid);
+          const newStatus: Invoice['status'] =
+            newBalanceDue <= 0.005 ? 'Paid' : 'Partially Paid';
+  
+          transaction.update(snap.ref, {
+            payments: [...(invoice.payments || []), newPayment],
+            amountPaid: newAmountPaid,
+            balanceDue: newBalanceDue,
+            status: newStatus,
+          });
+  
+          affectedInvoicesData.push({
+            invoiceNumber: invoice.invoiceNumber,
+            amountApplied: amountToApply,
+          });
+          remainingPaymentAmount -= amountToApply;
         }
-
+  
         if (remainingPaymentAmount > 0.01) {
-          throw new Error(`$${remainingPaymentAmount.toFixed(2)} of the payment could not be applied. Please check invoice balances. No changes were saved.`);
+          throw new Error(
+            `$${remainingPaymentAmount.toFixed(
+              2
+            )} of the payment could not be applied. Please check invoice balances. No changes were saved.`
+          );
         }
       });
-
-      const customer = customers.find(c => c.id === customerId);
+  
+      const customer = customers.find((c) => c.id === customerId);
       const receiptData: BulkPaymentReceiptData = {
         paymentDetails: { ...paymentDetails, id: crypto.randomUUID() },
-        customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'N/A',
+        customerName:
+          customer?.companyName ||
+          `${customer?.firstName} ${customer?.lastName}` ||
+          'N/A',
         affectedInvoices: affectedInvoicesData,
         companySettings: (await fetchCompanySettings())!,
-        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+        logoUrl:
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/Logo.png`
+            : '/Logo.png',
       };
-
+  
       toast({
-        title: "Bulk Payment Successful",
-        description: `Payment of $${paymentDetails.amount.toFixed(2)} applied successfully.`,
-        action: <BulkPaymentToastAction onPrint={() => handlePrepareAndPrintBulkReceipt(receiptData)} />,
+        title: 'Bulk Payment Successful',
+        description: `Payment of $${paymentDetails.amount.toFixed(
+          2
+        )} applied successfully.`,
+        action: (
+          <BulkPaymentToastAction
+            onPrint={() => handlePrepareAndPrintBulkReceipt(receiptData)}
+          />
+        ),
       });
       setIsBulkPaymentDialogOpen(false);
     } catch (error: any) {
-      console.error("Error during bulk payment:", error);
+      console.error('Error during bulk payment:', error);
       toast({
-        title: "Bulk Payment Failed",
-        description: error.message || "Could not apply payments. The transaction was rolled back.",
-        variant: "destructive",
+        title: 'Bulk Payment Failed',
+        description:
+          error.message ||
+          'Could not apply payments. The transaction was rolled back.',
+        variant: 'destructive',
         duration: 10000,
       });
     }
