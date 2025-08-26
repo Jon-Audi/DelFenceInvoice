@@ -920,4 +920,87 @@ export default function InvoicesPage() {
                             }}
                           />
                           <Label htmlFor={`email-contact-invoice-${contact.id}`} className="text-sm font-normal">
-                            {contact.email} ({contact.type} - {c
+                            {contact.email} ({contact.type} - {contact.name || "N/A"})
+                          </Label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-2">No saved email contacts for this customer.</p>
+                  )}
+
+                  <FormFieldWrapper>
+                    <Label htmlFor="additionalEmailInvoice">Or add another email:</Label>
+                    <Input
+                      id="additionalEmailInvoice"
+                      type="email"
+                      placeholder="another@example.com"
+                      value={additionalRecipientEmail}
+                      onChange={(e) => setAdditionalRecipientEmail(e.target.value)}
+                    />
+                  </FormFieldWrapper>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Label htmlFor="emailSubjectInvoice">Subject</Label>
+                  <Input
+                    id="emailSubjectInvoice"
+                    value={editableSubject}
+                    onChange={(e) => setEditableSubject(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="emailBodyInvoice">Body</Label>
+                  <Textarea
+                    id="emailBodyInvoice"
+                    value={editableBody}
+                    onChange={(e) => setEditableBody(e.target.value)}
+                    rows={8}
+                    className="min-h-[150px]"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-center py-4">Could not load email draft.</p>
+            )}
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="button" onClick={handleSendEmail} disabled={isLoadingEmail || !emailDraft}>
+                {isLoadingEmail && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Send Email
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* hidden print area */}
+      <div style={{ display: "none" }}>
+        {invoiceToPrint && <PrintableInvoice ref={printRef} {...invoiceToPrint} />}
+        {packingSlipToPrintForInvoice && <PrintableInvoicePackingSlip ref={printRef} {...packingSlipToPrintForInvoice} />}
+        {bulkPaymentReceiptToPrint && <PrintableBulkPaymentReceipt ref={printRef} receiptData={bulkPaymentReceiptToPrint} />}
+      </div>
+
+      {invoiceForViewingItems && (
+        <LineItemsViewerDialog
+          isOpen={isLineItemsViewerOpen}
+          onOpenChange={setIsLineItemsViewerOpen}
+          lineItems={invoiceForViewingItems.lineItems}
+          documentType="Invoice"
+          documentNumber={invoiceForViewingItems.invoiceNumber}
+        />
+      )}
+    </>
+  );
+}
+
+const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="space-y-1">{children}</div>
+);
