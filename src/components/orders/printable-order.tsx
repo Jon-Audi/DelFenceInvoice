@@ -1,17 +1,17 @@
-
 "use client";
 
 import React from 'react';
-import type { Order, CompanySettings } from '@/types';
+import type { Order, CompanySettings, Customer } from '@/types';
 
 interface PrintableOrderProps {
   order: Order | null;
   companySettings: CompanySettings | null;
+  customer: Customer | null;
   logoUrl?: string;
 }
 
 const PrintableOrder = React.forwardRef<HTMLDivElement, PrintableOrderProps>(
-  ({ order, companySettings, logoUrl }, ref) => {
+  ({ order, companySettings, customer, logoUrl }, ref) => {
     if (!order || !companySettings) {
       return null;
     }
@@ -21,6 +21,8 @@ const PrintableOrder = React.forwardRef<HTMLDivElement, PrintableOrderProps>(
       const date = new Date(dateString);
       return includeTime ? date.toLocaleString() : date.toLocaleDateString();
     };
+
+    const customerEmail = customer?.emailContacts?.find(e => e.type === 'Main Contact')?.email || customer?.emailContacts?.[0]?.email;
 
     return (
       <div ref={ref} className="print-only-container">
@@ -60,6 +62,8 @@ const PrintableOrder = React.forwardRef<HTMLDivElement, PrintableOrderProps>(
           <div className="mb-8 p-4 border border-gray-300 rounded-md">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Customer:</h3>
             <p className="font-medium text-gray-800">{order.customerName || 'N/A Customer'}</p>
+            {customer?.phone && <p className="text-sm text-gray-600">Phone: {customer.phone}</p>}
+            {customerEmail && <p className="text-sm text-gray-600">Email: {customerEmail}</p>}
           </div>
 
           <table className="w-full mb-8 border-collapse text-sm">

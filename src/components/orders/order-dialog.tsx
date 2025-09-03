@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -12,12 +11,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { CustomerDialog } from '../customers/customer-dialog';
 
 interface OrderDialogProps {
   order?: Order;
   triggerButton?: React.ReactElement; 
   onSave: (order: Order) => void;
   onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
   customers: Customer[];
   products: Product[]; 
   productCategories: string[];
@@ -31,6 +32,7 @@ export function OrderDialog({
   triggerButton, 
   onSave, 
   onSaveProduct,
+  onSaveCustomer,
   customers, 
   products,
   productCategories,
@@ -39,6 +41,8 @@ export function OrderDialog({
   initialData
 }: OrderDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
+  const [customerToView, setCustomerToView] = React.useState<Customer | null>(null);
+
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -149,24 +153,36 @@ export function OrderDialog({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={setOpen}>
-      {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
-        </DialogHeader>
-        <OrderForm 
-          key={order?.id || initialData?.id || 'new-order-form'}
-          order={order} 
-          initialData={initialData}
-          onSubmit={handleSubmit} 
-          onClose={() => setOpen(false)}
-          customers={customers}
-          products={products}
-          productCategories={productCategories}
+    <>
+      <Dialog open={isOpen} onOpenChange={setOpen}>
+        {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <OrderForm 
+            key={order?.id || initialData?.id || 'new-order-form'}
+            order={order} 
+            initialData={initialData}
+            onSubmit={handleSubmit} 
+            onClose={() => setOpen(false)}
+            customers={customers}
+            products={products}
+            productCategories={productCategories}
+            onViewCustomer={(customer) => setCustomerToView(customer)}
+          />
+        </DialogContent>
+      </Dialog>
+      {customerToView && (
+        <CustomerDialog 
+            isOpen={!!customerToView}
+            onOpenChange={() => setCustomerToView(null)}
+            customer={customerToView}
+            onSave={onSaveCustomer}
+            productCategories={productCategories}
         />
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }

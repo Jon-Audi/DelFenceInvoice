@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -12,6 +11,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { CustomerDialog } from '../customers/customer-dialog';
+
 
 interface EstimateDialogProps {
   estimate?: Estimate;
@@ -41,6 +42,8 @@ export function EstimateDialog({
     initialData,
 }: EstimateDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
+  const [customerToView, setCustomerToView] = React.useState<Customer | null>(null);
+
   
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -144,24 +147,37 @@ export function EstimateDialog({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={setOpen}>
-      {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
-        </DialogHeader>
-        <EstimateForm
-          estimate={estimate}
-          initialData={initialData}
-          onSubmit={handleSubmit}
-          onClose={() => setOpen(false)}
-          products={products}
-          customers={customers}
-          productCategories={productCategories}
-          onSaveCustomer={onSaveCustomer}
+    <>
+      <Dialog open={isOpen} onOpenChange={setOpen}>
+        {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <EstimateForm
+            estimate={estimate}
+            initialData={initialData}
+            onSubmit={handleSubmit}
+            onClose={() => setOpen(false)}
+            products={products}
+            customers={customers}
+            productCategories={productCategories}
+            onSaveCustomer={onSaveCustomer}
+            onViewCustomer={(customer) => setCustomerToView(customer)}
+          />
+        </DialogContent>
+      </Dialog>
+      
+      {customerToView && (
+        <CustomerDialog
+            isOpen={!!customerToView}
+            onOpenChange={() => setCustomerToView(null)}
+            customer={customerToView}
+            onSave={onSaveCustomer}
+            productCategories={productCategories}
         />
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }

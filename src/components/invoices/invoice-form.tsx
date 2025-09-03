@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -140,7 +139,8 @@ interface InvoiceFormProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
-  isDataLoading?: boolean; // <--- Add this line
+  isDataLoading?: boolean; 
+  onViewCustomer: (customer: Customer) => void;
 }
 
 
@@ -152,7 +152,8 @@ export function InvoiceForm({
   customers,
   products,
   productCategories = [],
-  isDataLoading = false, // <--- Accept the prop here
+  isDataLoading = false,
+  onViewCustomer,
 }: InvoiceFormProps) {
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
@@ -509,6 +510,7 @@ export function InvoiceForm({
         <FormField control={form.control} name="customerId" render={({ field }) => (
             <FormItem className="flex flex-col">
               <FormLabel>Customer</FormLabel>
+              <div className="flex items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild><FormControl>
                     <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
@@ -533,7 +535,10 @@ export function InvoiceForm({
                         })}
                     </CommandGroup></CommandList>
                 </Command></PopoverContent>
-              </Popover><FormMessage />
+              </Popover>
+              <Button type="button" variant="outline" size="icon" onClick={() => {const c = customers.find(c => c.id === field.value); if(c) onViewCustomer(c)}} disabled={!field.value}><Icon name="UserCog" /></Button>
+              </div>
+              <FormMessage />
             </FormItem>
         )} />
         <FormField control={form.control} name="poNumber" render={({ field }) => (

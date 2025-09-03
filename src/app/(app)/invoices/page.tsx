@@ -988,15 +988,17 @@ export default function InvoicesPage() {
         {bulkPaymentReceiptToPrint && <PrintableBulkPaymentReceipt ref={printRef} receiptData={bulkPaymentReceiptToPrint} />}
       </div>
 
-      {invoiceForViewingItems && (
-        <LineItemsViewerDialog
-          isOpen={isLineItemsViewerOpen}
-          onOpenChange={setIsLineItemsViewerOpen}
-          lineItems={invoiceForViewingItems.lineItems}
-          documentType="Invoice"
-          documentNumber={invoiceForViewingItems.invoiceNumber}
-        />
-      )}
+      <LineItemsViewerDialog
+  isOpen={isLineItemsViewerOpen}
+  onOpenChange={(open) => {
+    setIsLineItemsViewerOpen(open);
+    if (!open) setInvoiceForViewingItems(null);
+  }}
+  lineItems={invoiceForViewingItems?.lineItems ?? []}
+  documentType="Invoice"
+  documentNumber={invoiceForViewingItems?.invoiceNumber ?? ''}
+/>
+
     </>
   );
 }

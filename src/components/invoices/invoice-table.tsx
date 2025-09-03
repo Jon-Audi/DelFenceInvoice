@@ -181,9 +181,17 @@ export function InvoiceTable({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     {/* ✅ Use onSelect for Radix menu actions */}
-                    <DropdownMenuItem onSelect={() => onViewItems(invoice)}>
-                      <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        // wait for dropdown to finish closing before opening the viewer
+                        setTimeout(() => onViewItems(invoice), 0);
+                      }}
+                     >
+                        <Icon name="Layers" className="mr-2 h-4 w-4" /> View Items
                     </DropdownMenuItem>
+
+
 
                     <InvoiceDialog
                       invoice={invoice}

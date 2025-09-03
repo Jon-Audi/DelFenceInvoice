@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -104,9 +103,10 @@ interface EstimateFormProps {
   customers: Customer[];
   productCategories: string[];
   onSaveCustomer: (customerToSave: Customer) => Promise<string | void>;
+  onViewCustomer: (customer: Customer) => void;
 }
 
-export function EstimateForm({ estimate, initialData, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer }: EstimateFormProps) {
+export function EstimateForm({ estimate, initialData, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer, onViewCustomer }: EstimateFormProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
@@ -417,6 +417,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
                     </Command>
                   </PopoverContent>
                 </Popover>
+                 <Button type="button" variant="outline" size="icon" onClick={() => {const c = customers.find(c => c.id === field.value); if(c) onViewCustomer(c)}} disabled={!field.value}><Icon name="UserCog" /></Button>
                 <Button type="button" variant="outline" size="icon" onClick={() => setIsNewCustomerDialogOpen(true)} title="Add New Customer">
                   <Icon name="PlusCircle" className="h-4 w-4" />
                 </Button>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -138,9 +137,10 @@ interface OrderFormProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  onViewCustomer: (customer: Customer) => void;
 }
 
-export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories }: OrderFormProps) {
+export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories, onViewCustomer }: OrderFormProps) {
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
@@ -443,6 +443,7 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
         <FormField
           control={form.control} name="customerId" render={({ field }) => (
             <FormItem className="flex flex-col"><FormLabel>Customer</FormLabel>
+            <div className="flex items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild><FormControl>
                   <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
@@ -468,6 +469,8 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
                   </CommandList>
                 </Command></PopoverContent>
               </Popover>
+               <Button type="button" variant="outline" size="icon" onClick={() => {const c = customers.find(c => c.id === field.value); if(c) onViewCustomer(c)}} disabled={!field.value}><Icon name="UserCog" /></Button>
+              </div>
               <FormMessage />
             </FormItem>
           )}

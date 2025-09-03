@@ -1,4 +1,3 @@
-
 // src/components/invoices/invoice-dialog.tsx
 
 "use client";
@@ -14,12 +13,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { CustomerDialog } from '../customers/customer-dialog';
 
 interface InvoiceDialogProps {
   invoice?: Invoice;
   triggerButton?: React.ReactElement;
   onSave: (invoice: Invoice) => void;
   onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
   customers: Customer[];
   products: Product[];
   productCategories: string[];
@@ -34,6 +35,7 @@ export function InvoiceDialog({
   triggerButton,
   onSave,
   onSaveProduct,
+  onSaveCustomer,
   customers,
   products,
   productCategories,
@@ -43,6 +45,7 @@ export function InvoiceDialog({
   isDataLoading,
 }: InvoiceDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
+  const [customerToView, setCustomerToView] = React.useState<Customer | null>(null);
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -167,24 +170,37 @@ export function InvoiceDialog({
   const dialogDescription = invoice ? 'Update the details of this invoice.' : (initialData ? 'Review and confirm the details for this new invoice.' : 'Fill in the details for the new invoice.');
 
   return (
-    <Dialog open={isOpen} onOpenChange={setOpen}>
-      {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
-        </DialogHeader>
-        <InvoiceForm
-          invoice={invoice}
-          initialData={initialData}
-          onSubmit={handleSubmit}
-          onClose={() => setOpen(false)}
-          customers={customers}
-          products={products}
-          productCategories={productCategories}
-          isDataLoading={isDataLoading}
+    <>
+      <Dialog open={isOpen} onOpenChange={setOpen}>
+        {triggerButton && <DialogTrigger asChild>{triggerButton}</DialogTrigger>}
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <InvoiceForm
+            invoice={invoice}
+            initialData={initialData}
+            onSubmit={handleSubmit}
+            onClose={() => setOpen(false)}
+            customers={customers}
+            products={products}
+            productCategories={productCategories}
+            isDataLoading={isDataLoading}
+            onViewCustomer={(customer) => setCustomerToView(customer)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {customerToView && (
+        <CustomerDialog 
+            isOpen={!!customerToView}
+            onOpenChange={() => setCustomerToView(null)}
+            customer={customerToView}
+            onSave={onSaveCustomer}
+            productCategories={productCategories}
         />
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }

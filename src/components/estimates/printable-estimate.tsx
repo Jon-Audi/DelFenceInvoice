@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -10,6 +9,8 @@ interface PrintableEstimateProps {
   date?: string;
   poNumber?: string;
   customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   items?: Array<{
     description: string;
     quantity: number;
@@ -21,7 +22,7 @@ interface PrintableEstimateProps {
 }
 
 const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProps>(
-  ({ logoUrl, estimateNumber, date, poNumber, customerName, items = [], subtotal = 0, total = 0 }, ref) => {
+  ({ logoUrl, estimateNumber, date, poNumber, customerName, customerPhone, customerEmail, items = [], subtotal = 0, total = 0 }, ref) => {
   return (
     // This div is what will have its innerHTML taken
     <div ref={ref} className="print-only-container">
@@ -57,6 +58,8 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
           <p><strong>Date:</strong> {date}</p>
           {poNumber && <p><strong>P.O. #:</strong> {poNumber}</p>}
           <p><strong>Estimate For:</strong> {customerName}</p>
+          {customerPhone && <p><strong>Phone:</strong> {customerPhone}</p>}
+          {customerEmail && <p><strong>Email:</strong> {customerEmail}</p>}
         </div>
 
         {/* Table */}
@@ -104,4 +107,3 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
 PrintableEstimate.displayName = "PrintableEstimate";
 
 export default PrintableEstimate;
-

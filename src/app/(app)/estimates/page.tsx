@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -280,7 +279,7 @@ export default function EstimatesPage() {
         ...li,
         isNonStock: li.isNonStock || false,
         isReturn: li.isReturn || false,
-        addToProductList: li.addToProductList ?? false, // Ensure boolean value
+        addToProductList: li.addToProductList ?? false,
       })),
     };
     setClonedEstimateData(newEstimateData);
@@ -471,11 +470,14 @@ export default function EstimatesPage() {
   };
 
   const handlePrepareAndPrint = (estimate: Estimate) => {
+    const customer = customers.find(c => c.id === estimate.customerId);
     const estimateDataForPrint = {
         estimateNumber: estimate.estimateNumber,
         date: formatDateForDisplay(estimate.date),
         poNumber: estimate.poNumber || '',
         customerName: estimate.customerName || 'N/A',
+        customerPhone: customer?.phone,
+        customerEmail: customer?.emailContacts?.find(e => e.type === 'Main Contact')?.email || customer?.emailContacts?.[0]?.email,
         items: estimate.lineItems.map(li => ({
           description: li.productName + (li.isReturn ? " (Return)" : ""),
           quantity: li.quantity,
