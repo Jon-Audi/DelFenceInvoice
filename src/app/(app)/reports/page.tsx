@@ -15,7 +15,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, Product } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, Product, CustomerStatementReportData, CustomerStatementItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
@@ -23,18 +23,19 @@ import { PrintablePaymentsReport } from '@/components/reports/printable-payments
 import { PrintableWeeklySummaryReport } from '@/components/reports/printable-weekly-summary-report';
 import { PrintablePaymentByTypeReport } from '@/components/reports/printable-payment-by-type-report';
 import { PrintableProfitReport } from '@/components/reports/printable-profit-report';
+import { PrintableCustomerStatement } from '@/components/reports/printable-customer-statement';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
   reportType: ReportType;
-  data: any[]; // Simplified to any[] for generic handling
+  data: any; 
   companySettings: CompanySettings;
   logoUrl: string;
   reportTitle?: string;
@@ -49,7 +50,7 @@ export default function ReportsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
-  const [generatedReportData, setGeneratedReportData] = useState<any[] | null>(null);
+  const [generatedReportData, setGeneratedReportData] = useState<any | null>(null);
   const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
   
   const [isLoading, setIsLoading] = useState(false);
@@ -118,24 +119,104 @@ export default function ReportsPage() {
 
   const handleGenerateReport = async () => {
     if (!startDate || !endDate) {
-      toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
-      return;
+      if (reportType !== 'customerBalances') {
+        toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
+        return;
+      }
     }
-    if (endDate! < startDate!) {
+     if (startDate && endDate && endDate! < startDate!) {
       toast({ title: "Invalid Date Range", description: "End date cannot be before start date.", variant: "destructive" });
       return;
     }
+    if (reportType === 'statement' && selectedCustomerId === 'all') {
+      toast({ title: "Customer Required", description: "Please select a customer to generate a statement.", variant: "destructive" });
+      return;
+    }
+
 
     setIsLoading(true);
     setGeneratedReportData(null);
     let currentReportTitle = '';
-    const rangeStart = new Date(startDate.setHours(0, 0, 0, 0));
-    const rangeEnd = new Date(endDate.setHours(23, 59, 59, 999));
+    const rangeStart = startDate ? new Date(startDate.setHours(0, 0, 0, 0)) : new Date(0);
+    const rangeEnd = endDate ? new Date(endDate.setHours(23, 59, 59, 999)) : new Date();
 
     try {
-      let data: any[] = [];
+      let data: any[] | any = [];
       
-      if (reportType === 'profitability') {
+      if (reportType === 'statement') {
+        const customer = customers.find(c => c.id === selectedCustomerId);
+        if (!customer) throw new Error("Customer not found.");
+
+        currentReportTitle = `Statement for ${customer.companyName || (customer.firstName + ' ' + customer.lastName)}`;
+
+        const invoicesRef = collection(db, 'invoices');
+        
+        // Fetch invoices before the start date to calculate opening balance
+        const openingBalanceInvoicesQuery = query(invoicesRef, where('customerId', '==', selectedCustomerId), where('date', '<', rangeStart.toISOString()));
+        const openingBalanceSnapshot = await getDocs(openingBalanceInvoicesQuery);
+        let openingBalance = 0;
+        openingBalanceSnapshot.forEach(doc => {
+            const inv = doc.data() as Invoice;
+            openingBalance += inv.total;
+            if(inv.payments) {
+                inv.payments.forEach(p => {
+                    openingBalance -= p.amount;
+                });
+            }
+        });
+
+        // Fetch transactions within the date range
+        const invoicesQuery = query(invoicesRef, where('customerId', '==', selectedCustomerId), where('date', '>=', rangeStart.toISOString()), where('date', '<=', rangeEnd.toISOString()));
+        const invoicesSnapshot = await getDocs(invoicesQuery);
+
+        let transactions: CustomerStatementItem[] = [];
+        invoicesSnapshot.forEach(doc => {
+            const inv = doc.data() as Invoice;
+            transactions.push({
+                date: inv.date,
+                transactionType: 'Invoice',
+                documentNumber: inv.invoiceNumber,
+                debit: inv.total,
+                credit: 0,
+                balance: 0 // will be calculated later
+            });
+            if (inv.payments) {
+                inv.payments.forEach(p => {
+                     const paymentDate = new Date(p.date);
+                    if (paymentDate >= rangeStart && paymentDate <= rangeEnd) {
+                        transactions.push({
+                            date: p.date,
+                            transactionType: 'Payment',
+                            documentNumber: p.notes || `Payment for Inv #${inv.invoiceNumber}`,
+                            debit: 0,
+                            credit: p.amount,
+                            balance: 0
+                        });
+                    }
+                });
+            }
+        });
+        
+        transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        let runningBalance = openingBalance;
+        transactions = transactions.map(t => {
+            runningBalance += t.debit - t.credit;
+            return { ...t, balance: runningBalance };
+        });
+
+        const statementData: CustomerStatementReportData = {
+            customer,
+            startDate: rangeStart,
+            endDate: rangeEnd,
+            openingBalance,
+            transactions,
+            closingBalance: runningBalance,
+        };
+
+        data = statementData; // Data is now an object, not an array
+      }
+      else if (reportType === 'profitability') {
         currentReportTitle = `Profitability Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
@@ -294,7 +375,6 @@ export default function ReportsPage() {
         currentReportTitle = `Payments by Type (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const paymentSummary = new Map<Payment['method'], { totalAmount: number; transactionCount: number }>();
         
-        // Initialize map with all possible payment methods
         PAYMENT_METHODS.forEach(method => {
             paymentSummary.set(method, { totalAmount: 0, transactionCount: 0 });
         });
@@ -387,10 +467,13 @@ export default function ReportsPage() {
 
       setGeneratedReportData(data);
       setReportTitleForSummary(currentReportTitle);
-      if (data.length === 0) {
-        toast({ title: "No Data", description: "No records found for the selected criteria.", variant: "default" });
+      
+      const hasData = Array.isArray(data) ? data.length > 0 : data && (data as any).transactions?.length > 0;
+      
+      if (hasData) {
+        toast({ title: "Report Generated", description: `Report "${currentReportTitle}" is ready.`, variant: "default" });
       } else {
-        toast({ title: "Report Generated", description: `${data.length} records found.`, variant: "default" });
+         toast({ title: "No Data", description: "No records found for the selected criteria.", variant: "default" });
       }
     } catch (error) {
       console.error("Error generating report:", error);
@@ -417,16 +500,18 @@ export default function ReportsPage() {
   };
 
   const handlePrintReport = async () => {
-    if (!generatedReportData || generatedReportData.length === 0) {
-      toast({ title: "No Report Data", description: "Please generate a report first.", variant: "default" });
+    const dataForPrintCheck = generatedReportData as any;
+    if (!dataForPrintCheck || (Array.isArray(dataForPrintCheck) && dataForPrintCheck.length === 0) || (dataForPrintCheck.transactions && dataForPrintCheck.transactions.length === 0)) {
+      toast({ title: "No Report Data", description: "Please generate a report with data first.", variant: "default" });
       return;
     }
+
     setIsLoading(true);
     const settings = await fetchCompanySettings();
     if (settings) {
       const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
       
-      const dataForPrint: ReportToPrintData = {
+      const printData: ReportToPrintData = {
         reportType: reportType,
         data: generatedReportData,
         companySettings: settings,
@@ -435,7 +520,7 @@ export default function ReportsPage() {
         startDate: startDate,
         endDate: endDate,
       };
-      setReportToPrintData(dataForPrint);
+      setReportToPrintData(printData);
 
       setTimeout(() => {
         if (printRef.current) {
@@ -474,6 +559,16 @@ export default function ReportsPage() {
 
   const renderReportSummary = () => {
     if (!generatedReportData) return null;
+
+     if (reportType === 'statement') {
+      const statementData = generatedReportData as CustomerStatementReportData;
+      return (
+          <div className="space-y-1">
+            <p>Opening Balance: <span className="font-semibold">${statementData.openingBalance.toFixed(2)}</span></p>
+            <p>Closing Balance: <span className="font-semibold">${statementData.closingBalance.toFixed(2)}</span></p>
+          </div>
+      );
+    }
 
     if (reportType === 'profitability') {
         const profitItems = generatedReportData as ProfitReportItem[];
@@ -531,6 +626,45 @@ export default function ReportsPage() {
 
   const renderReportTable = () => {
     if (!generatedReportData) return null;
+
+    if (reportType === 'statement') {
+      const statementData = generatedReportData as CustomerStatementReportData;
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Transaction</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+                <TableCell>{format(statementData.startDate, 'P')}</TableCell>
+                <TableCell className="font-semibold">Opening Balance</TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-right font-semibold">${statementData.openingBalance.toFixed(2)}</TableCell>
+            </TableRow>
+            {statementData.transactions.map((item, index) => (
+              <TableRow key={index}>
+                <TableCell>{format(new Date(item.date), 'P')}</TableCell>
+                <TableCell>{item.transactionType}: {item.documentNumber}</TableCell>
+                <TableCell className="text-right">{item.debit > 0 ? `$${item.debit.toFixed(2)}` : ''}</TableCell>
+                <TableCell className="text-right">{item.credit > 0 ? `$${item.credit.toFixed(2)}` : ''}</TableCell>
+                <TableCell className="text-right">${item.balance.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+             <TableRow className="font-bold bg-muted/50">
+                <TableCell colSpan={4} className="text-right">Closing Balance:</TableCell>
+                <TableCell className="text-right">${statementData.closingBalance.toFixed(2)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      )
+    }
 
     if (reportType === 'profitability') {
         return (
@@ -624,7 +758,7 @@ export default function ReportsPage() {
   const getActiveDatePresets = () => {
     const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
     if (reportType === 'customerBalances') {
-        return ['custom']; // Should not be visible but as fallback
+        return ['custom'];
     }
     return commonPresets;
   }
@@ -644,10 +778,11 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7">
+            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8">
               <TabsTrigger value="sales">Sales</TabsTrigger>
               <TabsTrigger value="profitability">Profitability</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
+              <TabsTrigger value="statement">Statement</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
               <TabsTrigger value="payments">Payments</TabsTrigger>
               <TabsTrigger value="weeklySummary">Weekly</TabsTrigger>
@@ -655,7 +790,7 @@ export default function ReportsPage() {
             </TabsList>
           </Tabs>
 
-          {reportType !== 'customerBalances' && (
+          {(reportType !== 'customerBalances') && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                  {datePresetsToRender.map(preset => (
@@ -700,14 +835,14 @@ export default function ReportsPage() {
               )}
             </div>
           )}
-
-          {reportType === 'customerBalances' && (
+          
+          {(reportType === 'customerBalances' || reportType === 'statement') && (
             <div className="space-y-2">
               <Label htmlFor="customer-select">Customer</Label>
               <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId} disabled={isLoadingCustomers || isLoading}>
                 <SelectTrigger id="customer-select"><SelectValue placeholder="Select Customer" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
+                  {reportType === 'customerBalances' && <SelectItem value="all">All Customers</SelectItem>}
                   {customers.map(customer => (
                     <SelectItem key={customer.id} value={customer.id}>
                       {customer.companyName || `${customer.firstName} ${customer.lastName}`}
@@ -715,21 +850,23 @@ export default function ReportsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                This report shows currently outstanding invoices (not Paid or Voided, with a balance due). Date range is not applicable.
-              </p>
+              {reportType === 'customerBalances' && (
+                  <p className="text-xs text-muted-foreground">
+                    This report shows currently outstanding invoices (not Paid or Voided, with a balance due). Date range is not applicable.
+                  </p>
+              )}
             </div>
           )}
 
           <div className="flex space-x-2">
             <Button 
               onClick={handleGenerateReport} 
-              disabled={isLoading || isLoadingCustomers || (reportType !== 'customerBalances' && (!startDate || !endDate))}
+              disabled={isLoading || isLoadingCustomers || ((reportType !== 'customerBalances') && (!startDate || !endDate)) || (reportType === 'statement' && selectedCustomerId === 'all')}
             >
               {(isLoading || isLoadingCustomers) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
             </Button>
-            <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData || generatedReportData.length === 0}>
+            <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData}>
               <Icon name="Printer" className="mr-2 h-4 w-4" />
               Print Report
             </Button>
@@ -752,6 +889,9 @@ export default function ReportsPage() {
       <div style={{ display: 'none' }}>
         {reportToPrintData && reportToPrintData.reportType === 'sales' && (
           <PrintableSalesReport ref={printRef} invoices={reportToPrintData.data as Invoice[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
+        )}
+         {reportToPrintData && reportToPrintData.reportType === 'statement' && (
+          <PrintableCustomerStatement ref={printRef} reportData={reportToPrintData.data as CustomerStatementReportData} companySettings={reportToPrintData.companySettings} logoUrl={reportToPrintData.logoUrl} />
         )}
         {reportToPrintData && reportToPrintData.reportType === 'orders' && (
           <PrintableOrderReport ref={printRef} orders={reportToPrintData.data as Order[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />

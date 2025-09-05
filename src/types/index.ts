@@ -1,4 +1,5 @@
 
+
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -245,3 +246,22 @@ export interface ProfitReportItem {
 export type InvoiceForFormInitialData = Omit<Invoice, 'payments'> & {
   payments?: (Omit<Payment, 'date'> & { date: string | Date })[];
 };
+
+// New types for Customer Statement report
+export type CustomerStatementItem = {
+  date: string; // ISO string
+  transactionType: 'Invoice' | 'Payment';
+  documentNumber: string;
+  debit: number;
+  credit: number;
+  balance: number;
+};
+
+export interface CustomerStatementReportData {
+  customer: Customer;
+  startDate: Date;
+  endDate: Date;
+  openingBalance: number;
+  transactions: CustomerStatementItem[];
+  closingBalance: number;
+}
