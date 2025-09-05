@@ -265,3 +265,10 @@ export interface CustomerStatementReportData {
   transactions: CustomerStatementItem[];
   closingBalance: number;
 }
+
+export interface SalesByCustomerReportItem {
+  customerId: string;
+  customerName: string;
+  totalSales: number;
+  invoiceCount: number;
+}

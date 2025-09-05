@@ -15,7 +15,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, Product, CustomerStatementReportData, CustomerStatementItem } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, Product, CustomerStatementReportData, CustomerStatementItem, SalesByCustomerReportItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
@@ -24,13 +24,14 @@ import { PrintableWeeklySummaryReport } from '@/components/reports/printable-wee
 import { PrintablePaymentByTypeReport } from '@/components/reports/printable-payment-by-type-report';
 import { PrintableProfitReport } from '@/components/reports/printable-profit-report';
 import { PrintableCustomerStatement } from '@/components/reports/printable-customer-statement';
+import { PrintableSalesByCustomerReport } from '@/components/reports/printable-sales-by-customer-report';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
@@ -143,7 +144,37 @@ export default function ReportsPage() {
     try {
       let data: any[] | any = [];
       
-      if (reportType === 'statement') {
+      if (reportType === 'salesByCustomer') {
+        currentReportTitle = `Sales by Customer (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
+        const invoicesRef = collection(db, 'invoices');
+        const q = query(invoicesRef, 
+                        where('date', '>=', rangeStart.toISOString()), 
+                        where('date', '<=', rangeEnd.toISOString()));
+        const invoiceSnapshot = await getDocs(q);
+
+        const salesByCustomer = new Map<string, { customerName: string; totalSales: number; invoiceCount: number }>();
+
+        invoiceSnapshot.forEach(doc => {
+            const invoice = doc.data() as Invoice;
+            if(invoice.status === 'Voided') return;
+
+            const customerId = invoice.customerId;
+            const customerName = invoice.customerName || 'Unknown Customer';
+            const currentData = salesByCustomer.get(customerId) || { customerName, totalSales: 0, invoiceCount: 0 };
+            
+            currentData.totalSales += invoice.total;
+            currentData.invoiceCount += 1;
+            salesByCustomer.set(customerId, currentData);
+        });
+        
+        const reportItems: SalesByCustomerReportItem[] = Array.from(salesByCustomer.entries()).map(([customerId, data]) => ({
+            customerId,
+            ...data
+        }));
+
+        data = reportItems.sort((a,b) => b.totalSales - a.totalSales);
+      }
+      else if (reportType === 'statement') {
         const customer = customers.find(c => c.id === selectedCustomerId);
         if (!customer) throw new Error("Customer not found.");
 
@@ -569,7 +600,11 @@ export default function ReportsPage() {
           </div>
       );
     }
-
+    if (reportType === 'salesByCustomer') {
+      const salesData = generatedReportData as SalesByCustomerReportItem[];
+      const grandTotal = salesData.reduce((sum, item) => sum + item.totalSales, 0);
+      return <p>Total Sales (All Customers): <span className="font-semibold">${grandTotal.toFixed(2)}</span></p>;
+    }
     if (reportType === 'profitability') {
         const profitItems = generatedReportData as ProfitReportItem[];
         const grandTotalRevenue = profitItems.reduce((sum, item) => sum + item.invoiceTotal, 0);
@@ -626,6 +661,29 @@ export default function ReportsPage() {
 
   const renderReportTable = () => {
     if (!generatedReportData) return null;
+
+    if (reportType === 'salesByCustomer') {
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead className="text-right"># of Invoices</TableHead>
+              <TableHead className="text-right">Total Sales</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(generatedReportData as SalesByCustomerReportItem[]).map((item) => (
+              <TableRow key={item.customerId}>
+                <TableCell>{item.customerName}</TableCell>
+                <TableCell className="text-right">{item.invoiceCount}</TableCell>
+                <TableCell className="text-right font-semibold">${item.totalSales.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )
+    }
 
     if (reportType === 'statement') {
       const statementData = generatedReportData as CustomerStatementReportData;
@@ -780,6 +838,7 @@ export default function ReportsPage() {
           }}>
             <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8">
               <TabsTrigger value="sales">Sales</TabsTrigger>
+              <TabsTrigger value="salesByCustomer">Sales by Cust.</TabsTrigger>
               <TabsTrigger value="profitability">Profitability</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="statement">Statement</TabsTrigger>
@@ -887,6 +946,9 @@ export default function ReportsPage() {
       )}
 
       <div style={{ display: 'none' }}>
+        {reportToPrintData && reportToPrintData.reportType === 'salesByCustomer' && (
+            <PrintableSalesByCustomerReport ref={printRef} reportItems={reportToPrintData.data as SalesByCustomerReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
+        )}
         {reportToPrintData && reportToPrintData.reportType === 'sales' && (
           <PrintableSalesReport ref={printRef} invoices={reportToPrintData.data as Invoice[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
         )}
