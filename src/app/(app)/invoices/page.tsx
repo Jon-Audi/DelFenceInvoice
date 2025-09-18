@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -113,6 +114,8 @@ export default function InvoicesPage() {
 
   // Handle "convert estimate/order to invoice" handoff from localStorage
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+  
     const pendingEstimateRaw = localStorage.getItem("estimateToConvert_invoice");
     const pendingOrderRaw = localStorage.getItem("orderToConvert_invoice");
     let newInvoiceData:

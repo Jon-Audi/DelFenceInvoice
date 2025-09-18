@@ -75,38 +75,40 @@ export default function OrdersPage() {
   
   useEffect(() => {
     setIsClient(true);
-    const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
-    if (pendingOrderRaw) {
-      localStorage.removeItem('estimateToConvert_order');
-      try {
-        const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
-        const newOrderData: OrderFormData = {
-          orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
-          customerId: estimateToConvert.customerId,
-          date: new Date(),
-          status: 'Ordered',
-          orderState: 'Open',
-          poNumber: estimateToConvert.poNumber || '',
-          lineItems: estimateToConvert.lineItems.map(li => ({
-            id: li.id,
-            productId: li.productId,
-            productName: li.productName,
-            quantity: li.quantity,
-            unitPrice: li.unitPrice,
-            isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false,
-            addToProductList: li.addToProductList ?? false,
-          })),
-          notes: `Converted from Estimate #${estimateToConvert.estimateNumber}. ${estimateToConvert.notes || ''}`.trim(),
-          expectedDeliveryDate: undefined,
-          readyForPickUpDate: undefined,
-          pickedUpDate: undefined,
-          payments: [],
-        };
-        setConversionOrderData(newOrderData);
-      } catch (error) {
-        console.error("Error processing estimate for order conversion:", error);
-        toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
+    if (typeof window !== 'undefined') {
+      const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
+      if (pendingOrderRaw) {
+        localStorage.removeItem('estimateToConvert_order');
+        try {
+          const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
+          const newOrderData: OrderFormData = {
+            orderNumber: `ORD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+            customerId: estimateToConvert.customerId,
+            date: new Date(),
+            status: 'Ordered',
+            orderState: 'Open',
+            poNumber: estimateToConvert.poNumber || '',
+            lineItems: estimateToConvert.lineItems.map(li => ({
+              id: li.id,
+              productId: li.productId,
+              productName: li.productName,
+              quantity: li.quantity,
+              unitPrice: li.unitPrice,
+              isReturn: li.isReturn || false,
+              isNonStock: li.isNonStock || false,
+              addToProductList: li.addToProductList ?? false,
+            })),
+            notes: `Converted from Estimate #${estimateToConvert.estimateNumber}. ${estimateToConvert.notes || ''}`.trim(),
+            expectedDeliveryDate: undefined,
+            readyForPickUpDate: undefined,
+            pickedUpDate: undefined,
+            payments: [],
+          };
+          setConversionOrderData(newOrderData);
+        } catch (error) {
+          console.error("Error processing estimate for order conversion:", error);
+          toast({ title: "Conversion Error", description: "Could not process estimate data for order.", variant: "destructive" });
+        }
       }
     }
   }, [toast]);
