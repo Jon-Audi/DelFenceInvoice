@@ -589,10 +589,11 @@ export default function ReportsPage() {
   };
 
   const renderReportSummary = () => {
-    if (!generatedReportData) return null;
+    if (!generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)) return null;
 
      if (reportType === 'statement') {
       const statementData = generatedReportData as CustomerStatementReportData;
+       if (!statementData.transactions || statementData.transactions.length === 0) return null;
       return (
           <div className="space-y-1">
             <p>Opening Balance: <span className="font-semibold">${statementData.openingBalance.toFixed(2)}</span></p>
@@ -660,7 +661,9 @@ export default function ReportsPage() {
   };
 
   const renderReportTable = () => {
-    if (!generatedReportData) return null;
+    if (!generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)) {
+        return <p className="text-center text-muted-foreground py-4">No data to display for the selected criteria.</p>;
+    }
 
     if (reportType === 'salesByCustomer') {
       return (
@@ -687,6 +690,9 @@ export default function ReportsPage() {
 
     if (reportType === 'statement') {
       const statementData = generatedReportData as CustomerStatementReportData;
+      if (!statementData.transactions || statementData.transactions.length === 0) {
+        return <p className="text-center text-muted-foreground py-4">No transactions to display for this customer in the selected period.</p>;
+      }
       return (
         <Table>
           <TableHeader>
@@ -836,7 +842,7 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8">
+            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-9">
               <TabsTrigger value="sales">Sales</TabsTrigger>
               <TabsTrigger value="salesByCustomer">Sales by Cust.</TabsTrigger>
               <TabsTrigger value="profitability">Profitability</TabsTrigger>
@@ -925,7 +931,7 @@ export default function ReportsPage() {
               {(isLoading || isLoadingCustomers) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
             </Button>
-            <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData}>
+            <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)}>
               <Icon name="Printer" className="mr-2 h-4 w-4" />
               Print Report
             </Button>
@@ -933,15 +939,15 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {generatedReportData && !reportToPrintData && (
+      {generatedReportData && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>{reportTitleForSummary || 'Generated Report Summary'}</CardTitle>
+            <CardTitle>{reportTitleForSummary || 'Generated Report'}</CardTitle>
+             <CardContent className="pt-4 px-0">
+                {renderReportSummary()}
+                <div className="mt-4">{renderReportTable()}</div>
+            </CardContent>
           </CardHeader>
-          <CardContent>
-            {renderReportSummary()}
-            <div className="mt-4">{renderReportTable()}</div>
-          </CardContent>
         </Card>
       )}
 
@@ -977,3 +983,5 @@ export default function ReportsPage() {
     </>
   );
 }
+
+    
