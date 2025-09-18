@@ -758,6 +758,37 @@ export default function ReportsPage() {
             </Table>
         );
     }
+    
+    if (reportType === 'customerBalances') {
+        const reportData = generatedReportData as CustomerInvoiceDetail[];
+        if (reportData.length === 0) return <p className="text-center text-muted-foreground py-4">No outstanding invoices found for the selected criteria.</p>;
+
+        return (
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Inv. Date</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead className="text-right">Balance Due</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {reportData.map((item) => (
+                        <TableRow key={item.invoiceId}>
+                            <TableCell>{item.customerName}</TableCell>
+                            <TableCell>{item.invoiceNumber}</TableCell>
+                            <TableCell>{format(new Date(item.invoiceDate), 'P')}</TableCell>
+                            <TableCell>{item.dueDate ? format(new Date(item.dueDate), 'P') : 'N/A'}</TableCell>
+                            <TableCell className="text-right font-semibold text-destructive">${item.balanceDue.toFixed(2)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        );
+    }
+
 
     if (reportType === 'weeklySummary') {
         return (
