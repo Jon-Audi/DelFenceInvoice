@@ -336,12 +336,12 @@ export default function ReportsPage() {
         
         const customerInvoiceDetails: CustomerInvoiceDetail[] = [];
         invoicesSnapshot.forEach(docSnap => {
-          const invoice = docSnap.data() as Invoice;
+          const invoice = docSnap.data() as Omit<Invoice, 'id'>;
           const customer = customers.find(c => c.id === invoice.customerId);
           customerInvoiceDetails.push({
             customerId: invoice.customerId,
             customerName: customer?.companyName || `${customer?.firstName} ${customer?.lastName}` || 'Unknown Customer',
-            invoiceId: invoice.id!,
+            invoiceId: docSnap.id,
             invoiceNumber: invoice.invoiceNumber,
             poNumber: invoice.poNumber,
             invoiceDate: invoice.date,
@@ -450,7 +450,7 @@ export default function ReportsPage() {
         const allOrdersInRange = ordersSnapshot.docs.map(d => d.data() as Order);
         const allInvoicesInRange = invoicesSnapshot.docs.map(d => d.data() as Invoice);
         const allInvoicesWithPayments = paymentsInvoicesSnapshot.docs.map(d => d.data() as Invoice);
-        const allOrdersWithPayments = paymentsOrdersSnapshot.docs.map(d => d.data() as Order);
+        const allOrdersWithPayments = ordersSnapshot.docs.map(d => d.data() as Order);
 
         const weeklySummaries: WeeklySummaryReportItem[] = [];
         let currentWeekStart = startOfWeek(rangeStart, { weekStartsOn: 1 });
