@@ -54,7 +54,7 @@ export function OrderDialog({
     }
   }, [initialData, controlledIsOpen]);
 
-  const adaptCustomerSave = (c: Omit<Customer, "id"> & { id?: string }) => {
+  const adaptCustomerSaveForDialog = (c: Omit<Customer, "id"> & { id?: string }) => {
     const id = c.id ?? customerToView?.id ?? "";
     const full: Customer = { ...c as Customer, id };
     void onSaveCustomer(full);
@@ -178,7 +178,7 @@ export function OrderDialog({
             products={products}
             productCategories={productCategories}
             onViewCustomer={(customer) => setCustomerToView(customer)}
-            onSaveCustomer={adaptCustomerSave}
+            onSaveCustomer={onSaveCustomer}
           />
         </DialogContent>
       </Dialog>
@@ -187,7 +187,7 @@ export function OrderDialog({
           isOpen={!!customerToView}
           onOpenChange={() => setCustomerToView(null)}
           customer={customerToView}
-          onSave={adaptCustomerSave}
+          onSave={adaptCustomerSaveForDialog}
           productCategories={productCategories}
         />      
       )}
