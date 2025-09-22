@@ -97,7 +97,7 @@ export function BulkPaymentDialog({ isOpen, onOpenChange, customers, onSave }: B
         const q = query(
           invoicesRef,
           where('customerId', '==', selectedCustomerId),
-          where('status', 'in', ['Sent', 'Partially Paid', 'Draft']), // Included Draft
+          where('status', 'not-in', ['Paid', 'Voided']),
           where('balanceDue', '>', 0),
           orderBy('date', 'asc')
         );
