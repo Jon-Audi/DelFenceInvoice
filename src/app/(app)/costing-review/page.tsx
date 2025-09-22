@@ -261,6 +261,8 @@ export default function CostingReviewPage() {
             onOpenChange={() => setEditingDoc(null)}
             invoice={editingDoc as Invoice}
             onSave={handleSaveInvoice}
+            onSaveProduct={() => Promise.resolve()}
+            onSaveCustomer={() => Promise.resolve()}
             customers={customers}
             products={products}
             productCategories={productCategories}
