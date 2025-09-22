@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { LineItem } from '@/types';
+import { useAuth } from '@/contexts/auth-context';
 import {
   Dialog,
   DialogContent,
@@ -37,9 +38,10 @@ export function LineItemsViewerDialog({
   documentType,
   documentNumber,
 }: LineItemsViewerDialogProps) {
+  const { user } = useAuth();
+  const canViewPricing = user && (user.role === 'Admin' || user.role === 'User');
+
   if (!lineItems || lineItems.length === 0) {
-    // This case should ideally be handled by the calling component (i.e., not opening the dialog)
-    // But as a fallback, we can render nothing or a message.
     return null;
   }
 
@@ -58,8 +60,12 @@ export function LineItemsViewerDialog({
               <TableRow>
                 <TableHead>Product Name</TableHead>
                 <TableHead className="text-center">Qty</TableHead>
-                <TableHead className="text-right">Unit Price</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                {canViewPricing && (
+                  <>
+                    <TableHead className="text-right">Unit Price</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -71,8 +77,12 @@ export function LineItemsViewerDialog({
                     {item.isNonStock && <span className="text-xs text-muted-foreground"> (Non-Stock)</span>}
                   </TableCell>
                   <TableCell className="text-center">{item.quantity}</TableCell>
-                  <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${item.total.toFixed(2)}</TableCell>
+                  {canViewPricing && (
+                    <>
+                      <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">${item.total.toFixed(2)}</TableCell>
+                    </>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

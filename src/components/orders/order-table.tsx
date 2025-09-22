@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { Order, Customer, Product, DocumentStatus } from '@/types';
+import { useAuth } from '@/contexts/auth-context';
 import {
   Table,
   TableBody,
@@ -79,6 +80,9 @@ export function OrderTable({
   renderSortArrow
 }: OrderTableProps) {
   const [orderToDelete, setOrderToDelete] = React.useState<Order | null>(null);
+  const { user } = useAuth();
+  const canViewPricing = user && (user.role === 'Admin' || user.role === 'User');
+
 
   const getStatusVariant = (status: Order['status']): "default" | "secondary" | "outline" | "destructive" => {
     switch (status) {
@@ -118,15 +122,19 @@ export function OrderTable({
             <TableHead onClick={() => requestSort('date')} className="cursor-pointer hover:bg-muted/50">
               Date {renderSortArrow('date')}
             </TableHead>
-            <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
-              Total {renderSortArrow('total')}
-            </TableHead>
-            <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
-              Paid {renderSortArrow('amountPaid')}
-            </TableHead>
-            <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
-              Balance {renderSortArrow('balanceDue')}
-            </TableHead>
+            {canViewPricing && (
+                <>
+                    <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Total {renderSortArrow('total')}
+                    </TableHead>
+                    <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Paid {renderSortArrow('amountPaid')}
+                    </TableHead>
+                    <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Balance {renderSortArrow('balanceDue')}
+                    </TableHead>
+                </>
+            )}
             <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
               Status {renderSortArrow('status')}
             </TableHead>
@@ -143,11 +151,15 @@ export function OrderTable({
               <TableCell>{order.customerName}</TableCell>
               <TableCell>{order.poNumber || 'N/A'}</TableCell>
               <TableCell>{formatDate(order.date)}</TableCell>
-              <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
-              <TableCell className="text-right text-green-600">${(order.amountPaid || 0).toFixed(2)}</TableCell>
-              <TableCell className={cn("text-right", (order.balanceDue !== undefined && order.balanceDue > 0) ? "text-destructive" : "text-green-600")}>
-                ${(order.balanceDue || 0).toFixed(2)}
-              </TableCell>
+              {canViewPricing && (
+                  <>
+                    <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-green-600">${(order.amountPaid || 0).toFixed(2)}</TableCell>
+                    <TableCell className={cn("text-right", (order.balanceDue !== undefined && order.balanceDue > 0) ? "text-destructive" : "text-green-600")}>
+                        ${(order.balanceDue || 0).toFixed(2)}
+                    </TableCell>
+                  </>
+              )}
               <TableCell>
                 <Badge variant={getStatusVariant(order.status)}
                   className={cn(

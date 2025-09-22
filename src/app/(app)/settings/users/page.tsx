@@ -1,85 +1,90 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { UserTable } from '@/components/users/user-table';
 import { UserDialog } from '@/components/users/user-dialog';
 import type { User } from '@/types';
-import { ROLE_PERMISSIONS } from '@/lib/constants';
 import { useToast } from "@/hooks/use-toast";
-
-// Initial mock data for users
-const initialMockUsers: User[] = [
-  { 
-    id: 'user_1', 
-    firstName: 'Alice', 
-    lastName: 'Admin', 
-    email: 'alice.admin@example.com', 
-    role: 'Admin',
-    isActive: true,
-    lastLogin: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-    permissions: ROLE_PERMISSIONS['Admin'],
-  },
-  { 
-    id: 'user_2', 
-    firstName: 'Bob', 
-    lastName: 'User', 
-    email: 'bob.user@example.com', 
-    role: 'User',
-    isActive: true,
-    lastLogin: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 days ago
-    permissions: ROLE_PERMISSIONS['User'],
-  },
-  { 
-    id: 'user_3', 
-    firstName: 'Charlie', 
-    lastName: 'Inactive', 
-    email: 'charlie.inactive@example.com', 
-    role: 'User',
-    isActive: false,
-    permissions: ROLE_PERMISSIONS['User'],
-    lastLogin: undefined, 
-  },
-];
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 export default function UsersSettingsPage() {
-  const [users, setUsers] = useState<User[]>(initialMockUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const handleSaveUser = (userToSave: User) => {
-    setUsers(prevUsers => {
-      const index = prevUsers.findIndex(u => u.id === userToSave.id);
-      if (index !== -1) {
-        // Edit existing user
-        const updatedUsers = [...prevUsers];
-        updatedUsers[index] = userToSave;
-        toast({
-          title: "User Updated",
-          description: `User ${userToSave.firstName} ${userToSave.lastName} has been updated.`,
+  useEffect(() => {
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'users'), 
+      (snapshot) => {
+        const fetchedUsers: User[] = [];
+        snapshot.forEach((doc) => {
+          fetchedUsers.push({ id: doc.id, ...doc.data() } as User);
         });
-        return updatedUsers;
-      } else {
-        // Add new user
-        toast({
-          title: "User Added",
-          description: `User ${userToSave.firstName} ${userToSave.lastName} has been added.`,
-        });
-        return [...prevUsers, { ...userToSave, id: userToSave.id || crypto.randomUUID() }];
+        setUsers(fetchedUsers);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching users: ", error);
+        toast({ title: "Error", description: "Could not fetch users.", variant: "destructive" });
+        setIsLoading(false);
       }
-    });
+    );
+    return () => unsubscribe();
+  }, [toast]);
+
+  const handleSaveUser = async (userToSave: User) => {
+    // In a real app, creating/updating Firebase Auth user is complex from client-side.
+    // This example focuses on updating the Firestore user document.
+    // A Firebase Function would be needed to securely manage Auth users.
+    const { id, ...userData } = userToSave;
+    try {
+      const userDocRef = doc(db, 'users', id);
+      await setDoc(userDocRef, userData, { merge: true });
+      toast({
+        title: "User Saved",
+        description: `User ${userToSave.firstName} ${userToSave.lastName} has been saved.`,
+      });
+    } catch (error) {
+      console.error("Error saving user:", error);
+      toast({ title: "Error", description: "Could not save user data.", variant: "destructive" });
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
-    toast({
-      title: "User Deleted",
-      description: "The user has been removed from the list.",
-      variant: "default",
-    });
+  const handleDeleteUser = async (userId: string) => {
+    // Deleting a user from Firestore.
+    // IMPORTANT: This does NOT delete the user from Firebase Authentication.
+    // A Firebase Function is required for that.
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      toast({
+        title: "User Deleted",
+        description: "The user document has been removed from Firestore.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Error deleting user document:", error);
+      toast({
+        title: "Error",
+        description: "Could not delete user document.",
+        variant: "destructive",
+      });
+    }
   };
+  
+  if (isLoading) {
+    return (
+      <PageHeader title="User Management" description="Loading user data...">
+        <div className="flex items-center justify-center h-32">
+          <Icon name="Loader2" className="h-8 w-8 animate-spin" />
+        </div>
+      </PageHeader>
+    );
+  }
 
   return (
     <>

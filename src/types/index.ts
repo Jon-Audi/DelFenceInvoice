@@ -1,9 +1,8 @@
 
-
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
-export type UserRole = 'Admin' | 'User';
+export type UserRole = 'Admin' | 'User' | 'Yard Staff'; // Added 'Yard Staff'
 
 export type PermissionKey =
   | 'manage_users'
@@ -19,7 +18,9 @@ export type PermissionKey =
   | 'manage_invoices'
   | 'view_invoices'
   | 'access_settings'
-  | 'manage_company_settings';
+  | 'manage_company_settings'
+  | 'view_packing_slips' // New permission
+  | 'view_pricing'; // New granular permission
 
 export interface Product {
   id: string;
@@ -154,15 +155,17 @@ export interface Invoice extends BaseDocument {
 }
 
 export interface User {
-  id: string;
+  id: string; // This will be the Firebase Auth UID
   firstName: string;
   lastName: string;
   email: string;
   role: UserRole;
   isActive: boolean;
-  lastLogin?: string;
+  lastLogin?: string; // ISO String
   permissions: PermissionKey[];
+  createdAt?: string; // ISO String
 }
+
 
 export interface CompanySettings {
   id?: string;

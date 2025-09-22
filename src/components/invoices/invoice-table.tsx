@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { Invoice, Customer, Product } from '@/types';
+import { useAuth } from '@/contexts/auth-context';
 import {
   Table,
   TableBody,
@@ -78,6 +79,11 @@ export function InvoiceTable({
   renderSortArrow,
 }: InvoiceTableProps) {
   const [invoiceToDelete, setInvoiceToDelete] = React.useState<Invoice | null>(null);
+  const { user } = useAuth();
+  // A simple permission check, assuming user object has a 'role' or 'permissions' array
+  // This would be more robust with a proper authorization context/hook
+  const canViewPricing = user && (user.role === 'Admin' || user.role === 'User');
+
 
   const getStatusVariant = (
     status: Invoice['status']
@@ -121,15 +127,19 @@ export function InvoiceTable({
             <TableHead onClick={() => requestSort('dueDate')} className="cursor-pointer hover:bg-muted/50">
               Due Date {renderSortArrow('dueDate')}
             </TableHead>
-            <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
-              Total {renderSortArrow('total')}
-            </TableHead>
-            <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
-              Paid {renderSortArrow('amountPaid')}
-            </TableHead>
-            <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
-              Balance {renderSortArrow('balanceDue')}
-            </TableHead>
+            {canViewPricing && (
+                <>
+                    <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Total {renderSortArrow('total')}
+                    </TableHead>
+                    <TableHead onClick={() => requestSort('amountPaid')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Paid {renderSortArrow('amountPaid')}
+                    </TableHead>
+                    <TableHead onClick={() => requestSort('balanceDue')} className="text-right cursor-pointer hover:bg-muted/50">
+                        Balance {renderSortArrow('balanceDue')}
+                    </TableHead>
+                </>
+            )}
             <TableHead onClick={() => requestSort('status')} className="cursor-pointer hover:bg-muted/50">
               Status {renderSortArrow('status')}
             </TableHead>
@@ -144,20 +154,24 @@ export function InvoiceTable({
               <TableCell>{invoice.poNumber || 'N/A'}</TableCell>
               <TableCell>{formatDate(invoice.date)}</TableCell>
               <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-              <TableCell className="text-right">${invoice.total.toFixed(2)}</TableCell>
-              <TableCell className="text-right text-green-600">
-                ${(invoice.amountPaid || 0).toFixed(2)}
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "text-right",
-                  invoice.balanceDue !== undefined && invoice.balanceDue > 0
-                    ? "text-destructive"
-                    : "text-green-600"
-                )}
-              >
-                ${(invoice.balanceDue || 0).toFixed(2)}
-              </TableCell>
+              {canViewPricing && (
+                <>
+                    <TableCell className="text-right">${invoice.total.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-green-600">
+                        ${(invoice.amountPaid || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell
+                        className={cn(
+                        "text-right",
+                        invoice.balanceDue !== undefined && invoice.balanceDue > 0
+                            ? "text-destructive"
+                            : "text-green-600"
+                        )}
+                    >
+                        ${(invoice.balanceDue || 0).toFixed(2)}
+                    </TableCell>
+                </>
+              )}
               <TableCell>
                 <Badge
                   variant={getStatusVariant(invoice.status)}
