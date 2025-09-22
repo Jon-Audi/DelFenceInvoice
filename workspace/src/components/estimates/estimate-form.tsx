@@ -213,7 +213,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
 
 
   const handleSaveNewCustomerFromEstimateForm = async (newCustomerData: Omit<Customer, 'id'> & { id?: string }) => {
-    const newCustomerId = await onSaveCustomer(newCustomerData as Customer);
+    const newCustomerId = await onSaveCustomer(newCustomerData);
     if (newCustomerId && typeof newCustomerId === 'string') {
       const customerToSelect = { ...newCustomerData, id: newCustomerId } as Customer;
       setCustomers(prev => [...prev, customerToSelect].sort((a,b) => (a.companyName || `${a.firstName} ${a.lastName}`).localeCompare(b.companyName || `${b.firstName} ${b.lastName}`)));

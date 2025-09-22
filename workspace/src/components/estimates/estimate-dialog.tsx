@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CustomerDialog } from '@/components/customers/customer-dialog';
+import { CustomerDialog } from "@/components/customers/customer-dialog";
 
 
 interface EstimateDialogProps {
@@ -143,7 +143,7 @@ export function EstimateDialog({
     setOpen(false);
   };
   
-  const handleSaveCustomerWrapper = (c: Omit<Customer, 'id'> & { id?: string }) => {
+  const handleSaveCustomerWrapper = (c: Omit<Customer, "id"> & { id?: string }) => {
     void onSaveCustomer(c as Customer).catch((err) => {
       console.error("Failed to save customer:", err);
       // Optionally surface a toast notification here if you have a toast context
