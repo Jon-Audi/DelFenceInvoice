@@ -10,13 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import type { Order, Invoice, LineItem } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, runTransaction } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose
+  DialogClose,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,7 +28,7 @@ import { cn } from '@/lib/utils';
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 // A new component for the packing slip dialog content
-const PackingSlipDialogContent = ({ doc }: { doc: PackableDocument }) => {
+const PackingSlipDialogContent = ({ doc, onStatusChange, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up') => void, isUpdating: boolean }) => {
     const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -43,6 +44,8 @@ const PackingSlipDialogContent = ({ doc }: { doc: PackableDocument }) => {
         setPackedItems(prev => ({ ...prev, [itemId]: checked }));
     };
 
+    const allItemsPacked = Object.values(packedItems).every(packed => packed) && Object.keys(packedItems).length > 0;
+
     return (
         <DialogContent className="sm:max-w-xl">
             <DialogHeader>
@@ -50,7 +53,7 @@ const PackingSlipDialogContent = ({ doc }: { doc: PackableDocument }) => {
                     Packing Slip for {doc.docType} #{(doc as Order).orderNumber || (doc as Invoice).invoiceNumber}
                 </DialogTitle>
             </DialogHeader>
-            <ScrollArea className="max-h-[70vh] mt-4">
+            <ScrollArea className="max-h-[60vh] mt-4">
                 <div className="space-y-4">
                     {doc.lineItems.map(item => (
                         <div 
@@ -87,9 +90,19 @@ const PackingSlipDialogContent = ({ doc }: { doc: PackableDocument }) => {
                     ))}
                 </div>
             </ScrollArea>
-            <DialogClose asChild className="mt-4">
-              <Button type="button" variant="outline">Close</Button>
-            </DialogClose>
+             <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Close</Button>
+              </DialogClose>
+              <Button 
+                type="button" 
+                onClick={() => onStatusChange('Ready for pick up')}
+                disabled={!allItemsPacked || isUpdating}
+              >
+                {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Mark as Ready for Pickup
+              </Button>
+            </DialogFooter>
         </DialogContent>
     );
 };
@@ -99,6 +112,7 @@ export default function PackingPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<PackableDocument | null>(null);
   const { toast } = useToast();
 
@@ -131,6 +145,35 @@ export default function PackingPage() {
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
+  
+  const handleStatusChange = async (newStatus: 'Ready for pick up') => {
+    if (!selectedDoc) return;
+    setIsUpdating(true);
+    
+    try {
+        await runTransaction(db, async (transaction) => {
+            const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
+            const updateData: any = { status: newStatus };
+            if (selectedDoc.docType === 'Order') {
+                updateData.readyForPickUpDate = new Date().toISOString();
+            }
+            transaction.update(docRef, updateData);
+        });
+
+        toast({
+            title: "Status Updated",
+            description: `${selectedDoc.docType} #${(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber} marked as Ready for Pickup.`
+        });
+        setSelectedDoc(null); // Close the dialog on success
+
+    } catch (error) {
+        console.error("Error updating document status:", error);
+        toast({ title: "Error", description: `Could not update status.`, variant: "destructive" });
+    } finally {
+        setIsUpdating(false);
+    }
+  };
+
 
   const documentsToPack = useMemo((): PackableDocument[] => {
     const docs: PackableDocument[] = [];
@@ -197,10 +240,13 @@ export default function PackingPage() {
       
       {selectedDoc && (
         <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
-            <PackingSlipDialogContent doc={selectedDoc} />
+            <PackingSlipDialogContent 
+              doc={selectedDoc} 
+              onStatusChange={handleStatusChange}
+              isUpdating={isUpdating}
+            />
         </Dialog>
       )}
     </>
   );
 }
-
