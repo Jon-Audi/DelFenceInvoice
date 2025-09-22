@@ -1,8 +1,9 @@
+
 "use client";
 
 import React from 'react';
 import type { Estimate, Product, LineItem, Customer } from '@/types';
-import { EstimateForm, type EstimateFormData } from './estimate-form';
+import { EstimateForm, type EstimateFormData } from '@/components/estimates/estimate-form';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CustomerDialog } from '../customers/customer-dialog';
+import { CustomerDialog } from '@/components/customers/customer-dialog';
 
 
 interface EstimateDialogProps {

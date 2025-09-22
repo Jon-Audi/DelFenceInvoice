@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -32,7 +33,7 @@ import { format } from 'date-fns';
 import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
-import { BulkAddProductsDialog } from './bulk-add-products-dialog';
+import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 import { ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
 
 
