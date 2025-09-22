@@ -1,10 +1,9 @@
-// src/components/invoices/invoice-dialog.tsx
 
 "use client";
 
 import React from 'react';
 import type { Invoice, Customer, Product, LineItem, Payment } from '@/types';
-import { InvoiceForm, type InvoiceFormData } from './invoice-form';
+import { InvoiceForm, type InvoiceFormData } from '@/components/invoices/invoice-form';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CustomerDialog } from '../customers/customer-dialog';
+import { CustomerDialog } from '@/components/customers/customer-dialog';
 
 interface InvoiceDialogProps {
   invoice?: Invoice;
@@ -166,6 +165,13 @@ export function InvoiceDialog({
     setOpen(false);
   };
 
+  const handleSaveCustomerWrapper = (c: Omit<Customer, "id"> & { id?: string }) => {
+    void onSaveCustomer(c as Customer).catch((err) => {
+      console.error("Failed to save customer:", err);
+      // Optionally surface a toast notification here if you have a toast context
+    });
+  };
+
   const dialogTitle = invoice ? 'Edit Invoice' : (initialData ? 'Create New Invoice from Conversion' : 'New Invoice');
   const dialogDescription = invoice ? 'Update the details of this invoice.' : (initialData ? 'Review and confirm the details for this new invoice.' : 'Fill in the details for the new invoice.');
 
@@ -197,7 +203,7 @@ export function InvoiceDialog({
             isOpen={!!customerToView}
             onOpenChange={() => setCustomerToView(null)}
             customer={customerToView}
-            onSave={onSaveCustomer}
+            onSave={handleSaveCustomerWrapper}
             productCategories={productCategories}
         />
       )}
