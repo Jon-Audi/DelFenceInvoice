@@ -1,3 +1,4 @@
+
 // next.config.ts
 import type { NextConfig } from 'next';
 
@@ -30,7 +31,7 @@ const nextConfig: NextConfig = {
   // Expose the server-side config to the client-side using the `env` key.
   env: getClientFirebaseConfig(),
   experimental: {
-    serverActions: true, // Explicitly enable server actions
+    serverActions: {}, // Explicitly enable server actions
   },
   images: {
     remotePatterns: [
