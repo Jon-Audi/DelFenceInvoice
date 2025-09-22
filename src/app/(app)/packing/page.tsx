@@ -43,7 +43,7 @@ export default function PackingPage() {
       toast({ title: "Error", description: `Could not fetch orders for packing.`, variant: "destructive" });
     }));
     
-    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid']));
+    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid', 'Ordered']));
      unsubscribes.push(onSnapshot(invoicesQuery, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Invoice[];
       setInvoices(items);
@@ -94,6 +94,7 @@ export default function PackingPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Number</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>PO Number</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -107,11 +108,12 @@ export default function PackingPage() {
                   </TableCell>
                   <TableCell>{(doc as Order).orderNumber || (doc as Invoice).invoiceNumber}</TableCell>
                   <TableCell>{doc.customerName}</TableCell>
+                  <TableCell>{doc.poNumber || 'N/A'}</TableCell>
                   <TableCell>{new Date(doc.date).toLocaleDateString()}</TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground p-6">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground p-6">
                       No documents are currently ready for packing.
                   </TableCell>
                 </TableRow>

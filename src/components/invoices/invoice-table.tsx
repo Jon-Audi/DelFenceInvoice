@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -41,10 +42,12 @@ interface InvoiceTableProps {
   invoices: Invoice[];
   onSave: (invoice: Invoice) => void;
   onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
   onDelete: (invoiceId: string) => void;
   onGenerateEmail: (invoice: Invoice) => void;
   onPrint: (invoice: Invoice) => void;
   onPrintPackingSlip: (invoice: Invoice) => void;
+  onSendToPacking: (invoice: Invoice) => void;
   formatDate: (dateString: string | Date | undefined, options?: Intl.DateTimeFormatOptions) => string;
   customers: Customer[];
   products: Product[];
@@ -59,10 +62,12 @@ export function InvoiceTable({
   invoices,
   onSave,
   onSaveProduct,
+  onSaveCustomer,
   onDelete,
   onGenerateEmail,
   onPrint,
   onPrintPackingSlip,
+  onSendToPacking,
   formatDate,
   customers,
   products,
@@ -203,6 +208,7 @@ export function InvoiceTable({
                       }
                       onSave={onSave}
                       onSaveProduct={onSaveProduct}
+                      onSaveCustomer={onSaveCustomer}
                       customers={customers}
                       products={products}
                       productCategories={productCategories}
@@ -210,6 +216,10 @@ export function InvoiceTable({
 
                     <DropdownMenuItem onSelect={() => onGenerateEmail(invoice)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Invoice
+                    </DropdownMenuItem>
+                    
+                     <DropdownMenuItem onSelect={() => onSendToPacking(invoice)}>
+                      <Icon name="PackageCheck" className="mr-2 h-4 w-4" /> Send to Packing
                     </DropdownMenuItem>
 
                     <DropdownMenuItem onSelect={() => onPrint(invoice)}>

@@ -123,7 +123,6 @@ export default function InvoicesPage() {
       | null = null;
 
     if (pendingEstimateRaw) {
-      localStorage.removeItem("estimateToConvert_invoice");
       try {
         const estimateToConvert = JSON.parse(pendingEstimateRaw) as Estimate;
         newInvoiceData = {
@@ -147,12 +146,13 @@ export default function InvoicesPage() {
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
           payments: [],
         };
+        localStorage.removeItem("estimateToConvert_invoice");
       } catch (e) {
         console.error("Error processing estimate for invoice conversion:", e);
         toast({ title: "Conversion Error", description: "Could not process estimate data for invoice.", variant: "destructive" });
+        localStorage.removeItem("estimateToConvert_invoice");
       }
     } else if (pendingOrderRaw) {
-      localStorage.removeItem("orderToConvert_invoice");
       try {
         const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
         newInvoiceData = {
@@ -176,9 +176,11 @@ export default function InvoicesPage() {
           dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
           payments: orderToConvert.payments?.map((p) => ({ ...p, date: p.date })) || [],
         };
+        localStorage.removeItem("orderToConvert_invoice");
       } catch (e) {
         console.error("Error processing order for invoice conversion:", e);
         toast({ title: "Conversion Error", description: "Could not process order data for invoice.", variant: "destructive" });
+        localStorage.removeItem("orderToConvert_invoice");
       }
     }
 
@@ -370,6 +372,28 @@ export default function InvoicesPage() {
       });
     }
   };
+  
+  const handleSaveCustomer = async (customerToSave: Customer): Promise<string | void> => {
+    const { id, ...customerData } = customerToSave;
+    try {
+      if (id && customers.some(c => c.id === id)) {
+        const customerRef = doc(db, 'customers', id);
+        await runTransaction(db, async (transaction) => {
+            transaction.set(customerRef, customerData, { merge: true });
+        });
+        toast({ title: "Customer Updated", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.` });
+        return id;
+      } else {
+        const dataToSave = { ...customerData, createdAt: new Date().toISOString() };
+        const docRef = await addDoc(collection(db, 'customers'), dataToSave);
+        toast({ title: "Customer Added", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.` });
+        return docRef.id;
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Could not save customer to database.", variant: "destructive" });
+    }
+  };
+
 
   // ---------- BULK PAYMENT (transaction-safe) ----------
   const handleBulkPaymentSave = async (
@@ -728,6 +752,17 @@ export default function InvoicesPage() {
       setIsLoadingEmail(false);
     }
   };
+  
+  const handleSendToPacking = async (invoice: Invoice) => {
+    if (invoice.status === 'Ordered') {
+      toast({ title: 'Already in Packing', description: 'This invoice is already in a state to be packed.', variant: 'default' });
+      return;
+    }
+    const updatedInvoice = { ...invoice, status: 'Ordered' as const };
+    await handleSaveInvoice(updatedInvoice);
+    toast({ title: 'Sent to Packing', description: `Invoice #${invoice.invoiceNumber} has been moved to packing.` });
+  };
+
 
   // Sorting/search helpers
   const requestSort = (key: SortableInvoiceKeys) => {
@@ -811,6 +846,7 @@ export default function InvoicesPage() {
             }
             onSave={handleSaveInvoice}
             onSaveProduct={handleSaveProduct}
+            onSaveCustomer={handleSaveCustomer}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
@@ -835,6 +871,7 @@ export default function InvoicesPage() {
           initialData={conversionInvoiceData}
           onSave={handleSaveInvoice}
           onSaveProduct={handleSaveProduct}
+          onSaveCustomer={handleSaveCustomer}
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
@@ -862,11 +899,15 @@ export default function InvoicesPage() {
               void handleSaveInvoice(inv);
             }}
             onSaveProduct={handleSaveProduct}
+            onSaveCustomer={handleSaveCustomer}
             onDelete={(id) => {
               void handleDeleteInvoice(id);
             }}
             onGenerateEmail={(inv) => {
               void handleGenerateEmail(inv);
+            }}
+            onSendToPacking={(inv) => {
+              void handleSendToPacking(inv);
             }}
             onPrint={(inv) => {
               void handlePrepareAndPrintInvoice(inv);
