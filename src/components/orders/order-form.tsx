@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -138,9 +139,10 @@ interface OrderFormProps {
   products: Product[];
   productCategories: string[];
   onViewCustomer: (customer: Customer) => void;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
 }
 
-export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories, onViewCustomer }: OrderFormProps) {
+export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories, onViewCustomer, onSaveCustomer }: OrderFormProps) {
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);

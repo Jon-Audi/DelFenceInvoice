@@ -113,6 +113,25 @@ export default function OrdersPage() {
     }
   }, [toast]);
 
+  const handleSaveCustomer = async (customerToSave: Customer): Promise<string | void> => {
+    const { id, ...customerData } = customerToSave;
+    try {
+      if (id && customers.some(c => c.id === id)) {
+        const customerRef = doc(db, 'customers', id);
+        await setDoc(customerRef, customerData, { merge: true });
+        toast({ title: "Customer Updated", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been updated.` });
+        return id;
+      } else {
+        const dataToSave = { ...customerData, createdAt: new Date().toISOString() };
+        const docRef = await addDoc(collection(db, 'customers'), dataToSave);
+        toast({ title: "Customer Added", description: `Customer ${customerToSave.firstName} ${customerToSave.lastName} has been added.` });
+        return docRef.id;
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Could not save customer to database.", variant: "destructive" });
+    }
+  };
+
   const handleSaveProduct = async (productToSave: Omit<Product, 'id'>): Promise<string | void> => {
     try {
       const docRef = await addDoc(collection(db, 'products'), productToSave);
@@ -586,6 +605,7 @@ export default function OrdersPage() {
           }
           onSave={handleSaveOrder}
           onSaveProduct={handleSaveProduct}
+          onSaveCustomer={handleSaveCustomer}
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
@@ -602,6 +622,7 @@ export default function OrdersPage() {
             initialData={conversionOrderData}
             onSave={handleSaveOrder}
             onSaveProduct={handleSaveProduct}
+            onSaveCustomer={handleSaveCustomer}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
@@ -637,6 +658,7 @@ export default function OrdersPage() {
             requestSort={requestSort}
             renderSortArrow={renderSortArrow}
             onSaveProduct={handleSaveProduct}
+            onSaveCustomer={handleSaveCustomer}
           />
            {sortedAndFilteredOrders.length === 0 && (
              <p className="p-4 text-center text-muted-foreground">

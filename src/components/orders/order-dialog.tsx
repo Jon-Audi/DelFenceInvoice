@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -171,6 +172,7 @@ export function OrderDialog({
             products={products}
             productCategories={productCategories}
             onViewCustomer={(customer) => setCustomerToView(customer)}
+            onSaveCustomer={onSaveCustomer}
           />
         </DialogContent>
       </Dialog>

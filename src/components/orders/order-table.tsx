@@ -43,6 +43,7 @@ interface OrderTableProps {
   orders: Order[];
   onSave: (order: Order) => void;
   onSaveProduct: (product: Omit<Product, 'id'>) => Promise<string | void>;
+  onSaveCustomer: (customer: Customer) => Promise<string | void>;
   onDelete: (orderId: string) => void;
   onGenerateEmail: (order: Order) => void;
   onPrint: (order: Order) => void;
@@ -62,6 +63,7 @@ export function OrderTable({
   orders,
   onSave,
   onSaveProduct,
+  onSaveCustomer,
   onDelete,
   onGenerateEmail,
   onPrint,
@@ -184,6 +186,7 @@ export function OrderTable({
                       }
                       onSave={onSave}
                       onSaveProduct={onSaveProduct}
+                      onSaveCustomer={onSaveCustomer}
                       customers={customers}
                       products={products}
                       productCategories={productCategories}

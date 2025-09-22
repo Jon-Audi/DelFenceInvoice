@@ -1,6 +1,5 @@
 // next.config.ts
 import type { NextConfig } from 'next';
-import type { Configuration as WebpackConfiguration } from 'webpack';
 
 // This function safely parses the server-side Firebase config
 // and prepares it for the client-side.
@@ -30,6 +29,9 @@ const getClientFirebaseConfig = () => {
 const nextConfig: NextConfig = {
   // Expose the server-side config to the client-side using the `env` key.
   env: getClientFirebaseConfig(),
+  experimental: {
+    serverActions: true, // Explicitly enable server actions
+  },
   images: {
     remotePatterns: [
       {
