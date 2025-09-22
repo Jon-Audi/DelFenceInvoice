@@ -1,8 +1,9 @@
+
 "use client";
 
 import React from 'react';
 import type { Estimate, Product, LineItem, Customer } from '@/types';
-import { EstimateForm, type EstimateFormData } from './estimate-form';
+import { EstimateForm, type EstimateFormData } from '@/components/estimates/estimate-form';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CustomerDialog } from '../customers/customer-dialog';
+import { CustomerDialog } from "@/components/customers/customer-dialog";
 
 
 interface EstimateDialogProps {
@@ -142,6 +143,13 @@ export function EstimateDialog({
     setOpen(false);
   };
   
+  const handleSaveCustomerWrapper = (c: Omit<Customer, "id"> & { id?: string }) => {
+    void onSaveCustomer(c as Customer).catch((err) => {
+      console.error("Failed to save customer:", err);
+      // Optionally surface a toast notification here if you have a toast context
+    });
+  };
+
   const dialogTitle = estimate ? 'Edit Estimate' : (initialData ? 'Clone Estimate' : 'New Estimate');
   const dialogDescription = estimate ? 'Update the details of this estimate.' : (initialData ? 'Review the cloned details and select a new customer.' : 'Fill in the details for the new estimate.');
 
@@ -174,7 +182,7 @@ export function EstimateDialog({
             isOpen={!!customerToView}
             onOpenChange={() => setCustomerToView(null)}
             customer={customerToView}
-            onSave={onSaveCustomer}
+            onSave={handleSaveCustomerWrapper}
             productCategories={productCategories}
         />
       )}
