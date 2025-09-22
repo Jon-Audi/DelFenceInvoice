@@ -28,13 +28,13 @@ import { cn } from '@/lib/utils';
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 // A new component for the packing slip dialog content
-const PackingSlipDialogContent = ({ doc, onStatusChange, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up') => void, isUpdating: boolean }) => {
+const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up') => void, onPartialPackSave: (packedItems: Record<string, boolean>) => void, isUpdating: boolean }) => {
     const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
-        // Reset packed items when a new document is selected
+        // Reset packed items when a new document is selected, respecting existing data
         const initialPackedState = doc.lineItems.reduce((acc, item) => {
-            acc[item.id] = false;
+            acc[item.id] = !!item.packed; // Use existing 'packed' status
             return acc;
         }, {} as Record<string, boolean>);
         setPackedItems(initialPackedState);
@@ -90,18 +90,24 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, isUpdating }: { doc: Pa
                     ))}
                 </div>
             </ScrollArea>
-             <DialogFooter className="mt-4">
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Close</Button>
-              </DialogClose>
-              <Button 
-                type="button" 
-                onClick={() => onStatusChange('Ready for pick up')}
-                disabled={!allItemsPacked || isUpdating}
-              >
-                {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
-                Mark as Ready for Pickup
+             <DialogFooter className="mt-4 sm:justify-between">
+              <Button type="button" variant="secondary" onClick={() => onPartialPackSave(packedItems)} disabled={isUpdating}>
+                 {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                Save Partial Pack
               </Button>
+              <div className="flex gap-2">
+                <DialogClose asChild>
+                    <Button type="button" variant="outline">Close</Button>
+                </DialogClose>
+                <Button 
+                    type="button" 
+                    onClick={() => onStatusChange('Ready for pick up')}
+                    disabled={!allItemsPacked || isUpdating}
+                >
+                    {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                    Mark as Ready for Pickup
+                </Button>
+              </div>
             </DialogFooter>
         </DialogContent>
     );
@@ -157,6 +163,10 @@ export default function PackingPage() {
             if (selectedDoc.docType === 'Order') {
                 updateData.readyForPickUpDate = new Date().toISOString();
             }
+            // Mark all items as packed when setting the final status
+            const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
+            updateData.lineItems = updatedLineItems;
+
             transaction.update(docRef, updateData);
         });
 
@@ -169,6 +179,36 @@ export default function PackingPage() {
     } catch (error) {
         console.error("Error updating document status:", error);
         toast({ title: "Error", description: `Could not update status.`, variant: "destructive" });
+    } finally {
+        setIsUpdating(false);
+    }
+  };
+
+  const handlePartialPackSave = async (packedItemsStatus: Record<string, boolean>) => {
+    if (!selectedDoc) return;
+    setIsUpdating(true);
+
+    try {
+        const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
+        const updatedLineItems = selectedDoc.lineItems.map(item => ({
+            ...item,
+            packed: packedItemsStatus[item.id] || false,
+        }));
+        
+        await runTransaction(db, async (transaction) => {
+            transaction.update(docRef, { lineItems: updatedLineItems });
+        });
+
+        toast({
+            title: "Packing Progress Saved",
+            description: `Packed items for ${selectedDoc.docType} #${(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber} have been saved.`,
+        });
+        // We can choose to keep the dialog open or close it. Let's close it for now.
+        setSelectedDoc(null);
+
+    } catch (error) {
+        console.error("Error saving partial pack status:", error);
+        toast({ title: "Error", description: `Could not save packing progress.`, variant: "destructive" });
     } finally {
         setIsUpdating(false);
     }
@@ -243,6 +283,7 @@ export default function PackingPage() {
             <PackingSlipDialogContent 
               doc={selectedDoc} 
               onStatusChange={handleStatusChange}
+              onPartialPackSave={handlePartialPackSave}
               isUpdating={isUpdating}
             />
         </Dialog>

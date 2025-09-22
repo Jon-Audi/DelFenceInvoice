@@ -79,6 +79,7 @@ export interface LineItem {
   unit?: string; // For creating new products from non-stock items
   addToProductList?: boolean; // UI flag for form
   newProductCategory?: string; // UI field for form
+  packed?: boolean; // For tracking packing status
 }
 
 
