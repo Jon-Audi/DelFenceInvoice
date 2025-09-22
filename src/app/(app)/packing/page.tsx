@@ -20,8 +20,80 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
+
 
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
+
+// A new component for the packing slip dialog content
+const PackingSlipDialogContent = ({ doc }: { doc: PackableDocument }) => {
+    const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        // Reset packed items when a new document is selected
+        const initialPackedState = doc.lineItems.reduce((acc, item) => {
+            acc[item.id] = false;
+            return acc;
+        }, {} as Record<string, boolean>);
+        setPackedItems(initialPackedState);
+    }, [doc]);
+
+    const handlePackedChange = (itemId: string, checked: boolean) => {
+        setPackedItems(prev => ({ ...prev, [itemId]: checked }));
+    };
+
+    return (
+        <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+                <DialogTitle className="text-2xl">
+                    Packing Slip for {doc.docType} #{(doc as Order).orderNumber || (doc as Invoice).invoiceNumber}
+                </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[70vh] mt-4">
+                <div className="space-y-4">
+                    {doc.lineItems.map(item => (
+                        <div 
+                          key={item.id} 
+                          className={cn(
+                            "flex justify-between items-center p-4 border rounded-lg transition-colors",
+                            packedItems[item.id] ? "bg-green-100/50 dark:bg-green-900/20 border-green-300 dark:border-green-800" : "bg-card"
+                          )}
+                        >
+                            <div className="flex items-center gap-4 flex-1">
+                                <Checkbox
+                                    id={`packed-${item.id}`}
+                                    checked={packedItems[item.id]}
+                                    onCheckedChange={(checked) => handlePackedChange(item.id, !!checked)}
+                                    className="h-6 w-6"
+                                />
+                                <label
+                                    htmlFor={`packed-${item.id}`}
+                                    className={cn(
+                                        "font-medium flex-1 text-lg cursor-pointer transition-colors",
+                                        packedItems[item.id] && "text-muted-foreground line-through"
+                                    )}
+                                >
+                                    {item.productName}
+                                </label>
+                            </div>
+                            <div className={cn(
+                                "font-bold text-2xl h-12 w-12 flex items-center justify-center rounded-md transition-colors",
+                                packedItems[item.id] ? "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200" : "bg-primary text-primary-foreground"
+                            )}>
+                                {item.quantity}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+            <DialogClose asChild className="mt-4">
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+        </DialogContent>
+    );
+};
+
 
 export default function PackingPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -125,30 +197,10 @@ export default function PackingPage() {
       
       {selectedDoc && (
         <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
-            <DialogContent className="sm:max-w-xl">
-                 <DialogHeader>
-                    <DialogTitle className="text-2xl">
-                        Packing Slip for {selectedDoc.docType} #{(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber}
-                    </DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="max-h-[70vh] mt-4">
-                     <div className="space-y-4">
-                        {selectedDoc.lineItems.map(item => (
-                            <div key={item.id} className="flex justify-between items-center p-4 border rounded-lg text-lg">
-                                <span className="font-medium flex-1 mr-4">{item.productName}</span>
-                                <span className="font-bold text-2xl bg-primary text-primary-foreground h-12 w-12 flex items-center justify-center rounded-md">
-                                    {item.quantity}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </ScrollArea>
-                <DialogClose asChild className="mt-4">
-                  <Button type="button" variant="outline">Close</Button>
-                </DialogClose>
-            </DialogContent>
+            <PackingSlipDialogContent doc={selectedDoc} />
         </Dialog>
       )}
     </>
   );
 }
+
