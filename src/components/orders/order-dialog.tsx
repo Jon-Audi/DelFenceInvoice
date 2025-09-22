@@ -54,6 +54,12 @@ export function OrderDialog({
     }
   }, [initialData, controlledIsOpen]);
 
+  const adaptCustomerSave = (c: Omit<Customer, "id"> & { id?: string }) => {
+    const id = c.id ?? customerToView?.id ?? "";
+    const full: Customer = { ...c as Customer, id };
+    void onSaveCustomer(full);
+  };
+
 
   const handleSubmit = async (formData: OrderFormData) => {
     const productsToCreate: Omit<Product, 'id'>[] = [];
@@ -172,18 +178,18 @@ export function OrderDialog({
             products={products}
             productCategories={productCategories}
             onViewCustomer={(customer) => setCustomerToView(customer)}
-            onSaveCustomer={onSaveCustomer}
+            onSaveCustomer={adaptCustomerSave}
           />
         </DialogContent>
       </Dialog>
       {customerToView && (
-        <CustomerDialog 
-            isOpen={!!customerToView}
-            onOpenChange={() => setCustomerToView(null)}
-            customer={customerToView}
-            onSave={onSaveCustomer}
-            productCategories={productCategories}
-        />
+        <CustomerDialog
+          isOpen={!!customerToView}
+          onOpenChange={() => setCustomerToView(null)}
+          customer={customerToView}
+          onSave={adaptCustomerSave}
+          productCategories={productCategories}
+        />      
       )}
     </>
   );
