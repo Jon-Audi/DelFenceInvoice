@@ -49,6 +49,7 @@ import {
   StopCircle,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export type IconName = keyof typeof iconComponents;
 
@@ -102,16 +103,31 @@ const iconComponents = {
   StopCircle,
 };
 
-interface IconProps extends LucideProps {
+type IconProps = {
   name: IconName;
+  /** Tooltip text (HTML `title`) */
   title?: string;
-}
+} & Omit<LucideProps, "ref">;
 
-export const Icon = ({ name, title, ...props }: IconProps) => {
-  const LucideIcon = iconComponents[name];
-  if (!LucideIcon) {
-    console.warn("Icon not found:", name);
-    return <AlertCircle {...props} />;
-  }
-  return <LucideIcon {...props} title={title} />;
+export const Icon = ({ name, title, className, ...rest }: IconProps) => {
+  const LucideIcon = iconComponents[name] ?? AlertCircle;
+
+  // IMPORTANT: do NOT pass `title` to the SVG; it’s not in LucideProps.
+  const svg = (
+    <LucideIcon
+      className={cn(className)}
+      aria-label={title}            // accessibility name
+      role="img"
+      {...rest}
+    />
+  );
+
+  // If a tooltip is desired, wrap the SVG in a span with a `title` attribute.
+  return title ? (
+    <span title={title} className="inline-block align-middle">
+      {svg}
+    </span>
+  ) : (
+    svg
+  );
 };
