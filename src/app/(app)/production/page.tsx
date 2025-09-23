@@ -90,7 +90,6 @@ export default function ProductionPage() {
               const totalElapsed = currentTask.elapsedSeconds + secondsSinceStart;
               // Note: We don't create an updatedTask here, we just use the calculation for display.
               // The state update is just to re-render. The actual elapsedSeconds is saved on pause/stop.
-              // To avoid constant re-renders if not needed, this could be optimized, but for a timer display, it's necessary.
               // We create a new object to ensure React detects the change for re-rendering.
                const displayTask = { ...currentTask };
                newTasks.set(taskName, displayTask);
@@ -339,5 +338,6 @@ export default function ProductionPage() {
     </>
   );
 }
+    
 
     
