@@ -104,13 +104,14 @@ const iconComponents = {
 
 interface IconProps extends LucideProps {
   name: IconName;
+  title?: string;
 }
 
-export const Icon = ({ name, ...props }: IconProps) => {
+export const Icon = ({ name, title, ...props }: IconProps) => {
   const LucideIcon = iconComponents[name];
   if (!LucideIcon) {
     console.warn("Icon not found:", name);
     return <AlertCircle {...props} />;
   }
-  return <LucideIcon {...props} />;
+  return <LucideIcon {...props} title={title} />;
 };
