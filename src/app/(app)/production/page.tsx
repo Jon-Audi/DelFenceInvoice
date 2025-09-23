@@ -36,7 +36,7 @@ const ALL_TASKS: ProductionTaskName[] = [
 // This is a new, separate component to manage its own timer state
 const ProductionTaskCard: React.FC<{
   task: ProductionTask;
-  onFieldChange: (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => void;
+  onFieldChange: (taskName: ProductionTaskName, field: 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => void;
   onToggleTimer: (task: ProductionTask) => void;
   onStopAndSave: (task: ProductionTask) => void;
   onSave: (task: ProductionTask) => void;
@@ -100,19 +100,7 @@ const ProductionTaskCard: React.FC<{
             />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label htmlFor={`cost-${task.id}`}>Labor Cost ($)</Label>
-            <Input 
-              id={`cost-${task.id}`} 
-              type="number" 
-              placeholder="0.00" 
-              value={task.cost ?? ''}
-              onChange={(e) => onFieldChange(task.name, 'cost', parseFloat(e.target.value) || undefined)}
-              onBlur={() => onSave(task)}
-            />
-          </div>
-          <div className="space-y-1">
+        <div className="space-y-1">
             <Label htmlFor={`material-${task.id}`}>Material Amt.</Label>
             <Input 
               id={`material-${task.id}`} 
@@ -121,7 +109,6 @@ const ProductionTaskCard: React.FC<{
               onChange={(e) => onFieldChange(task.name, 'materialAmount', e.target.value)}
               onBlur={() => onSave(task)}
             />
-          </div>
         </div>
         <div>
           <Label htmlFor={`notes-${task.id}`}>Notes</Label>
@@ -201,7 +188,7 @@ export default function ProductionPage() {
     }
   };
 
-  const handleFieldChange = (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => {
+  const handleFieldChange = (taskName: ProductionTaskName, field: 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => {
     setTasks(prevTasks => {
       const newTasks = new Map(prevTasks);
       const task = newTasks.get(taskName);
@@ -240,6 +227,7 @@ export default function ProductionPage() {
   const handleStopAndSave = async (task: ProductionTask) => {
      let finalTaskState = { ...task };
      let finalElapsedSeconds = task.elapsedSeconds;
+     const HOURLY_RATE = 20; // $20 per hour
 
     if (task.status === 'In Progress' && task.startTime) {
       const now = new Date();
@@ -253,11 +241,13 @@ export default function ProductionPage() {
       return;
     }
 
+    const calculatedCost = (finalElapsedSeconds / 3600) * HOURLY_RATE;
+
     const historyItem: Omit<ProductionHistoryItem, 'id'> = {
       taskName: finalTaskState.name,
       completedAt: new Date().toISOString(),
       elapsedSeconds: finalElapsedSeconds,
-      cost: finalTaskState.cost ?? null,
+      cost: parseFloat(calculatedCost.toFixed(2)),
       materialAmount: finalTaskState.materialAmount ?? null,
       notes: finalTaskState.notes ?? null,
       poNumber: finalTaskState.poNumber ?? null,
@@ -272,7 +262,6 @@ export default function ProductionPage() {
         name: task.name,
         status: 'Not Started',
         elapsedSeconds: 0,
-        cost: undefined,
         materialAmount: undefined,
         notes: undefined,
         startTime: undefined,
@@ -321,3 +310,4 @@ export default function ProductionPage() {
   );
 }
 
+    

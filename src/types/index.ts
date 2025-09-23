@@ -300,7 +300,6 @@ export interface ProductionTask {
   status: ProductionTaskStatus;
   startTime?: string; // ISO string
   elapsedSeconds: number;
-  cost?: number;
   materialAmount?: string;
   notes?: string;
   poNumber?: string;
@@ -311,9 +310,10 @@ export interface ProductionHistoryItem {
   taskName: ProductionTaskName;
   completedAt: string; // ISO string
   elapsedSeconds: number;
-  cost?: number;
-  materialAmount?: string;
-  notes?: string;
-  poNumber?: string;
+  cost: number | null;
+  materialAmount: string | null;
+  notes: string | null;
+  poNumber: string | null;
 }
 
+    
