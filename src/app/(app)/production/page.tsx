@@ -83,19 +83,12 @@ export default function ProductionPage() {
           setTasks(prevTasks => {
             const newTasks = new Map(prevTasks);
             const currentTask = newTasks.get(taskName);
-            if (currentTask && currentTask.status === 'In Progress' && currentTask.startTime) {
-              const now = new Date();
-              const start = new Date(currentTask.startTime);
-              const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
-              const totalElapsed = currentTask.elapsedSeconds + secondsSinceStart;
-              // Note: We don't create an updatedTask here, we just use the calculation for display.
-              // The state update is just to re-render. The actual elapsedSeconds is saved on pause/stop.
-              // We create a new object to ensure React detects the change for re-rendering.
-               const displayTask = { ...currentTask };
-               newTasks.set(taskName, displayTask);
-               return newTasks;
+            // We only need to trigger a re-render. The display calculation happens during render.
+            // Creating a new object for the specific task is key for React's change detection.
+            if (currentTask) {
+              newTasks.set(taskName, { ...currentTask }); 
             }
-            return prevTasks;
+            return newTasks;
           });
         }, 1000);
         intervalsRef.current.set(taskName, intervalId);
@@ -338,6 +331,4 @@ export default function ProductionPage() {
     </>
   );
 }
-    
 
-    
