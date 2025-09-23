@@ -291,23 +291,24 @@ export default function InvoicesPage() {
           }
         }
 
-        // Compute inventory deltas (no Firestore writes yet)
+        // Get a map of product IDs that currently exist.
+        const productIdsInState = new Set(products.map(p => p.id));
         const inventoryChanges = new Map<string, number>();
 
         if (originalInvoice) {
-          for (const item of originalInvoice.lineItems || []) {
-            if (item.productId && !item.isNonStock) {
-              const delta = item.isReturn ? -item.quantity : item.quantity; // revert old
-              inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
+            for (const item of originalInvoice.lineItems || []) {
+                if (item.productId && !item.isNonStock && productIdsInState.has(item.productId)) {
+                    const delta = item.isReturn ? -item.quantity : item.quantity;
+                    inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
+                }
             }
-          }
         }
 
         for (const item of invoiceDataFromDialog.lineItems || []) {
-          if (item.productId && !item.isNonStock) {
-            const delta = item.isReturn ? item.quantity : -item.quantity; // apply new
-            inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
-          }
+            if (item.productId && !item.isNonStock && productIdsInState.has(item.productId)) {
+                const delta = item.isReturn ? item.quantity : -item.quantity;
+                inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
+            }
         }
 
         const productIds = Array.from(inventoryChanges.keys());
@@ -373,6 +374,16 @@ export default function InvoicesPage() {
     }
   };
   
+  const handleSaveCustomerWrapper = (c: Omit<Customer, "id"> & { id?: string; }) => {
+    const id = c.id ?? "";
+    const fullCustomer: Customer = { ...c, id: id } as Customer;
+    // fire-and-forget to match the `()=>void` prop type
+    void handleSaveCustomer(fullCustomer).catch(err => {
+      console.error("Failed to save customer from invoice dialog:", err);
+      toast({ title: "Error", description: "Could not save customer.", variant: "destructive" });
+    });
+  };
+
   const handleSaveCustomer = async (customerToSave: Customer): Promise<string | void> => {
     const { id, ...customerData } = customerToSave;
     try {
@@ -1050,3 +1061,5 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
