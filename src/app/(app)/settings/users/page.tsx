@@ -42,9 +42,16 @@ export default function UsersSettingsPage() {
     // This example focuses on updating the Firestore user document.
     // A Firebase Function would be needed to securely manage Auth users.
     const { id, ...userData } = userToSave;
+
+    // Create a copy to modify for Firestore, ensuring no 'undefined' values.
+    const dataToSave: Omit<User, 'id'> = { ...userData };
+    if (dataToSave.lastLogin === undefined) {
+      delete (dataToSave as Partial<User>).lastLogin;
+    }
+
     try {
       const userDocRef = doc(db, 'users', id);
-      await setDoc(userDocRef, userData, { merge: true });
+      await setDoc(userDocRef, dataToSave, { merge: true });
       toast({
         title: "User Saved",
         description: `User ${userToSave.firstName} ${userToSave.lastName} has been saved.`,
