@@ -36,7 +36,7 @@ const ALL_TASKS: ProductionTaskName[] = [
 const formatElapsedTime = (totalSeconds: number): string => {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  const seconds = Math.floor(totalSeconds % 60); // Use Math.floor for clean integer seconds
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
@@ -52,18 +52,13 @@ export default function ProductionPage() {
     setIsLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'productionTasks'), (snapshot) => {
       const fetchedTasks = new Map<ProductionTaskName, ProductionTask>();
-      // Ensure all predefined tasks have an entry
       ALL_TASKS.forEach(taskName => {
         const doc = snapshot.docs.find(d => d.id === taskName);
         if (doc) {
           fetchedTasks.set(taskName, { id: doc.id, ...doc.data() } as ProductionTask);
         } else {
-          // Create a default task structure if not in Firestore
           fetchedTasks.set(taskName, {
-            id: taskName,
-            name: taskName,
-            status: 'Not Started',
-            elapsedSeconds: 0,
+            id: taskName, name: taskName, status: 'Not Started', elapsedSeconds: 0,
           });
         }
       });
@@ -83,15 +78,23 @@ export default function ProductionPage() {
 
   useEffect(() => {
     tasks.forEach((task, taskName) => {
-      if (task.status === 'In Progress' && !intervalsRef.current.has(taskName)) {
+      if (task.status === 'In Progress' && task.startTime && !intervalsRef.current.has(taskName)) {
         const intervalId = setInterval(() => {
           setTasks(prevTasks => {
             const newTasks = new Map(prevTasks);
             const currentTask = newTasks.get(taskName);
-            if (currentTask && currentTask.status === 'In Progress') {
-              const updatedTask = { ...currentTask, elapsedSeconds: currentTask.elapsedSeconds + 1 };
-              newTasks.set(taskName, updatedTask);
-              return newTasks;
+            if (currentTask && currentTask.status === 'In Progress' && currentTask.startTime) {
+              const now = new Date();
+              const start = new Date(currentTask.startTime);
+              const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
+              const totalElapsed = currentTask.elapsedSeconds + secondsSinceStart;
+              // Note: We don't create an updatedTask here, we just use the calculation for display.
+              // The state update is just to re-render. The actual elapsedSeconds is saved on pause/stop.
+              // To avoid constant re-renders if not needed, this could be optimized, but for a timer display, it's necessary.
+              // We create a new object to ensure React detects the change for re-rendering.
+               const displayTask = { ...currentTask };
+               newTasks.set(taskName, displayTask);
+               return newTasks;
             }
             return prevTasks;
           });
@@ -108,16 +111,17 @@ export default function ProductionPage() {
     };
   }, [tasks]);
 
+
   const handleTaskUpdate = async (task: ProductionTask) => {
     try {
       const taskRef = doc(db, 'productionTasks', task.id);
-      // Create a clean copy to avoid sending 'undefined' to Firestore
       const dataToSave: Partial<ProductionTask> = { ...task };
-      for (const key in dataToSave) {
+      // Clean up undefined fields before saving to Firestore
+      Object.keys(dataToSave).forEach(key => {
         if (dataToSave[key as keyof ProductionTask] === undefined) {
           delete dataToSave[key as keyof ProductionTask];
         }
-      }
+      });
       await setDoc(taskRef, dataToSave, { merge: true });
     } catch (error) {
       console.error(`Error saving task ${task.name}:`, error);
@@ -139,23 +143,53 @@ export default function ProductionPage() {
   const handleToggleTimer = (task: ProductionTask) => {
     let updatedTask: ProductionTask;
     if (task.status === 'In Progress') {
-      updatedTask = { ...task, status: 'Paused' };
-      // Stop interval (handled by useEffect)
-    } else { // 'Not Started' or 'Paused'
-      updatedTask = { ...task, status: 'In Progress', startTime: task.startTime || new Date().toISOString() };
-      // Start interval (handled by useEffect)
+      // Pausing the timer
+      const now = new Date();
+      const start = task.startTime ? new Date(task.startTime) : now;
+      const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
+      
+      updatedTask = { 
+        ...task, 
+        status: 'Paused',
+        elapsedSeconds: task.elapsedSeconds + secondsSinceStart,
+        startTime: undefined, // Clear start time on pause
+      };
+      
+      if (intervalsRef.current.has(task.name)) {
+        clearInterval(intervalsRef.current.get(task.name)!);
+        intervalsRef.current.delete(task.name);
+      }
+
+    } else { // 'Not Started' or 'Paused' -> starting the timer
+      updatedTask = { 
+        ...task, 
+        status: 'In Progress', 
+        startTime: new Date().toISOString(),
+      };
     }
     setTasks(prev => new Map(prev).set(task.name, updatedTask));
-    handleTaskUpdate(updatedTask); // Save status change immediately
+    handleTaskUpdate(updatedTask);
   };
   
   const handleStopAndSave = (task: ProductionTask) => {
-    if (task.status === 'In Progress') {
-      intervalsRef.current.delete(task.name); // Clean up interval reference
+     let finalTaskState = { ...task };
+
+    if (task.status === 'In Progress' && task.startTime) {
+      const now = new Date();
+      const start = new Date(task.startTime);
+      const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
+      finalTaskState.elapsedSeconds += secondsSinceStart;
+      finalTaskState.startTime = undefined;
+
+      if (intervalsRef.current.has(task.name)) {
+        clearInterval(intervalsRef.current.get(task.name)!);
+        intervalsRef.current.delete(task.name);
+      }
     }
-    const updatedTask = { ...task, status: 'Completed' };
-    setTasks(prev => new Map(prev).set(task.name, updatedTask));
-    handleTaskUpdate(updatedTask);
+    
+    finalTaskState.status = 'Completed';
+    setTasks(prev => new Map(prev).set(task.name, finalTaskState));
+    handleTaskUpdate(finalTaskState);
     toast({ title: 'Task Completed', description: `Task "${task.name}" has been marked as complete and saved.` });
   };
   
@@ -199,78 +233,88 @@ export default function ProductionPage() {
     <>
       <PageHeader title="Production Tracking" description="Time and track costs for standard fabrication tasks." />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {sortedTasks.map((task) => (
-          <Card key={task.id} className={cn("flex flex-col", task.status === 'In Progress' && 'border-primary ring-2 ring-primary ring-offset-2')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Icon name="Timer" />
-                {task.name}
-              </CardTitle>
-              <CardDescription>
-                Status: <span className={cn("font-semibold", 
-                  task.status === 'In Progress' && 'text-primary',
-                  task.status === 'Completed' && 'text-green-600',
-                  task.status === 'Paused' && 'text-amber-600'
-                )}>{task.status}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow space-y-4">
-              <div className="text-center bg-muted rounded-lg p-4">
-                <div className="text-5xl font-mono tracking-tighter">
-                  {formatElapsedTime(task.elapsedSeconds)}
+        {sortedTasks.map((task) => {
+          let displaySeconds = task.elapsedSeconds;
+          if (task.status === 'In Progress' && task.startTime) {
+              const now = new Date();
+              const start = new Date(task.startTime);
+              const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
+              displaySeconds += secondsSinceStart;
+          }
+
+          return (
+            <Card key={task.id} className={cn("flex flex-col", task.status === 'In Progress' && 'border-primary ring-2 ring-primary ring-offset-2')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Icon name="Timer" />
+                  {task.name}
+                </CardTitle>
+                <CardDescription>
+                  Status: <span className={cn("font-semibold", 
+                    task.status === 'In Progress' && 'text-primary',
+                    task.status === 'Completed' && 'text-green-600',
+                    task.status === 'Paused' && 'text-amber-600'
+                  )}>{task.status}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-grow space-y-4">
+                <div className="text-center bg-muted rounded-lg p-4">
+                  <div className="text-5xl font-mono tracking-tighter">
+                    {formatElapsedTime(displaySeconds)}
+                  </div>
+                  <Label className="text-xs text-muted-foreground">HH:MM:SS</Label>
                 </div>
-                <Label className="text-xs text-muted-foreground">HH:MM:SS</Label>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor={`cost-${task.id}`}>Cost ($)</Label>
-                  <Input 
-                    id={`cost-${task.id}`} 
-                    type="number" 
-                    placeholder="0.00" 
-                    value={task.cost ?? ''}
-                    onChange={(e) => handleFieldChange(task.name, 'cost', parseFloat(e.target.value) || undefined)}
-                    onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor={`cost-${task.id}`}>Cost ($)</Label>
+                    <Input 
+                      id={`cost-${task.id}`} 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={task.cost ?? ''}
+                      onChange={(e) => handleFieldChange(task.name, 'cost', parseFloat(e.target.value) || undefined)}
+                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`material-${task.id}`}>Material Amt.</Label>
+                    <Input 
+                      id={`material-${task.id}`} 
+                      placeholder="e.g., 10 sections" 
+                      value={task.materialAmount ?? ''}
+                      onChange={(e) => handleFieldChange(task.name, 'materialAmount', e.target.value)}
+                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor={`notes-${task.id}`}>Notes</Label>
+                  <Textarea 
+                      id={`notes-${task.id}`} 
+                      placeholder="Add any relevant notes..."
+                      value={task.notes ?? ''}
+                      onChange={(e) => handleFieldChange(task.name, 'notes', e.target.value)}
+                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
+                      rows={2}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`material-${task.id}`}>Material Amt.</Label>
-                  <Input 
-                    id={`material-${task.id}`} 
-                    placeholder="e.g., 10 sections" 
-                    value={task.materialAmount ?? ''}
-                    onChange={(e) => handleFieldChange(task.name, 'materialAmount', e.target.value)}
-                    onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor={`notes-${task.id}`}>Notes</Label>
-                <Textarea 
-                    id={`notes-${task.id}`} 
-                    placeholder="Add any relevant notes..."
-                    value={task.notes ?? ''}
-                    onChange={(e) => handleFieldChange(task.name, 'notes', e.target.value)}
-                    onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
-                    rows={2}
-                />
-              </div>
-            </CardContent>
-            <CardFooter className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={() => handleToggleTimer(task)} disabled={task.status === 'Completed'}>
-                {task.status === 'In Progress' ? <Icon name="Pause" className="mr-2" /> : <Icon name="Play" className="mr-2" />}
-                {task.status === 'In Progress' ? 'Pause' : 'Start'}
-              </Button>
-              <Button onClick={() => handleStopAndSave(task)} disabled={task.status === 'Not Started' || task.status === 'Completed'}>
-                <Icon name="Check" className="mr-2" />
-                Stop & Save
-              </Button>
-               <Button variant="destructive" className="col-span-2" onClick={() => setTaskToReset(task)} disabled={task.status === 'Not Started' && task.elapsedSeconds === 0}>
-                <Icon name="Trash2" className="mr-2"/> Reset Task
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+              </CardContent>
+              <CardFooter className="grid grid-cols-2 gap-2">
+                <Button variant="outline" onClick={() => handleToggleTimer(task)} disabled={task.status === 'Completed'}>
+                  {task.status === 'In Progress' ? <Icon name="Pause" className="mr-2" /> : <Icon name="Play" className="mr-2" />}
+                  {task.status === 'In Progress' ? 'Pause' : 'Start'}
+                </Button>
+                <Button onClick={() => handleStopAndSave(task)} disabled={task.status === 'Not Started' || task.status === 'Completed'}>
+                  <Icon name="Check" className="mr-2" />
+                  Stop & Save
+                </Button>
+                 <Button variant="destructive" className="col-span-2" onClick={() => setTaskToReset(task)} disabled={task.status === 'Not Started' && task.elapsedSeconds === 0}>
+                  <Icon name="Trash2" className="mr-2"/> Reset Task
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
       
        {taskToReset && (
