@@ -119,6 +119,8 @@ export default function ProductsPage() {
       price: restOfProductData.price,
       markupPercentage: restOfProductData.markupPercentage,
       quantityInStock: restOfProductData.quantityInStock || 0,
+      isAssembly: restOfProductData.isAssembly || false,
+      components: restOfProductData.components || [],
     };
 
     if (restOfProductData.description !== undefined) {
@@ -769,6 +771,7 @@ export default function ProductsPage() {
               </Button>
             }
             onSave={handleSaveProduct}
+            allProducts={products}
             productCategories={productCategories}
             onAddNewCategory={handleAddNewCategory}
           />
@@ -786,6 +789,7 @@ export default function ProductsPage() {
       </PageHeader>
       <ProductTable 
         groupedProducts={groupedProducts} 
+        allProducts={products}
         onSave={handleSaveProduct} 
         onDelete={handleDeleteProduct}
         productCategories={productCategories}

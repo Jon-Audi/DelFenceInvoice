@@ -22,6 +22,12 @@ export type PermissionKey =
   | 'view_packing_slips' // New permission
   | 'view_pricing'; // New granular permission
 
+export interface AssemblyComponent {
+  productId: string;
+  productName: string; // Denormalized for easier display
+  quantity: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -32,6 +38,8 @@ export interface Product {
   markupPercentage: number;
   description?: string;
   quantityInStock?: number; // Added for inventory tracking
+  isAssembly?: boolean; // New field for assemblies
+  components?: AssemblyComponent[]; // New field for assembly components
 }
 
 export interface EmailContact {

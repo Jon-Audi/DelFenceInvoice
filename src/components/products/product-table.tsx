@@ -54,6 +54,7 @@ import { cn } from '@/lib/utils';
 
 interface ProductTableProps {
   groupedProducts: Map<string, Product[]>;
+  allProducts: Product[]; // Need all products for assemblies
   onSave: (product: Product) => void;
   onDelete: (productId: string) => void;
   productCategories: string[];
@@ -62,11 +63,12 @@ interface ProductTableProps {
   onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
   onDeleteCategory: (categoryName: string) => void;
   onUpdateStock: (product: Product) => void;
-  onBulkUpdate: (products: Product[]) => Promise<void>; // New prop for bulk updates
+  onBulkUpdate: (products: Product[]) => Promise<void>;
 }
 
 export function ProductTable({ 
   groupedProducts, 
+  allProducts,
   onSave, 
   onDelete, 
   productCategories, 
@@ -75,7 +77,7 @@ export function ProductTable({
   onApplyCategoryMarkup,
   onDeleteCategory,
   onUpdateStock,
-  onBulkUpdate, // Destructure new prop
+  onBulkUpdate,
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null);
@@ -83,7 +85,6 @@ export function ProductTable({
   const [isMarkupDialogOpen, setIsMarkupDialogOpen] = React.useState(false);
   const [newMarkupValue, setNewMarkupValue] = React.useState<string>("");
   
-  // State for the new bulk price editor
   const [categoryForBulkEdit, setCategoryForBulkEdit] = React.useState<string | null>(null);
   const [isBulkPriceEditorOpen, setIsBulkPriceEditorOpen] = React.useState(false);
 
@@ -221,7 +222,10 @@ export function ProductTable({
                     <TableBody>
                       {productsInCategory.map((product) => (
                         <TableRow key={product.id} className="hover:bg-muted/30">
-                          <TableCell className="font-medium text-card-foreground">{product.name}</TableCell>
+                          <TableCell className="font-medium text-card-foreground">
+                            {product.name}
+                            {product.isAssembly && <Icon name="Settings" className="h-3 w-3 ml-2 inline-block text-muted-foreground" title="This is an assembly" />}
+                          </TableCell>
                           <TableCell className="text-card-foreground/90">{product.unit}</TableCell>
                           <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.cost)}</TableCell>
                           <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.price)}</TableCell>
@@ -245,6 +249,7 @@ export function ProductTable({
                                 </DropdownMenuItem>
                                 <ProductDialog
                                   product={product}
+                                  allProducts={allProducts}
                                   triggerButton={
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                       <Icon name="Edit" className="mr-2 h-4 w-4" /> Edit

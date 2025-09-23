@@ -15,13 +15,14 @@ import {
 
 interface ProductDialogProps {
   product?: Product;
+  allProducts?: Product[]; // Make this optional
   triggerButton: React.ReactElement;
   onSave?: (product: Product) => void;
   productCategories: string[];
   onAddNewCategory: (category: string) => void;
 }
 
-export function ProductDialog({ product, triggerButton, onSave, productCategories, onAddNewCategory }: ProductDialogProps) {
+export function ProductDialog({ product, allProducts, triggerButton, onSave, productCategories, onAddNewCategory }: ProductDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (data: Omit<Product, 'id'>) => {
@@ -50,6 +51,7 @@ export function ProductDialog({ product, triggerButton, onSave, productCategorie
         </DialogHeader>
         <ProductForm 
           product={product} 
+          allProducts={allProducts}
           onSubmit={handleSubmit} 
           onClose={() => setOpen(false)}
           productCategories={productCategories}
