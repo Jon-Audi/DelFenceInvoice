@@ -276,3 +276,23 @@ export interface SalesByCustomerReportItem {
   totalSales: number;
   invoiceCount: number;
 }
+
+export type ProductionTaskName = 
+  | 'Building wood sections'
+  | 'Building vinyl sections'
+  | 'Wiring up chain link gates'
+  | 'Welding chain link gates'
+  | 'Cutting pickets';
+
+export type ProductionTaskStatus = 'Not Started' | 'In Progress' | 'Paused' | 'Completed';
+
+export interface ProductionTask {
+  id: string; // Corresponds to the name for singleton tasks
+  name: ProductionTaskName;
+  status: ProductionTaskStatus;
+  startTime?: string; // ISO string
+  elapsedSeconds: number;
+  cost?: number;
+  materialAmount?: string;
+  notes?: string;
+}

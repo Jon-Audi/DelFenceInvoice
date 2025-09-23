@@ -42,6 +42,11 @@ import {
   PackageCheck,
   ClipboardList,
   Copy,
+  Construction,
+  Timer,
+  Play,
+  Pause,
+  StopCircle,
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -90,6 +95,11 @@ const iconComponents = {
   PackageCheck,
   ClipboardList,
   Copy,
+  Construction,
+  Timer,
+  Play,
+  Pause,
+  StopCircle,
 };
 
 interface IconProps extends LucideProps {
