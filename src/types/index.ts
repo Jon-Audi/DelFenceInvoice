@@ -305,3 +305,15 @@ export interface ProductionTask {
   notes?: string;
   poNumber?: string;
 }
+
+export interface ProductionHistoryItem {
+  id: string;
+  taskName: ProductionTaskName;
+  completedAt: string; // ISO string
+  elapsedSeconds: number;
+  cost?: number;
+  materialAmount?: string;
+  notes?: string;
+  poNumber?: string;
+}
+

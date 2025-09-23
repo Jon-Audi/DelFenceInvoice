@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { ProductionTask, ProductionTaskName } from '@/types';
+import type { ProductionTask, ProductionTaskName, ProductionHistoryItem } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, addDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -39,9 +39,8 @@ const ProductionTaskCard: React.FC<{
   onFieldChange: (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => void;
   onToggleTimer: (task: ProductionTask) => void;
   onStopAndSave: (task: ProductionTask) => void;
-  onReset: (task: ProductionTask) => void;
   onSave: (task: ProductionTask) => void;
-}> = ({ task, onFieldChange, onToggleTimer, onStopAndSave, onReset, onSave }) => {
+}> = ({ task, onFieldChange, onToggleTimer, onStopAndSave, onSave }) => {
   const [displaySeconds, setDisplaySeconds] = useState(task.elapsedSeconds);
 
   useEffect(() => {
@@ -142,12 +141,9 @@ const ProductionTaskCard: React.FC<{
           {task.status === 'In Progress' ? <Icon name="Pause" className="mr-2" /> : <Icon name="Play" className="mr-2" />}
           {task.status === 'In Progress' ? 'Pause' : 'Start'}
         </Button>
-        <Button onClick={() => onStopAndSave(task)} disabled={task.status === 'Not Started' || task.status === 'Completed'}>
+        <Button onClick={() => onStopAndSave(task)} disabled={task.status === 'Not Started'}>
           <Icon name="Check" className="mr-2" />
           Stop & Save
-        </Button>
-         <Button variant="destructive" className="col-span-2" onClick={() => onReset(task)} disabled={task.status === 'Not Started' && task.elapsedSeconds === 0}>
-          <Icon name="Trash2" className="mr-2"/> Reset Task
         </Button>
       </CardFooter>
     </Card>
@@ -159,7 +155,6 @@ export default function ProductionPage() {
   const [tasks, setTasks] = useState<Map<ProductionTaskName, ProductionTask>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [taskToReset, setTaskToReset] = useState<ProductionTask | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -243,41 +238,57 @@ export default function ProductionPage() {
     handleTaskUpdate(updatedTask);
   };
   
-  const handleStopAndSave = (task: ProductionTask) => {
+  const handleStopAndSave = async (task: ProductionTask) => {
      let finalTaskState = { ...task };
+     let finalElapsedSeconds = task.elapsedSeconds;
 
     if (task.status === 'In Progress' && task.startTime) {
       const now = new Date();
       const start = new Date(task.startTime);
       const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
-      finalTaskState.elapsedSeconds += secondsSinceStart;
-      finalTaskState.startTime = undefined;
+      finalElapsedSeconds += secondsSinceStart;
     }
-    
-    finalTaskState.status = 'Completed';
-    setTasks(prev => new Map(prev).set(task.name, finalTaskState));
-    handleTaskUpdate(finalTaskState);
-    toast({ title: 'Task Completed', description: `Task "${task.name}" has been marked as complete and saved.` });
-  };
-  
-  const handleResetTask = async () => {
-    if (!taskToReset) return;
-    const taskName = taskToReset.name;
-    const freshTask: ProductionTask = {
-      id: taskName,
-      name: taskName,
-      status: 'Not Started',
-      elapsedSeconds: 0,
-      cost: undefined,
-      materialAmount: undefined,
-      notes: undefined,
-      startTime: undefined,
-      poNumber: undefined,
+
+    if (finalElapsedSeconds === 0) {
+      toast({ title: 'No Time Recorded', description: 'Cannot save a task with zero elapsed time.', variant: 'default' });
+      return;
+    }
+
+    // 1. Create a historical record
+    const historyItem: Omit<ProductionHistoryItem, 'id'> = {
+      taskName: finalTaskState.name,
+      completedAt: new Date().toISOString(),
+      elapsedSeconds: finalElapsedSeconds,
+      cost: finalTaskState.cost,
+      materialAmount: finalTaskState.materialAmount,
+      notes: finalTaskState.notes,
+      poNumber: finalTaskState.poNumber,
     };
-    setTasks(prev => new Map(prev).set(taskName, freshTask));
-    await handleTaskUpdate(freshTask);
-    toast({ title: "Task Reset", description: `Task "${taskName}" has been reset.` });
-    setTaskToReset(null);
+
+    try {
+      await addDoc(collection(db, 'productionHistory'), historyItem);
+      
+      // 2. Reset the main task card
+      const freshTask: ProductionTask = {
+        id: task.name,
+        name: task.name,
+        status: 'Not Started',
+        elapsedSeconds: 0,
+        cost: undefined,
+        materialAmount: undefined,
+        notes: undefined,
+        startTime: undefined,
+        poNumber: undefined,
+      };
+      setTasks(prev => new Map(prev).set(task.name, freshTask));
+      await handleTaskUpdate(freshTask);
+
+      toast({ title: 'Task Saved', description: `Task "${task.name}" has been saved to history and reset.` });
+
+    } catch(error) {
+      console.error("Error saving task history:", error);
+      toast({ title: "Save Error", description: "Could not save task to history.", variant: "destructive" });
+    }
   };
 
 
@@ -304,32 +315,10 @@ export default function ProductionPage() {
             onFieldChange={handleFieldChange}
             onToggleTimer={handleToggleTimer}
             onStopAndSave={handleStopAndSave}
-            onReset={() => setTaskToReset(task)}
             onSave={handleTaskUpdate}
           />
         ))}
       </div>
-      
-       {taskToReset && (
-        <AlertDialog open={!!taskToReset} onOpenChange={(isOpen) => !isOpen && setTaskToReset(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently reset all data for the task 
-                "{taskToReset.name}", including elapsed time, cost, materials, and notes.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setTaskToReset(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleResetTask} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Reset Task
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
     </>
   );
 }
-

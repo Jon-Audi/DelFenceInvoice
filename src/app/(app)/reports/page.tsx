@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -14,7 +15,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, CustomerStatementReportData, CustomerStatementItem, SalesByCustomerReportItem, Product } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, CustomerStatementReportData, CustomerStatementItem, SalesByCustomerReportItem, Product, ProductionHistoryItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
@@ -24,13 +25,14 @@ import { PrintablePaymentByTypeReport } from '@/components/reports/printable-pay
 import { PrintableProfitReport } from '@/components/reports/printable-profit-report';
 import { PrintableCustomerStatement } from '@/components/reports/printable-customer-statement';
 import { PrintableSalesByCustomerReport } from '@/components/reports/printable-sales-by-customer-report';
+import { PrintableProductionReport } from '@/components/reports/printable-production-report'; // New Import
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
@@ -143,7 +145,19 @@ export default function ReportsPage() {
     try {
       let data: any[] | any = [];
       
-      if (reportType === 'salesByCustomer') {
+      if (reportType === 'production') {
+        currentReportTitle = `Production History Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
+        const historyRef = collection(db, 'productionHistory');
+        const q = query(historyRef, 
+                        where('completedAt', '>=', rangeStart.toISOString()), 
+                        where('completedAt', '<=', rangeEnd.toISOString()),
+                        orderBy('completedAt', 'desc'));
+        const historySnapshot = await getDocs(q);
+        const fetchedItems: ProductionHistoryItem[] = [];
+        historySnapshot.forEach(docSnap => fetchedItems.push({ id: docSnap.id, ...docSnap.data() } as ProductionHistoryItem));
+        data = fetchedItems;
+      }
+      else if (reportType === 'salesByCustomer') {
         currentReportTitle = `Sales by Customer (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
@@ -399,7 +413,7 @@ export default function ReportsPage() {
             }
           }
         });
-        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.documentDate).getTime());
+        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.date).getTime());
       
       } else if (reportType === 'paymentByType') {
         currentReportTitle = `Payments by Type (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
@@ -658,10 +672,44 @@ export default function ReportsPage() {
     }
     return null;
   };
+  
+  const formatElapsedTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
 
   const renderReportTable = () => {
     if (!generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)) {
         return <p className="text-center text-muted-foreground py-4">No data to display for the selected criteria.</p>;
+    }
+    
+    if (reportType === 'production') {
+      return (
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Task Name</TableHead>
+            <TableHead>PO # / Job</TableHead>
+            <TableHead>Completed At</TableHead>
+            <TableHead>Time Elapsed</TableHead>
+            <TableHead>Cost</TableHead>
+            <TableHead>Material Amt.</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {(generatedReportData as ProductionHistoryItem[]).map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.taskName}</TableCell>
+                <TableCell>{item.poNumber || 'N/A'}</TableCell>
+                <TableCell>{format(new Date(item.completedAt), 'P p')}</TableCell>
+                <TableCell>{formatElapsedTime(item.elapsedSeconds)}</TableCell>
+                <TableCell>{item.cost ? `$${item.cost.toFixed(2)}` : 'N/A'}</TableCell>
+                <TableCell>{item.materialAmount || 'N/A'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )
     }
 
     if (reportType === 'salesByCustomer') {
@@ -872,10 +920,11 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-9">
+            <TabsList className="grid w-full grid-cols-5 sm:grid-cols-10">
               <TabsTrigger value="sales">Sales</TabsTrigger>
               <TabsTrigger value="salesByCustomer">Sales by Cust.</TabsTrigger>
               <TabsTrigger value="profitability">Profitability</TabsTrigger>
+              <TabsTrigger value="production">Production</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="statement">Statement</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
@@ -982,6 +1031,9 @@ export default function ReportsPage() {
       )}
 
       <div style={{ display: 'none' }}>
+        {reportToPrintData && reportToPrintData.reportType === 'production' && (
+            <PrintableProductionReport ref={printRef} reportItems={reportToPrintData.data as ProductionHistoryItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
+        )}
         {reportToPrintData && reportToPrintData.reportType === 'salesByCustomer' && (
             <PrintableSalesByCustomerReport ref={printRef} reportItems={reportToPrintData.data as SalesByCustomerReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
         )}
@@ -1013,5 +1065,3 @@ export default function ReportsPage() {
     </>
   );
 }
-
-    
