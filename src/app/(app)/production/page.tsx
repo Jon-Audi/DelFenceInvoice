@@ -44,7 +44,6 @@ const ProductionTaskCard: React.FC<{
   const [displaySeconds, setDisplaySeconds] = useState(task.elapsedSeconds);
 
   useEffect(() => {
-    // Reset display seconds when the underlying task data changes
     setDisplaySeconds(task.elapsedSeconds);
 
     if (task.status === 'In Progress' && task.startTime) {
@@ -254,15 +253,14 @@ export default function ProductionPage() {
       return;
     }
 
-    // 1. Create a historical record
     const historyItem: Omit<ProductionHistoryItem, 'id'> = {
       taskName: finalTaskState.name,
       completedAt: new Date().toISOString(),
       elapsedSeconds: finalElapsedSeconds,
-      cost: finalTaskState.cost,
-      materialAmount: finalTaskState.materialAmount,
-      notes: finalTaskState.notes,
-      poNumber: finalTaskState.poNumber,
+      cost: finalTaskState.cost ?? null,
+      materialAmount: finalTaskState.materialAmount ?? null,
+      notes: finalTaskState.notes ?? null,
+      poNumber: finalTaskState.poNumber ?? null,
     };
 
     try {
@@ -322,3 +320,4 @@ export default function ProductionPage() {
     </>
   );
 }
+
