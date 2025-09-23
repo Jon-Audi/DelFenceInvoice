@@ -33,20 +33,121 @@ const ALL_TASKS: ProductionTaskName[] = [
   'Cutting pickets'
 ];
 
-const formatElapsedTime = (totalSeconds: number): string => {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.floor(totalSeconds % 60); // Use Math.floor for clean integer seconds
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+// This is a new, separate component to manage its own timer state
+const ProductionTaskCard: React.FC<{
+  task: ProductionTask;
+  onFieldChange: (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes', value: string | number) => void;
+  onToggleTimer: (task: ProductionTask) => void;
+  onStopAndSave: (task: ProductionTask) => void;
+  onReset: (task: ProductionTask) => void;
+  onSave: (task: ProductionTask) => void;
+}> = ({ task, onFieldChange, onToggleTimer, onStopAndSave, onReset, onSave }) => {
+  const [displaySeconds, setDisplaySeconds] = useState(task.elapsedSeconds);
+
+  useEffect(() => {
+    // Reset display seconds when the underlying task data changes
+    setDisplaySeconds(task.elapsedSeconds);
+
+    if (task.status === 'In Progress' && task.startTime) {
+      const start = new Date(task.startTime).getTime();
+      
+      const interval = setInterval(() => {
+        const now = Date.now();
+        const elapsedSinceStart = (now - start) / 1000;
+        setDisplaySeconds(task.elapsedSeconds + elapsedSinceStart);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [task]);
+  
+  const formatElapsedTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  return (
+    <Card className={cn("flex flex-col", task.status === 'In Progress' && 'border-primary ring-2 ring-primary ring-offset-2')}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon name="Timer" />
+          {task.name}
+        </CardTitle>
+        <CardDescription>
+          Status: <span className={cn("font-semibold", 
+            task.status === 'In Progress' && 'text-primary',
+            task.status === 'Completed' && 'text-green-600',
+            task.status === 'Paused' && 'text-amber-600'
+          )}>{task.status}</span>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex-grow space-y-4">
+        <div className="text-center bg-muted rounded-lg p-4">
+          <div className="text-5xl font-mono tracking-tighter">
+            {formatElapsedTime(displaySeconds)}
+          </div>
+          <Label className="text-xs text-muted-foreground">HH:MM:SS</Label>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor={`cost-${task.id}`}>Cost ($)</Label>
+            <Input 
+              id={`cost-${task.id}`} 
+              type="number" 
+              placeholder="0.00" 
+              value={task.cost ?? ''}
+              onChange={(e) => onFieldChange(task.name, 'cost', parseFloat(e.target.value) || undefined)}
+              onBlur={() => onSave(task)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`material-${task.id}`}>Material Amt.</Label>
+            <Input 
+              id={`material-${task.id}`} 
+              placeholder="e.g., 10 sections" 
+              value={task.materialAmount ?? ''}
+              onChange={(e) => onFieldChange(task.name, 'materialAmount', e.target.value)}
+              onBlur={() => onSave(task)}
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor={`notes-${task.id}`}>Notes</Label>
+          <Textarea 
+              id={`notes-${task.id}`} 
+              placeholder="Add any relevant notes..."
+              value={task.notes ?? ''}
+              onChange={(e) => onFieldChange(task.name, 'notes', e.target.value)}
+              onBlur={() => onSave(task)}
+              rows={2}
+          />
+        </div>
+      </CardContent>
+      <CardFooter className="grid grid-cols-2 gap-2">
+        <Button variant="outline" onClick={() => onToggleTimer(task)} disabled={task.status === 'Completed'}>
+          {task.status === 'In Progress' ? <Icon name="Pause" className="mr-2" /> : <Icon name="Play" className="mr-2" />}
+          {task.status === 'In Progress' ? 'Pause' : 'Start'}
+        </Button>
+        <Button onClick={() => onStopAndSave(task)} disabled={task.status === 'Not Started' || task.status === 'Completed'}>
+          <Icon name="Check" className="mr-2" />
+          Stop & Save
+        </Button>
+         <Button variant="destructive" className="col-span-2" onClick={() => onReset(task)} disabled={task.status === 'Not Started' && task.elapsedSeconds === 0}>
+          <Icon name="Trash2" className="mr-2"/> Reset Task
+        </Button>
+      </CardFooter>
+    </Card>
+  );
 };
+
 
 export default function ProductionPage() {
   const [tasks, setTasks] = useState<Map<ProductionTaskName, ProductionTask>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const intervalsRef = useRef<Map<ProductionTaskName, NodeJS.Timeout>>(new Map());
   const [taskToReset, setTaskToReset] = useState<ProductionTask | null>(null);
-
 
   useEffect(() => {
     setIsLoading(true);
@@ -70,50 +171,22 @@ export default function ProductionPage() {
       setIsLoading(false);
     });
 
-    return () => {
-      unsubscribe();
-      intervalsRef.current.forEach(intervalId => clearInterval(intervalId));
-    };
+    return () => unsubscribe();
   }, [toast]);
-
-  useEffect(() => {
-    tasks.forEach((task, taskName) => {
-      if (task.status === 'In Progress' && task.startTime && !intervalsRef.current.has(taskName)) {
-        const intervalId = setInterval(() => {
-          setTasks(prevTasks => {
-            const newTasks = new Map(prevTasks);
-            const currentTask = newTasks.get(taskName);
-            // We only need to trigger a re-render. The display calculation happens during render.
-            // Creating a new object for the specific task is key for React's change detection.
-            if (currentTask) {
-              newTasks.set(taskName, { ...currentTask }); 
-            }
-            return newTasks;
-          });
-        }, 1000);
-        intervalsRef.current.set(taskName, intervalId);
-      } else if (task.status !== 'In Progress' && intervalsRef.current.has(taskName)) {
-        clearInterval(intervalsRef.current.get(taskName)!);
-        intervalsRef.current.delete(taskName);
-      }
-    });
-
-    return () => {
-      intervalsRef.current.forEach(intervalId => clearInterval(intervalId));
-    };
-  }, [tasks]);
 
 
   const handleTaskUpdate = async (task: ProductionTask) => {
     try {
       const taskRef = doc(db, 'productionTasks', task.id);
+      
       const dataToSave: Partial<ProductionTask> = { ...task };
-      // Clean up undefined fields before saving to Firestore
-      Object.keys(dataToSave).forEach(key => {
-        if (dataToSave[key as keyof ProductionTask] === undefined) {
-          delete dataToSave[key as keyof ProductionTask];
+      Object.keys(dataToSave).forEach(keyStr => {
+        const key = keyStr as keyof ProductionTask;
+        if (dataToSave[key] === undefined) {
+          delete dataToSave[key];
         }
       });
+      
       await setDoc(taskRef, dataToSave, { merge: true });
     } catch (error) {
       console.error(`Error saving task ${task.name}:`, error);
@@ -135,7 +208,6 @@ export default function ProductionPage() {
   const handleToggleTimer = (task: ProductionTask) => {
     let updatedTask: ProductionTask;
     if (task.status === 'In Progress') {
-      // Pausing the timer
       const now = new Date();
       const start = task.startTime ? new Date(task.startTime) : now;
       const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
@@ -144,15 +216,10 @@ export default function ProductionPage() {
         ...task, 
         status: 'Paused',
         elapsedSeconds: task.elapsedSeconds + secondsSinceStart,
-        startTime: undefined, // Clear start time on pause
+        startTime: undefined, 
       };
-      
-      if (intervalsRef.current.has(task.name)) {
-        clearInterval(intervalsRef.current.get(task.name)!);
-        intervalsRef.current.delete(task.name);
-      }
 
-    } else { // 'Not Started' or 'Paused' -> starting the timer
+    } else {
       updatedTask = { 
         ...task, 
         status: 'In Progress', 
@@ -172,11 +239,6 @@ export default function ProductionPage() {
       const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
       finalTaskState.elapsedSeconds += secondsSinceStart;
       finalTaskState.startTime = undefined;
-
-      if (intervalsRef.current.has(task.name)) {
-        clearInterval(intervalsRef.current.get(task.name)!);
-        intervalsRef.current.delete(task.name);
-      }
     }
     
     finalTaskState.status = 'Completed';
@@ -198,10 +260,6 @@ export default function ProductionPage() {
       notes: undefined,
       startTime: undefined,
     };
-    if (intervalsRef.current.has(taskName)) {
-      clearInterval(intervalsRef.current.get(taskName)!);
-      intervalsRef.current.delete(taskName);
-    }
     setTasks(prev => new Map(prev).set(taskName, freshTask));
     await handleTaskUpdate(freshTask);
     toast({ title: "Task Reset", description: `Task "${taskName}" has been reset.` });
@@ -225,88 +283,17 @@ export default function ProductionPage() {
     <>
       <PageHeader title="Production Tracking" description="Time and track costs for standard fabrication tasks." />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {sortedTasks.map((task) => {
-          let displaySeconds = task.elapsedSeconds;
-          if (task.status === 'In Progress' && task.startTime) {
-              const now = new Date();
-              const start = new Date(task.startTime);
-              const secondsSinceStart = (now.getTime() - start.getTime()) / 1000;
-              displaySeconds += secondsSinceStart;
-          }
-
-          return (
-            <Card key={task.id} className={cn("flex flex-col", task.status === 'In Progress' && 'border-primary ring-2 ring-primary ring-offset-2')}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Icon name="Timer" />
-                  {task.name}
-                </CardTitle>
-                <CardDescription>
-                  Status: <span className={cn("font-semibold", 
-                    task.status === 'In Progress' && 'text-primary',
-                    task.status === 'Completed' && 'text-green-600',
-                    task.status === 'Paused' && 'text-amber-600'
-                  )}>{task.status}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow space-y-4">
-                <div className="text-center bg-muted rounded-lg p-4">
-                  <div className="text-5xl font-mono tracking-tighter">
-                    {formatElapsedTime(displaySeconds)}
-                  </div>
-                  <Label className="text-xs text-muted-foreground">HH:MM:SS</Label>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor={`cost-${task.id}`}>Cost ($)</Label>
-                    <Input 
-                      id={`cost-${task.id}`} 
-                      type="number" 
-                      placeholder="0.00" 
-                      value={task.cost ?? ''}
-                      onChange={(e) => handleFieldChange(task.name, 'cost', parseFloat(e.target.value) || undefined)}
-                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={`material-${task.id}`}>Material Amt.</Label>
-                    <Input 
-                      id={`material-${task.id}`} 
-                      placeholder="e.g., 10 sections" 
-                      value={task.materialAmount ?? ''}
-                      onChange={(e) => handleFieldChange(task.name, 'materialAmount', e.target.value)}
-                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor={`notes-${task.id}`}>Notes</Label>
-                  <Textarea 
-                      id={`notes-${task.id}`} 
-                      placeholder="Add any relevant notes..."
-                      value={task.notes ?? ''}
-                      onChange={(e) => handleFieldChange(task.name, 'notes', e.target.value)}
-                      onBlur={() => handleTaskUpdate(tasks.get(task.name)!)}
-                      rows={2}
-                  />
-                </div>
-              </CardContent>
-              <CardFooter className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => handleToggleTimer(task)} disabled={task.status === 'Completed'}>
-                  {task.status === 'In Progress' ? <Icon name="Pause" className="mr-2" /> : <Icon name="Play" className="mr-2" />}
-                  {task.status === 'In Progress' ? 'Pause' : 'Start'}
-                </Button>
-                <Button onClick={() => handleStopAndSave(task)} disabled={task.status === 'Not Started' || task.status === 'Completed'}>
-                  <Icon name="Check" className="mr-2" />
-                  Stop & Save
-                </Button>
-                 <Button variant="destructive" className="col-span-2" onClick={() => setTaskToReset(task)} disabled={task.status === 'Not Started' && task.elapsedSeconds === 0}>
-                  <Icon name="Trash2" className="mr-2"/> Reset Task
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
+        {sortedTasks.map((task) => (
+          <ProductionTaskCard
+            key={task.id}
+            task={task}
+            onFieldChange={handleFieldChange}
+            onToggleTimer={handleToggleTimer}
+            onStopAndSave={handleStopAndSave}
+            onReset={() => setTaskToReset(task)}
+            onSave={handleTaskUpdate}
+          />
+        ))}
       </div>
       
        {taskToReset && (
