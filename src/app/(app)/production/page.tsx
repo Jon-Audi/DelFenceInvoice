@@ -111,7 +111,14 @@ export default function ProductionPage() {
   const handleTaskUpdate = async (task: ProductionTask) => {
     try {
       const taskRef = doc(db, 'productionTasks', task.id);
-      await setDoc(taskRef, task, { merge: true });
+      // Create a clean copy to avoid sending 'undefined' to Firestore
+      const dataToSave: Partial<ProductionTask> = { ...task };
+      for (const key in dataToSave) {
+        if (dataToSave[key as keyof ProductionTask] === undefined) {
+          delete dataToSave[key as keyof ProductionTask];
+        }
+      }
+      await setDoc(taskRef, dataToSave, { merge: true });
     } catch (error) {
       console.error(`Error saving task ${task.name}:`, error);
       toast({ title: "Save Error", description: `Could not save task: ${task.name}.`, variant: "destructive" });
