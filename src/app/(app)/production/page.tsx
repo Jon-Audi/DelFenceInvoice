@@ -36,7 +36,7 @@ const ALL_TASKS: ProductionTaskName[] = [
 // This is a new, separate component to manage its own timer state
 const ProductionTaskCard: React.FC<{
   task: ProductionTask;
-  onFieldChange: (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes', value: string | number) => void;
+  onFieldChange: (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => void;
   onToggleTimer: (task: ProductionTask) => void;
   onStopAndSave: (task: ProductionTask) => void;
   onReset: (task: ProductionTask) => void;
@@ -90,9 +90,21 @@ const ProductionTaskCard: React.FC<{
           </div>
           <Label className="text-xs text-muted-foreground">HH:MM:SS</Label>
         </div>
+
+        <div className="space-y-1">
+            <Label htmlFor={`poNumber-${task.id}`}>PO # / Job Name</Label>
+            <Input 
+              id={`poNumber-${task.id}`} 
+              placeholder="e.g., 12345 or Smith Job" 
+              value={task.poNumber ?? ''}
+              onChange={(e) => onFieldChange(task.name, 'poNumber', e.target.value)}
+              onBlur={() => onSave(task)}
+            />
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label htmlFor={`cost-${task.id}`}>Cost ($)</Label>
+            <Label htmlFor={`cost-${task.id}`}>Labor Cost ($)</Label>
             <Input 
               id={`cost-${task.id}`} 
               type="number" 
@@ -180,6 +192,7 @@ export default function ProductionPage() {
       const taskRef = doc(db, 'productionTasks', task.id);
       
       const dataToSave: Partial<ProductionTask> = { ...task };
+      // Firestore does not allow `undefined` values. Clean them up before saving.
       Object.keys(dataToSave).forEach(keyStr => {
         const key = keyStr as keyof ProductionTask;
         if (dataToSave[key] === undefined) {
@@ -194,7 +207,7 @@ export default function ProductionPage() {
     }
   };
 
-  const handleFieldChange = (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes', value: string | number) => {
+  const handleFieldChange = (taskName: ProductionTaskName, field: 'cost' | 'materialAmount' | 'notes' | 'poNumber', value: string | number | undefined) => {
     setTasks(prevTasks => {
       const newTasks = new Map(prevTasks);
       const task = newTasks.get(taskName);
@@ -259,6 +272,7 @@ export default function ProductionPage() {
       materialAmount: undefined,
       notes: undefined,
       startTime: undefined,
+      poNumber: undefined,
     };
     setTasks(prev => new Map(prev).set(taskName, freshTask));
     await handleTaskUpdate(freshTask);
@@ -318,4 +332,3 @@ export default function ProductionPage() {
     </>
   );
 }
-

@@ -303,6 +303,5 @@ export interface ProductionTask {
   cost?: number;
   materialAmount?: string;
   notes?: string;
+  poNumber?: string;
 }
-
-    
