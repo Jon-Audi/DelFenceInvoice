@@ -141,6 +141,8 @@ export default function ReportsPage() {
     let currentReportTitle = '';
     const rangeStart = startDate ? new Date(startDate.setHours(0, 0, 0, 0)) : new Date(0);
     const rangeEnd = endDate ? new Date(endDate.setHours(23, 59, 59, 999)) : new Date();
+    
+    const toTime = (d?: string | Date) => (d ? new Date(d).getTime() : 0);
 
     try {
       let data: any[] | any = [];
@@ -307,7 +309,7 @@ export default function ReportsPage() {
                 profit: invoice.total - totalCostOfGoods,
             });
         });
-        data = profitReportItems.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+        data = profitReportItems.sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
       } else if (reportType === 'sales') {
         currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
@@ -317,7 +319,7 @@ export default function ReportsPage() {
         const querySnapshot = await getDocs(q);
         const fetchedInvoices: Invoice[] = [];
         querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
-        data = fetchedInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        data = fetchedInvoices.sort((a, b) => toTime(b.date) - toTime(a.date));
 
       } else if (reportType === 'orders') {
         currentReportTitle = `Order Report (Order Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
@@ -328,7 +330,7 @@ export default function ReportsPage() {
         const querySnapshot = await getDocs(q);
         const fetchedOrders: Order[] = [];
         querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
-        data = fetchedOrders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        data = fetchedOrders.sort((a,b) => toTime(b.date) - toTime(a.date));
 
       } else if (reportType === 'customerBalances') {
         const invoicesRef = collection(db, 'invoices');
@@ -364,7 +366,7 @@ export default function ReportsPage() {
             amountPaid: invoice.amountPaid || 0,
           });
         });
-        data = customerInvoiceDetails.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+        data = customerInvoiceDetails.sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
       
       } else if (reportType === 'payments') {
         currentReportTitle = `Payments Report (Payment Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
@@ -413,7 +415,7 @@ export default function ReportsPage() {
             }
           }
         });
-        data = paymentReportItems.sort((a,b) => new Date(b.documentDate).getTime() - new Date(a.date).getTime());
+        data = paymentReportItems.sort((a,b) => toTime(b.documentDate) - toTime(a.documentDate));
       
       } else if (reportType === 'paymentByType') {
         currentReportTitle = `Payments by Type (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
@@ -1065,3 +1067,5 @@ export default function ReportsPage() {
     </>
   );
 }
+
+    
