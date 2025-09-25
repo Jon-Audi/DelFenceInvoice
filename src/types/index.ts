@@ -141,7 +141,7 @@ export interface Estimate extends BaseDocument {
 export interface Order extends BaseDocument {
   orderNumber: string;
   estimateId?: string;
-  status: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>;
+  status: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided' | 'Partial Packed' | 'Packed'>;
   expectedDeliveryDate?: string;
   readyForPickUpDate?: string;
   pickedUpDate?: string;

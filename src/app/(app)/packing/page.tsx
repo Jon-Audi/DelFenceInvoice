@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 // A new component for the packing slip dialog content
-const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up' | 'Packed') => void, onPartialPackSave: (packedItems: Record<string, boolean>, newStatus: 'Partial Packed') => void, isUpdating: boolean }) => {
+const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up' | 'Packed' | 'Picked up') => void, onPartialPackSave: (packedItems: Record<string, boolean>, newStatus: 'Partial Packed') => void, isUpdating: boolean }) => {
     const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -45,6 +45,9 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
     };
 
     const allItemsPacked = Object.values(packedItems).every(packed => packed) && Object.keys(packedItems).length > 0;
+    
+    // Determine if the "Mark as Picked Up" button should be shown
+    const canBePickedUp = doc.status === 'Ready for pick up' || doc.status === 'Packed';
 
     return (
         <DialogContent className="sm:max-w-xl">
@@ -95,11 +98,11 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
                  {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
                 Save Partial Pack
               </Button>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <DialogClose asChild>
                     <Button type="button" variant="outline">Close</Button>
                 </DialogClose>
-                <Button 
+                 <Button 
                     type="button" 
                     onClick={() => onStatusChange('Packed')}
                     disabled={!allItemsPacked || isUpdating}
@@ -115,6 +118,17 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
                     {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
                     Ready for Pickup
                 </Button>
+                {canBePickedUp && (
+                   <Button 
+                        type="button" 
+                        onClick={() => onStatusChange('Picked up')}
+                        disabled={isUpdating}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                        {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                        Mark as Picked Up
+                    </Button>
+                )}
               </div>
             </DialogFooter>
         </DialogContent>
@@ -134,7 +148,7 @@ export default function PackingPage() {
     const unsubscribes: (() => void)[] = [];
     setIsLoading(true);
 
-    const ordersQuery = query(collection(db, 'orders'), where('status', 'in', ['Ordered', 'Ready for pick up']));
+    const ordersQuery = query(collection(db, 'orders'), where('status', 'in', ['Ordered', 'Ready for pick up', 'Packed', 'Partial Packed']));
     unsubscribes.push(onSnapshot(ordersQuery, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Order[];
       setOrders(items);
@@ -143,7 +157,7 @@ export default function PackingPage() {
       toast({ title: "Error", description: `Could not fetch orders for packing.`, variant: "destructive" });
     }));
     
-    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid', 'Ordered', 'Paid', 'Partial Packed', 'Packed']));
+    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid', 'Ordered', 'Paid', 'Partial Packed', 'Packed', 'Ready for pick up']));
      unsubscribes.push(onSnapshot(invoicesQuery, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Invoice[];
       setInvoices(items);
@@ -160,7 +174,7 @@ export default function PackingPage() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
   
-  const handleStatusChange = async (newStatus: 'Ready for pick up' | 'Packed') => {
+  const handleStatusChange = async (newStatus: 'Ready for pick up' | 'Packed' | 'Picked up') => {
     if (!selectedDoc) return;
     setIsUpdating(true);
     
@@ -168,12 +182,23 @@ export default function PackingPage() {
         await runTransaction(db, async (transaction) => {
             const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
             const updateData: any = { status: newStatus };
+            
             if (newStatus === 'Ready for pick up') {
                 updateData.readyForPickUpDate = new Date().toISOString();
+                // Mark all items as packed when setting this final status
+                const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
+                updateData.lineItems = updatedLineItems;
             }
-            // Mark all items as packed when setting a final status like 'Packed' or 'Ready for pick up'
-            const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
-            updateData.lineItems = updatedLineItems;
+            if (newStatus === 'Picked up') {
+                 updateData.pickedUpDate = new Date().toISOString();
+                 if (selectedDoc.docType === 'Order') {
+                    updateData.orderState = 'Closed';
+                 }
+            }
+            if (newStatus === 'Packed') {
+                const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
+                updateData.lineItems = updatedLineItems;
+            }
 
             transaction.update(docRef, updateData);
         });
@@ -205,8 +230,7 @@ export default function PackingPage() {
         
         await runTransaction(db, async (transaction) => {
             const updatePayload: any = { lineItems: updatedLineItems };
-            // Only invoices can have "Partial Packed" status based on the new logic
-            if(selectedDoc.docType === 'Invoice') {
+            if(selectedDoc.docType === 'Invoice' || selectedDoc.docType === 'Order') {
                 updatePayload.status = newStatus;
             }
             transaction.update(docRef, updatePayload);
