@@ -93,6 +93,8 @@ export function InvoiceTable({
         return 'default';
       case 'Partially Paid':
       case 'Ready for pick up':
+      case 'Packed':
+      case 'Partial Packed':
         return 'secondary';
       case 'Picked up':
         return 'default';
@@ -177,7 +179,7 @@ export function InvoiceTable({
                   variant={getStatusVariant(invoice.status)}
                   className={cn(
                     invoice.status === 'Paid' && 'bg-green-500 hover:bg-green-600 text-white',
-                    (invoice.status === 'Partially Paid' || invoice.status === 'Ready for pick up') &&
+                    (invoice.status === 'Partially Paid' || invoice.status === 'Ready for pick up' || invoice.status === 'Packed' || invoice.status === 'Partial Packed') &&
                       'bg-yellow-500 hover:bg-yellow-600 text-black',
                     invoice.status === 'Picked up' && 'bg-green-500 hover:bg-green-600 text-white',
                   )}

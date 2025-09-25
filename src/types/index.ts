@@ -113,7 +113,9 @@ export type DocumentStatus =
   | 'Invoiced'
   | 'Partially Paid'
   | 'Paid'
-  | 'Voided';
+  | 'Voided'
+  | 'Packed'
+  | 'Partial Packed';
 
 interface BaseDocument {
   id: string;
@@ -152,7 +154,7 @@ export interface Order extends BaseDocument {
 export interface Invoice extends BaseDocument {
   invoiceNumber: string;
   orderId?: string;
-  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>;
+  status: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Partial Packed' | 'Packed' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>;
   dueDate?: string;
   paymentTerms?: string;
   payments: Payment[]; // Ensure payments is always an array, even if empty
@@ -315,5 +317,3 @@ export interface ProductionHistoryItem {
   notes: string | null;
   poNumber: string | null;
 }
-
-    

@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 // A new component for the packing slip dialog content
-const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up') => void, onPartialPackSave: (packedItems: Record<string, boolean>) => void, isUpdating: boolean }) => {
+const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up' | 'Packed') => void, onPartialPackSave: (packedItems: Record<string, boolean>, newStatus: 'Partial Packed') => void, isUpdating: boolean }) => {
     const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -91,7 +91,7 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
                 </div>
             </ScrollArea>
              <DialogFooter className="mt-4 sm:justify-between">
-              <Button type="button" variant="secondary" onClick={() => onPartialPackSave(packedItems)} disabled={isUpdating}>
+              <Button type="button" variant="secondary" onClick={() => onPartialPackSave(packedItems, 'Partial Packed')} disabled={isUpdating}>
                  {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
                 Save Partial Pack
               </Button>
@@ -101,11 +101,19 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
                 </DialogClose>
                 <Button 
                     type="button" 
+                    onClick={() => onStatusChange('Packed')}
+                    disabled={!allItemsPacked || isUpdating}
+                >
+                    {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
+                    Mark as Packed
+                </Button>
+                <Button 
+                    type="button" 
                     onClick={() => onStatusChange('Ready for pick up')}
                     disabled={!allItemsPacked || isUpdating}
                 >
                     {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
-                    Mark as Ready for Pickup
+                    Ready for Pickup
                 </Button>
               </div>
             </DialogFooter>
@@ -135,7 +143,7 @@ export default function PackingPage() {
       toast({ title: "Error", description: `Could not fetch orders for packing.`, variant: "destructive" });
     }));
     
-    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid', 'Ordered']));
+    const invoicesQuery = query(collection(db, 'invoices'), where('status', 'in', ['Sent', 'Partially Paid', 'Ordered', 'Paid', 'Partial Packed', 'Packed']));
      unsubscribes.push(onSnapshot(invoicesQuery, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Invoice[];
       setInvoices(items);
@@ -152,7 +160,7 @@ export default function PackingPage() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
   
-  const handleStatusChange = async (newStatus: 'Ready for pick up') => {
+  const handleStatusChange = async (newStatus: 'Ready for pick up' | 'Packed') => {
     if (!selectedDoc) return;
     setIsUpdating(true);
     
@@ -160,10 +168,10 @@ export default function PackingPage() {
         await runTransaction(db, async (transaction) => {
             const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
             const updateData: any = { status: newStatus };
-            if (selectedDoc.docType === 'Order') {
+            if (newStatus === 'Ready for pick up') {
                 updateData.readyForPickUpDate = new Date().toISOString();
             }
-            // Mark all items as packed when setting the final status
+            // Mark all items as packed when setting a final status like 'Packed' or 'Ready for pick up'
             const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
             updateData.lineItems = updatedLineItems;
 
@@ -172,7 +180,7 @@ export default function PackingPage() {
 
         toast({
             title: "Status Updated",
-            description: `${selectedDoc.docType} #${(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber} marked as Ready for Pickup.`
+            description: `${selectedDoc.docType} #${(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber} marked as ${newStatus}.`
         });
         setSelectedDoc(null); // Close the dialog on success
 
@@ -184,7 +192,7 @@ export default function PackingPage() {
     }
   };
 
-  const handlePartialPackSave = async (packedItemsStatus: Record<string, boolean>) => {
+  const handlePartialPackSave = async (packedItemsStatus: Record<string, boolean>, newStatus: 'Partial Packed') => {
     if (!selectedDoc) return;
     setIsUpdating(true);
 
@@ -196,14 +204,18 @@ export default function PackingPage() {
         }));
         
         await runTransaction(db, async (transaction) => {
-            transaction.update(docRef, { lineItems: updatedLineItems });
+            const updatePayload: any = { lineItems: updatedLineItems };
+            // Only invoices can have "Partial Packed" status based on the new logic
+            if(selectedDoc.docType === 'Invoice') {
+                updatePayload.status = newStatus;
+            }
+            transaction.update(docRef, updatePayload);
         });
 
         toast({
             title: "Packing Progress Saved",
             description: `Packed items for ${selectedDoc.docType} #${(selectedDoc as Order).orderNumber || (selectedDoc as Invoice).invoiceNumber} have been saved.`,
         });
-        // We can choose to keep the dialog open or close it. Let's close it for now.
         setSelectedDoc(null);
 
     } catch (error) {
@@ -251,6 +263,7 @@ export default function PackingPage() {
                 <TableHead>Customer</TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -265,10 +278,11 @@ export default function PackingPage() {
                   <TableCell>{doc.customerName}</TableCell>
                   <TableCell>{doc.poNumber || 'N/A'}</TableCell>
                   <TableCell>{new Date(doc.date).toLocaleDateString()}</TableCell>
+                  <TableCell><Badge variant="outline">{doc.status}</Badge></TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground p-6">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground p-6">
                       No documents are currently ready for packing.
                   </TableCell>
                 </TableRow>

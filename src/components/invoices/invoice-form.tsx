@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -43,7 +44,7 @@ import { Icon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
-const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Ordered', 'Ready for pick up', 'Picked up', 'Partially Paid', 'Paid', 'Voided'];
+const INVOICE_STATUSES: Extract<DocumentStatus, 'Draft' | 'Sent' | 'Ordered' | 'Partial Packed' | 'Packed' | 'Ready for pick up' | 'Picked up' | 'Partially Paid' | 'Paid' | 'Voided'>[] = ['Draft', 'Sent', 'Ordered', 'Partial Packed', 'Packed', 'Ready for pick up', 'Picked up', 'Partially Paid', 'Paid', 'Voided'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
 const lineItemSchema = z.object({
@@ -655,7 +656,7 @@ export function InvoiceForm({
                         <FormField control={form.control} name={`lineItems.${index}.markupPercentage`} render={({ field }) => (
                             <FormItem><FormLabel>Markup (%)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'markup')} /></FormControl><FormMessage /></FormItem>
                         )} />
-                        <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
+                         <FormField control={form.control} name={`lineItems.${index}.unitPrice`} render={({ field }) => (
                             <FormItem><FormLabel>Unit Price</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => handleNonStockPriceChange(index, parseFloat(e.target.value) || 0, 'price')} /></FormControl><FormMessage /></FormItem>
                         )} />
                     </div>
@@ -704,7 +705,8 @@ export function InvoiceForm({
                               </Button>
                         </FormControl></PopoverTrigger>
                         <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command>
-                            <CommandInput placeholder="Search product..." /><CommandList><CommandEmpty>No product found.</CommandEmpty>
+                            <CommandInput placeholder="Search product..." />
+                            <CommandList><CommandEmpty>No product found.</CommandEmpty>
                             <CommandGroup>
                               {filteredProductsForLine.map((product) => {
                                 const searchableValue = [product.name, product.category, product.unit].filter(Boolean).join(' ').toLowerCase();
