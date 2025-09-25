@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -28,7 +27,7 @@ import { cn } from '@/lib/utils';
 type PackableDocument = (Order | Invoice) & { docType: 'Order' | 'Invoice' };
 
 // A new component for the packing slip dialog content
-const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up' | 'Packed' | 'Picked up') => void, onPartialPackSave: (packedItems: Record<string, boolean>, newStatus: 'Partial Packed') => void, isUpdating: boolean }) => {
+const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUpdating }: { doc: PackableDocument, onStatusChange: (newStatus: 'Ready for pick up' | 'Packed') => void, onPartialPackSave: (packedItems: Record<string, boolean>, newStatus: 'Partial Packed') => void, isUpdating: boolean }) => {
     const [packedItems, setPackedItems] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -45,9 +44,6 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
     };
 
     const allItemsPacked = Object.values(packedItems).every(packed => packed) && Object.keys(packedItems).length > 0;
-    
-    // Determine if the "Mark as Picked Up" button should be shown
-    const canBePickedUp = doc.status === 'Ready for pick up' || doc.status === 'Packed';
 
     return (
         <DialogContent className="sm:max-w-xl">
@@ -118,17 +114,6 @@ const PackingSlipDialogContent = ({ doc, onStatusChange, onPartialPackSave, isUp
                     {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
                     Ready for Pickup
                 </Button>
-                {canBePickedUp && (
-                   <Button 
-                        type="button" 
-                        onClick={() => onStatusChange('Picked up')}
-                        disabled={isUpdating}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                        {isUpdating && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
-                        Mark as Picked Up
-                    </Button>
-                )}
               </div>
             </DialogFooter>
         </DialogContent>
@@ -174,32 +159,23 @@ export default function PackingPage() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
   
-  const handleStatusChange = async (newStatus: 'Ready for pick up' | 'Packed' | 'Picked up') => {
+  const handleStatusChange = async (newStatus: 'Ready for pick up' | 'Packed') => {
     if (!selectedDoc) return;
     setIsUpdating(true);
     
     try {
-        await runTransaction(db, async (transaction) => {
-            const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
-            const updateData: any = { status: newStatus };
-            
-            if (newStatus === 'Ready for pick up') {
-                updateData.readyForPickUpDate = new Date().toISOString();
-                // Mark all items as packed when setting this final status
-                const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
-                updateData.lineItems = updatedLineItems;
-            }
-            if (newStatus === 'Picked up') {
-                 updateData.pickedUpDate = new Date().toISOString();
-                 if (selectedDoc.docType === 'Order') {
-                    updateData.orderState = 'Closed';
-                 }
-            }
-            if (newStatus === 'Packed') {
-                const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
-                updateData.lineItems = updatedLineItems;
-            }
+        const docRef = doc(db, selectedDoc.docType === 'Order' ? 'orders' : 'invoices', selectedDoc.id);
+        const updateData: any = { status: newStatus };
+        
+        if (newStatus === 'Ready for pick up') {
+            updateData.readyForPickUpDate = new Date().toISOString();
+        }
+        
+        // Mark all items as packed when setting these final statuses
+        const updatedLineItems = selectedDoc.lineItems.map(item => ({ ...item, packed: true }));
+        updateData.lineItems = updatedLineItems;
 
+        await runTransaction(db, async (transaction) => {
             transaction.update(docRef, updateData);
         });
 
