@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product } from '@/types';
@@ -14,7 +13,8 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
-import { BulkPriceEditorDialog } from './bulk-price-editor-dialog'; // Import new component
+import { BulkPriceEditorDialog } from './bulk-price-editor-dialog'; 
+import { BulkStockEditorDialog } from './bulk-stock-editor-dialog';
 import {
   Accordion,
   AccordionContent,
@@ -64,6 +64,7 @@ interface ProductTableProps {
   onDeleteCategory: (categoryName: string) => void;
   onUpdateStock: (product: Product) => void;
   onBulkUpdate: (products: Product[]) => Promise<void>;
+  onBulkStockUpdate: (products: { id: string; quantityInStock: number }[]) => Promise<void>;
 }
 
 export function ProductTable({ 
@@ -78,6 +79,7 @@ export function ProductTable({
   onDeleteCategory,
   onUpdateStock,
   onBulkUpdate,
+  onBulkStockUpdate,
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null);
@@ -87,6 +89,7 @@ export function ProductTable({
   
   const [categoryForBulkEdit, setCategoryForBulkEdit] = React.useState<string | null>(null);
   const [isBulkPriceEditorOpen, setIsBulkPriceEditorOpen] = React.useState(false);
+  const [isBulkStockEditorOpen, setIsBulkStockEditorOpen] = React.useState(false);
 
 
   const formatCurrency = (amount: number | undefined) => {
@@ -103,6 +106,11 @@ export function ProductTable({
   const handleOpenBulkPriceEditor = (category: string) => {
     setCategoryForBulkEdit(category);
     setIsBulkPriceEditorOpen(true);
+  };
+  
+  const handleOpenBulkStockEditor = (category: string) => {
+    setCategoryForBulkEdit(category);
+    setIsBulkStockEditorOpen(true);
   };
 
   const handleApplyMarkup = () => {
@@ -182,6 +190,10 @@ export function ProductTable({
                       </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                       <DropdownMenuItem onSelect={() => handleOpenBulkStockEditor(category)}>
+                        <Icon name="PackageCheck" className="mr-2 h-4 w-4" />
+                        Bulk Edit Stock
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => handleOpenBulkPriceEditor(category)}>
                         <Icon name="Edit" className="mr-2 h-4 w-4" />
                         Bulk Edit Prices
@@ -291,6 +303,16 @@ export function ProductTable({
           categoryName={categoryForBulkEdit}
           products={groupedProducts.get(categoryForBulkEdit) || []}
           onSave={onBulkUpdate}
+        />
+      )}
+      
+       {categoryForBulkEdit && (
+        <BulkStockEditorDialog
+          isOpen={isBulkStockEditorOpen}
+          onOpenChange={setIsBulkStockEditorOpen}
+          categoryName={categoryForBulkEdit}
+          products={groupedProducts.get(categoryForBulkEdit) || []}
+          onSave={onBulkStockUpdate}
         />
       )}
 

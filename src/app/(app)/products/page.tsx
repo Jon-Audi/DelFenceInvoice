@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -195,6 +194,31 @@ export default function ProductsPage() {
       setIsLoading(false);
     }
   };
+  
+  const handleBulkStockUpdate = async (updatedProducts: { id: string; quantityInStock: number }[]) => {
+    setIsLoading(true);
+    const batch = writeBatch(db);
+    updatedProducts.forEach(product => {
+      const productRef = doc(db, "products", product.id);
+      batch.update(productRef, { quantityInStock: product.quantityInStock });
+    });
+    try {
+      await batch.commit();
+      toast({
+        title: "Bulk Stock Update Successful",
+        description: `${updatedProducts.length} products have had their stock updated.`,
+      });
+    } catch (error) {
+      console.error("Error during bulk stock update:", error);
+      toast({
+        title: "Bulk Stock Update Failed",
+        description: `Could not update stock levels. Error: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSaveMultipleProducts = async (productsToSave: Omit<Product, 'id'>[]) => {
     const currentUser = firebaseAuthInstance.currentUser;
@@ -312,7 +336,7 @@ export default function ProductsPage() {
 
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
     const newProductsData: Omit<Product, 'id'>[] = [];
-    const lines = csvData.trim().split(/\r\n|\n/);
+    const lines = csvData.trim().split(/\\r\\n|\\n/);
     const lineCount = lines.length;
 
     if (lineCount < 2) {
@@ -321,7 +345,7 @@ export default function ProductsPage() {
     }
 
     const rawHeaders = lines[0].split(',').map(h => h.trim());
-    const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\s+/g, ''));
+    const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\\s+/g, ''));
     
     const expectedRequiredHeadersNormalized = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'];
     
@@ -505,7 +529,7 @@ export default function ProductsPage() {
 
         if (typeof value === 'string') {
           const escapedValue = value.replace(/"/g, '""');
-          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+          if (value.includes(',') || value.includes('"') || value.includes('\\n')) {
             return `"${escapedValue}"`;
           }
           return escapedValue;
@@ -513,7 +537,7 @@ export default function ProductsPage() {
         return value !== undefined && value !== null ? String(value) : '';
       }).join(',')
     );
-    return [headerString, ...rows].join('\n');
+    return [headerString, ...rows].join('\\n');
   };
 
   const handleExportCsv = () => {
@@ -799,6 +823,7 @@ export default function ProductsPage() {
         onDeleteCategory={handleDeleteCategory}
         onUpdateStock={handleOpenStockUpdateDialog}
         onBulkUpdate={handleBulkUpdateProducts}
+        onBulkStockUpdate={handleBulkStockUpdate}
       />
        {groupedProducts.size === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
