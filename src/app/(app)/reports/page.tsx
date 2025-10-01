@@ -37,6 +37,14 @@ const COMPANY_SETTINGS_DOC_ID = "main";
 type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production' | 'profitabilitySummary';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
+interface ProfitSummaryItem {
+  customerId: string;
+  customerName: string;
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+}
+
 interface ReportToPrintData {
   reportType: ReportType;
   data: any; 
@@ -55,6 +63,7 @@ export default function ReportsPage() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
   const [generatedReportData, setGeneratedReportData] = useState<any | null>(null);
+  const [generatedProfitabilitySummaryData, setGeneratedProfitabilitySummaryData] = useState<ProfitSummaryItem[] | null>(null);
   const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
   
   const [isLoading, setIsLoading] = useState(false);
@@ -188,6 +197,7 @@ export default function ReportsPage() {
 
     setIsLoading(true);
     setGeneratedReportData(null);
+    setGeneratedProfitabilitySummaryData(null);
     let currentReportTitle = '';
     const rangeStart = startDate ? new Date(startDate.setHours(0, 0, 0, 0)) : new Date(0);
     const rangeEnd = endDate ? new Date(endDate.setHours(23, 59, 59, 999)) : new Date();
@@ -247,7 +257,6 @@ export default function ReportsPage() {
 
         const invoicesRef = collection(db, 'invoices');
         
-        // Fetch invoices before the start date to calculate opening balance
         const openingBalanceInvoicesQuery = query(invoicesRef, where('customerId', '==', selectedCustomerId), where('date', '<', rangeStart.toISOString()));
         const openingBalanceSnapshot = await getDocs(openingBalanceInvoicesQuery);
         let openingBalance = 0;
@@ -261,7 +270,6 @@ export default function ReportsPage() {
             }
         });
 
-        // Fetch transactions within the date range
         const invoicesQuery = query(invoicesRef, where('customerId', '==', selectedCustomerId), where('date', '>=', rangeStart.toISOString()), where('date', '<=', rangeEnd.toISOString()));
         const invoicesSnapshot = await getDocs(invoicesQuery);
 
@@ -274,7 +282,7 @@ export default function ReportsPage() {
                 documentNumber: inv.invoiceNumber,
                 debit: inv.total,
                 credit: 0,
-                balance: 0 // will be calculated later
+                balance: 0 
             });
             if (inv.payments) {
                 inv.payments.forEach(p => {
@@ -310,29 +318,25 @@ export default function ReportsPage() {
             closingBalance: runningBalance,
         };
 
-        data = statementData; // Data is now an object, not an array
+        data = statementData;
       }
       else if (targetReportType === 'profitability') {
         currentReportTitle = `Profitability Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
-        data = (await generateProfitabilityReportData(rangeStart, rangeEnd))
-            .sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
-
-      } else if (targetReportType === 'profitabilitySummary') {
-        currentReportTitle = `Profitability Summary by Customer (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const detailedData = await generateProfitabilityReportData(rangeStart, rangeEnd);
-        
-        const summary = detailedData.reduce((acc, item) => {
-            const key = item.customerId;
-            if (!acc[key]) {
-                acc[key] = { customerId: key, customerName: item.customerName, totalRevenue: 0, totalCost: 0, totalProfit: 0 };
-            }
-            acc[key].totalRevenue += item.invoiceTotal;
-            acc[key].totalCost += item.totalCostOfGoods;
-            acc[key].totalProfit += item.profit;
-            return acc;
-        }, {} as Record<string, { customerId: string, customerName: string, totalRevenue: number, totalCost: number, totalProfit: number }>);
-        
-        data = Object.values(summary).sort((a, b) => b.totalProfit - a.totalProfit);
+        data = detailedData.sort((a, b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
+
+        const summaryData = Object.values(detailedData.reduce((acc, item) => {
+          const key = item.customerId;
+          if (!acc[key]) {
+              acc[key] = { customerId: key, customerName: item.customerName, totalRevenue: 0, totalCost: 0, totalProfit: 0 };
+          }
+          acc[key].totalRevenue += item.invoiceTotal;
+          acc[key].totalCost += item.totalCostOfGoods;
+          acc[key].totalProfit += item.profit;
+          return acc;
+        }, {} as Record<string, ProfitSummaryItem>));
+        setGeneratedProfitabilitySummaryData(summaryData.sort((a,b) => b.totalProfit - a.totalProfit));
+
       } else if (targetReportType === 'sales') {
         currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
@@ -569,7 +573,7 @@ export default function ReportsPage() {
   };
 
   const handlePrintReport = async (printReportType: ReportType) => {
-    const dataForPrintCheck = generatedReportData as any;
+    const dataForPrintCheck = (printReportType === 'profitabilitySummary') ? generatedProfitabilitySummaryData : generatedReportData;
     if (!dataForPrintCheck || (Array.isArray(dataForPrintCheck) && dataForPrintCheck.length === 0) || (dataForPrintCheck.transactions && dataForPrintCheck.transactions.length === 0)) {
       toast({ title: "No Report Data", description: "Please generate a report with data first.", variant: "default" });
       return;
@@ -582,7 +586,7 @@ export default function ReportsPage() {
       
       const printData: ReportToPrintData = {
         reportType: printReportType,
-        data: generatedReportData,
+        data: dataForPrintCheck,
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
         reportTitle: reportTitleForSummary,
@@ -644,11 +648,11 @@ export default function ReportsPage() {
       const grandTotal = salesData.reduce((sum, item) => sum + item.totalSales, 0);
       return <p>Total Sales (All Customers): <span className="font-semibold">${grandTotal.toFixed(2)}</span></p>;
     }
-    if (reportType === 'profitability' || reportType === 'profitabilitySummary') {
-        const profitItems = generatedReportData as ProfitReportItem[];
-        const grandTotalRevenue = profitItems.reduce((sum, item) => sum + item.invoiceTotal, 0);
-        const grandTotalCost = profitItems.reduce((sum, item) => sum + item.totalCostOfGoods, 0);
-        const grandTotalProfit = profitItems.reduce((sum, item) => sum + item.profit, 0);
+    if (reportType === 'profitability') {
+        const profitItems = generatedProfitabilitySummaryData || [];
+        const grandTotalRevenue = profitItems.reduce((sum, item) => sum + item.totalRevenue, 0);
+        const grandTotalCost = profitItems.reduce((sum, item) => sum + item.totalCost, 0);
+        const grandTotalProfit = profitItems.reduce((sum, item) => sum + item.totalProfit, 0);
         return (
           <div className="space-y-1">
             <p>Total Revenue: <span className="font-semibold">${grandTotalRevenue.toFixed(2)}</span></p>
@@ -802,7 +806,8 @@ export default function ReportsPage() {
       )
     }
 
-    if (reportType === 'profitability' || reportType === 'profitabilitySummary') {
+    if (reportType === 'profitability') {
+        const profitReportItems = generatedReportData as ProfitReportItem[] || [];
         return (
             <Table>
                 <TableHeader>
@@ -816,7 +821,7 @@ export default function ReportsPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {(generatedReportData as ProfitReportItem[]).map(item => (
+                    {profitReportItems.map(item => (
                         <TableRow key={item.invoiceId}>
                             <TableCell>{item.invoiceNumber}</TableCell>
                             <TableCell>{format(new Date(item.invoiceDate), 'P')}</TableCell>
@@ -932,13 +937,16 @@ export default function ReportsPage() {
   const datePresetsToRender = getActiveDatePresets();
 
   const renderPrintButton = () => {
-    const isDataAvailable = generatedReportData && (!Array.isArray(generatedReportData) || generatedReportData.length > 0);
+    const isDataAvailableForCurrentReport = reportType === 'profitability' ? 
+      (generatedReportData && Array.isArray(generatedReportData) && generatedReportData.length > 0) || 
+      (generatedProfitabilitySummaryData && Array.isArray(generatedProfitabilitySummaryData) && generatedProfitabilitySummaryData.length > 0)
+      : generatedReportData && (!Array.isArray(generatedReportData) || generatedReportData.length > 0);
 
     if (reportType === 'profitability') {
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={isLoading || !isDataAvailable}>
+            <Button variant="outline" disabled={isLoading || !isDataAvailableForCurrentReport}>
               <Icon name="Printer" className="mr-2 h-4 w-4" />
               Print Report
               <Icon name="ChevronDown" className="ml-2 h-4 w-4" />
@@ -957,7 +965,7 @@ export default function ReportsPage() {
     }
 
     return (
-      <Button onClick={() => handlePrintReport(reportType)} variant="outline" disabled={isLoading || !isDataAvailable}>
+      <Button onClick={() => handlePrintReport(reportType)} variant="outline" disabled={isLoading || !isDataAvailableForCurrentReport}>
         <Icon name="Printer" className="mr-2 h-4 w-4" />
         Print Report
       </Button>
@@ -976,10 +984,9 @@ export default function ReportsPage() {
             const newReportType = value as ReportType;
             setReportType(newReportType);
             setGeneratedReportData(null); 
+            setGeneratedProfitabilitySummaryData(null);
             setSelectedCustomerId('all');
-            if (newReportType !== 'profitabilitySummary') {
-              handleDatePresetChange('thisMonth');
-            }
+            handleDatePresetChange('thisMonth');
           }}>
             <TabsList className="grid w-full grid-cols-5 sm:grid-cols-10">
               <TabsTrigger value="sales">Sales</TabsTrigger>
