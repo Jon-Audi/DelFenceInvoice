@@ -251,10 +251,12 @@ export interface ProfitReportItem {
   invoiceNumber: string;
   invoiceDate: string; // ISO string
   customerName: string;
+  customerId: string; // For grouping
   invoiceTotal: number;
   totalCostOfGoods: number;
   profit: number;
 }
+
 
 // Ensure Invoice type in initialData for InvoiceForm expects Payment[] with string dates
 export type InvoiceForFormInitialData = Omit<Invoice, 'payments'> & {

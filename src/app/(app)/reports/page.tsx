@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isValid, startOfWeek, endOfWeek, addWeeks, isBefore, getISOWeek, subMonths, startOfQuarter, endOfQuarter } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
@@ -23,16 +24,17 @@ import { PrintablePaymentsReport } from '@/components/reports/printable-payments
 import { PrintableWeeklySummaryReport } from '@/components/reports/printable-weekly-summary-report';
 import { PrintablePaymentByTypeReport } from '@/components/reports/printable-payment-by-type-report';
 import { PrintableProfitReport } from '@/components/reports/printable-profit-report';
+import { PrintableProfitSummaryReport } from '@/components/reports/printable-profit-summary-report';
 import { PrintableCustomerStatement } from '@/components/reports/printable-customer-statement';
 import { PrintableSalesByCustomerReport } from '@/components/reports/printable-sales-by-customer-report';
-import { PrintableProductionReport } from '@/components/reports/printable-production-report'; // New Import
+import { PrintableProductionReport } from '@/components/reports/printable-production-report';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production' | 'profitabilitySummary';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ReportToPrintData {
@@ -119,9 +121,57 @@ export default function ReportsPage() {
     setEndDate(newEnd);
   };
 
-  const handleGenerateReport = async () => {
+  const generateProfitabilityReportData = async (rangeStart: Date, rangeEnd: Date) => {
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(invoicesRef, 
+                      where('date', '>=', rangeStart.toISOString()), 
+                      where('date', '<=', rangeEnd.toISOString()));
+      
+      const [invoiceSnapshot, productsSnapshot] = await Promise.all([
+          getDocs(q),
+          getDocs(collection(db, 'products'))
+      ]);
+
+      const productsMap = new Map<string, Product>();
+      productsSnapshot.forEach(doc => productsMap.set(doc.id, { id: doc.id, ...doc.data() } as Product));
+
+      const profitReportItems: ProfitReportItem[] = [];
+      invoiceSnapshot.forEach(docSnap => {
+          const invoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
+          if (invoice.status === 'Voided') return;
+
+          let totalCostOfGoods = 0;
+          invoice.lineItems.forEach(item => {
+              let itemCost = 0;
+              if (item.isNonStock) {
+                  itemCost = item.cost || 0;
+              } else if (item.productId) {
+                  const product = productsMap.get(item.productId);
+                  if (product) {
+                      itemCost = product.cost;
+                  }
+              }
+              const totalItemCost = itemCost * item.quantity;
+              totalCostOfGoods += item.isReturn ? -totalItemCost : totalItemCost;
+          });
+
+          profitReportItems.push({
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              invoiceDate: invoice.date,
+              customerName: invoice.customerName || 'N/A',
+              customerId: invoice.customerId,
+              invoiceTotal: invoice.total,
+              totalCostOfGoods: totalCostOfGoods,
+              profit: invoice.total - totalCostOfGoods,
+          });
+      });
+      return profitReportItems;
+  }
+
+  const handleGenerateReport = async (targetReportType = reportType) => {
     if (!startDate || !endDate) {
-      if (reportType !== 'customerBalances') {
+      if (targetReportType !== 'customerBalances') {
         toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
         return;
       }
@@ -130,7 +180,7 @@ export default function ReportsPage() {
       toast({ title: "Invalid Date Range", description: "End date cannot be before start date.", variant: "destructive" });
       return;
     }
-    if (reportType === 'statement' && selectedCustomerId === 'all') {
+    if (targetReportType === 'statement' && selectedCustomerId === 'all') {
       toast({ title: "Customer Required", description: "Please select a customer to generate a statement.", variant: "destructive" });
       return;
     }
@@ -147,7 +197,7 @@ export default function ReportsPage() {
     try {
       let data: any[] | any = [];
       
-      if (reportType === 'production') {
+      if (targetReportType === 'production') {
         currentReportTitle = `Production History Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const historyRef = collection(db, 'productionHistory');
         const q = query(historyRef, 
@@ -159,7 +209,7 @@ export default function ReportsPage() {
         historySnapshot.forEach(docSnap => fetchedItems.push({ id: docSnap.id, ...docSnap.data() } as ProductionHistoryItem));
         data = fetchedItems;
       }
-      else if (reportType === 'salesByCustomer') {
+      else if (targetReportType === 'salesByCustomer') {
         currentReportTitle = `Sales by Customer (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
@@ -189,7 +239,7 @@ export default function ReportsPage() {
 
         data = reportItems.sort((a,b) => b.totalSales - a.totalSales);
       }
-      else if (reportType === 'statement') {
+      else if (targetReportType === 'statement') {
         const customer = customers.find(c => c.id === selectedCustomerId);
         if (!customer) throw new Error("Customer not found.");
 
@@ -262,55 +312,28 @@ export default function ReportsPage() {
 
         data = statementData; // Data is now an object, not an array
       }
-      else if (reportType === 'profitability') {
+      else if (targetReportType === 'profitability') {
         currentReportTitle = `Profitability Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
-        const invoicesRef = collection(db, 'invoices');
-        const q = query(invoicesRef, 
-                        where('date', '>=', rangeStart.toISOString()), 
-                        where('date', '<=', rangeEnd.toISOString()));
+        data = (await generateProfitabilityReportData(rangeStart, rangeEnd))
+            .sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
+
+      } else if (targetReportType === 'profitabilitySummary') {
+        currentReportTitle = `Profitability Summary by Customer (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
+        const detailedData = await generateProfitabilityReportData(rangeStart, rangeEnd);
         
-        const [invoiceSnapshot, productsSnapshot] = await Promise.all([
-            getDocs(q),
-            getDocs(collection(db, 'products'))
-        ]);
-
-        const productsMap = new Map<string, Product>();
-        productsSnapshot.forEach(doc => productsMap.set(doc.id, { id: doc.id, ...doc.data() } as Product));
-
-        const profitReportItems: ProfitReportItem[] = [];
-        invoiceSnapshot.forEach(docSnap => {
-            const invoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
-            if (invoice.status === 'Voided') return;
-
-            let totalCostOfGoods = 0;
-            invoice.lineItems.forEach(item => {
-                let itemCost = 0;
-                if (item.isNonStock) {
-                    // For non-stock items, use the cost stored on the line item itself
-                    itemCost = item.cost || 0;
-                } else if (item.productId) {
-                    // For stock items, look up the product cost from the map
-                    const product = productsMap.get(item.productId);
-                    if (product) {
-                        itemCost = product.cost;
-                    }
-                }
-                const totalItemCost = itemCost * item.quantity;
-                totalCostOfGoods += item.isReturn ? -totalItemCost : totalItemCost;
-            });
-
-            profitReportItems.push({
-                invoiceId: invoice.id,
-                invoiceNumber: invoice.invoiceNumber,
-                invoiceDate: invoice.date,
-                customerName: invoice.customerName || 'N/A',
-                invoiceTotal: invoice.total,
-                totalCostOfGoods: totalCostOfGoods,
-                profit: invoice.total - totalCostOfGoods,
-            });
-        });
-        data = profitReportItems.sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
-      } else if (reportType === 'sales') {
+        const summary = detailedData.reduce((acc, item) => {
+            const key = item.customerId;
+            if (!acc[key]) {
+                acc[key] = { customerId: key, customerName: item.customerName, totalRevenue: 0, totalCost: 0, totalProfit: 0 };
+            }
+            acc[key].totalRevenue += item.invoiceTotal;
+            acc[key].totalCost += item.totalCostOfGoods;
+            acc[key].totalProfit += item.profit;
+            return acc;
+        }, {} as Record<string, { customerId: string, customerName: string, totalRevenue: number, totalCost: number, totalProfit: number }>);
+        
+        data = Object.values(summary).sort((a, b) => b.totalProfit - a.totalProfit);
+      } else if (targetReportType === 'sales') {
         currentReportTitle = `Sales Report (Invoice Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const invoicesRef = collection(db, 'invoices');
         const q = query(invoicesRef, 
@@ -321,7 +344,7 @@ export default function ReportsPage() {
         querySnapshot.forEach(docSnap => fetchedInvoices.push({ id: docSnap.id, ...docSnap.data() } as Invoice));
         data = fetchedInvoices.sort((a, b) => toTime(b.date) - toTime(a.date));
 
-      } else if (reportType === 'orders') {
+      } else if (targetReportType === 'orders') {
         currentReportTitle = `Order Report (Order Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const ordersRef = collection(db, 'orders');
         const q = query(ordersRef, 
@@ -332,7 +355,7 @@ export default function ReportsPage() {
         querySnapshot.forEach(docSnap => fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order));
         data = fetchedOrders.sort((a,b) => toTime(b.date) - toTime(a.date));
 
-      } else if (reportType === 'customerBalances') {
+      } else if (targetReportType === 'customerBalances') {
         const invoicesRef = collection(db, 'invoices');
         let qConstraints = [
             where('status', 'not-in', ['Paid', 'Voided']),
@@ -368,7 +391,7 @@ export default function ReportsPage() {
         });
         data = customerInvoiceDetails.sort((a,b) => toTime(b.invoiceDate) - toTime(a.invoiceDate));
       
-      } else if (reportType === 'payments') {
+      } else if (targetReportType === 'payments') {
         currentReportTitle = `Payments Report (Payment Dates: ${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const paymentReportItems: PaymentReportItem[] = [];
 
@@ -417,7 +440,7 @@ export default function ReportsPage() {
         });
         data = paymentReportItems.sort((a,b) => toTime(b.documentDate) - toTime(a.documentDate));
       
-      } else if (reportType === 'paymentByType') {
+      } else if (targetReportType === 'paymentByType') {
         currentReportTitle = `Payments by Type (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const paymentSummary = new Map<Payment['method'], { totalAmount: number; transactionCount: number }>();
         
@@ -452,7 +475,7 @@ export default function ReportsPage() {
             transactionCount: summary.transactionCount,
         })).sort((a, b) => b.totalAmount - a.totalAmount);
     
-      } else if (reportType === 'weeklySummary') {
+      } else if (targetReportType === 'weeklySummary') {
         currentReportTitle = `Weekly Summary Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
 
         const [ordersSnapshot, invoicesSnapshot, paymentsInvoicesSnapshot, paymentsOrdersSnapshot] = await Promise.all([
@@ -545,7 +568,7 @@ export default function ReportsPage() {
     }
   };
 
-  const handlePrintReport = async () => {
+  const handlePrintReport = async (printReportType: ReportType) => {
     const dataForPrintCheck = generatedReportData as any;
     if (!dataForPrintCheck || (Array.isArray(dataForPrintCheck) && dataForPrintCheck.length === 0) || (dataForPrintCheck.transactions && dataForPrintCheck.transactions.length === 0)) {
       toast({ title: "No Report Data", description: "Please generate a report with data first.", variant: "default" });
@@ -558,7 +581,7 @@ export default function ReportsPage() {
       const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
       
       const printData: ReportToPrintData = {
-        reportType: reportType,
+        reportType: printReportType,
         data: generatedReportData,
         companySettings: settings,
         logoUrl: absoluteLogoUrl,
@@ -587,7 +610,7 @@ export default function ReportsPage() {
               setReportToPrintData(null); 
             }, 750);
           } else {
-            toast({ title: "Print Error", description: "Popup blocked.", variant: "destructive" });
+            toast({ title: "Print Error", description: "Popup blocked. Please allow popups for this site.", variant: "destructive" });
             setReportToPrintData(null);
           }
         } else {
@@ -621,7 +644,7 @@ export default function ReportsPage() {
       const grandTotal = salesData.reduce((sum, item) => sum + item.totalSales, 0);
       return <p>Total Sales (All Customers): <span className="font-semibold">${grandTotal.toFixed(2)}</span></p>;
     }
-    if (reportType === 'profitability') {
+    if (reportType === 'profitability' || reportType === 'profitabilitySummary') {
         const profitItems = generatedReportData as ProfitReportItem[];
         const grandTotalRevenue = profitItems.reduce((sum, item) => sum + item.invoiceTotal, 0);
         const grandTotalCost = profitItems.reduce((sum, item) => sum + item.totalCostOfGoods, 0);
@@ -779,7 +802,7 @@ export default function ReportsPage() {
       )
     }
 
-    if (reportType === 'profitability') {
+    if (reportType === 'profitability' || reportType === 'profitabilitySummary') {
         return (
             <Table>
                 <TableHeader>
@@ -908,6 +931,39 @@ export default function ReportsPage() {
   }
   const datePresetsToRender = getActiveDatePresets();
 
+  const renderPrintButton = () => {
+    const isDataAvailable = generatedReportData && (!Array.isArray(generatedReportData) || generatedReportData.length > 0);
+
+    if (reportType === 'profitability') {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={isLoading || !isDataAvailable}>
+              <Icon name="Printer" className="mr-2 h-4 w-4" />
+              Print Report
+              <Icon name="ChevronDown" className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => handlePrintReport('profitability')}>
+              Print Detailed Report
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handlePrintReport('profitabilitySummary')}>
+              Print Summary Report
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    return (
+      <Button onClick={() => handlePrintReport(reportType)} variant="outline" disabled={isLoading || !isDataAvailable}>
+        <Icon name="Printer" className="mr-2 h-4 w-4" />
+        Print Report
+      </Button>
+    );
+  };
+
   return (
     <>
       <PageHeader title="Reports" description="Generate and print business reports." />
@@ -917,10 +973,13 @@ export default function ReportsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <Tabs value={reportType} onValueChange={(value) => {
-            setReportType(value as ReportType);
+            const newReportType = value as ReportType;
+            setReportType(newReportType);
             setGeneratedReportData(null); 
             setSelectedCustomerId('all');
-            handleDatePresetChange('thisMonth');
+            if (newReportType !== 'profitabilitySummary') {
+              handleDatePresetChange('thisMonth');
+            }
           }}>
             <TabsList className="grid w-full grid-cols-5 sm:grid-cols-10">
               <TabsTrigger value="sales">Sales</TabsTrigger>
@@ -1006,16 +1065,13 @@ export default function ReportsPage() {
 
           <div className="flex space-x-2">
             <Button 
-              onClick={handleGenerateReport} 
+              onClick={() => handleGenerateReport()} 
               disabled={isLoading || isLoadingCustomers || ((reportType !== 'customerBalances') && (!startDate || !endDate)) || (reportType === 'statement' && selectedCustomerId === 'all')}
             >
               {(isLoading || isLoadingCustomers) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
             </Button>
-            <Button onClick={handlePrintReport} variant="outline" disabled={isLoading || !generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)}>
-              <Icon name="Printer" className="mr-2 h-4 w-4" />
-              Print Report
-            </Button>
+            {renderPrintButton()}
           </div>
         </CardContent>
       </Card>
@@ -1063,9 +1119,10 @@ export default function ReportsPage() {
          {reportToPrintData && reportToPrintData.reportType === 'profitability' && (
           <PrintableProfitReport ref={printRef} reportItems={reportToPrintData.data as ProfitReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
+        {reportToPrintData && reportToPrintData.reportType === 'profitabilitySummary' && (
+          <PrintableProfitSummaryReport ref={printRef} reportData={reportToPrintData.data} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
+        )}
       </div>
     </>
   );
 }
-
-    
