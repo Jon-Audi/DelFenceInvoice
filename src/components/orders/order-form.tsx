@@ -44,7 +44,7 @@ import { Separator } from '@/components/ui/separator';
 import { ALL_CATEGORIES_MARKUP_KEY, PAYMENT_METHODS } from '@/lib/constants';
 import { BulkAddProductsDialog } from '@/components/estimates/bulk-add-products-dialog';
 
-const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided'];
+const ORDER_STATUSES: Extract<DocumentStatus, 'Draft' | 'Ordered' | 'Ready for pick up' | 'Picked up' | 'Invoiced' | 'Voided' | 'Packed' | 'Partial Packed'>[] = ['Draft', 'Ordered', 'Ready for pick up', 'Picked up', 'Invoiced', 'Voided', 'Packed', 'Partial Packed'];
 const ORDER_STATES: Order['orderState'][] = ['Open', 'Closed'];
 const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
 
@@ -711,3 +711,5 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
     </Form>
   );
 }
+
+    
