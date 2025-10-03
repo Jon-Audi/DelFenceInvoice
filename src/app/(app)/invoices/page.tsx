@@ -279,22 +279,33 @@ export default function InvoicesPage() {
       await runTransaction(db, async (transaction) => {
         const hasId = Boolean(invoiceToSave.id);
         const invoiceRef = hasId ? doc(db, "invoices", invoiceToSave.id!) : doc(collection(db, "invoices"));
-
+  
         // Prepare write data (strip id)
         const { id: _ignore, ...invoiceDataFromDialog } = invoiceToSave;
         
-        // Sanitize optional fields to prevent Firestore 'undefined' error
         const payload: any = { ...invoiceDataFromDialog };
-        if (!payload.poNumber || payload.poNumber.trim() === '') payload.poNumber = deleteField();
-        if (!payload.dueDate) payload.dueDate = deleteField();
-        if (!payload.paymentTerms || payload.paymentTerms.trim() === '') payload.paymentTerms = deleteField();
-        if (!payload.notes || payload.notes.trim() === '') payload.notes = deleteField();
-        if (!payload.internalNotes || payload.internalNotes.trim() === '') payload.internalNotes = deleteField();
-        if (!payload.readyForPickUpDate) payload.readyForPickUpDate = deleteField();
-        if (!payload.pickedUpDate) payload.pickedUpDate = deleteField();
-
-
-        // PHASE 1: READS ONLY
+  
+        // Sanitize optional fields based on whether it's a new doc or an update
+        if (hasId) {
+          // For updates, use deleteField with merge: true
+          if (!payload.poNumber || payload.poNumber.trim() === '') payload.poNumber = deleteField();
+          if (!payload.dueDate) payload.dueDate = deleteField();
+          if (!payload.paymentTerms || payload.paymentTerms.trim() === '') payload.paymentTerms = deleteField();
+          if (!payload.notes || payload.notes.trim() === '') payload.notes = deleteField();
+          if (!payload.internalNotes || payload.internalNotes.trim() === '') payload.internalNotes = deleteField();
+          if (!payload.readyForPickUpDate) payload.readyForPickUpDate = deleteField();
+          if (!payload.pickedUpDate) payload.pickedUpDate = deleteField();
+        } else {
+          // For new documents, just delete the key if it's empty/falsy
+          if (!payload.poNumber || payload.poNumber.trim() === '') delete payload.poNumber;
+          if (!payload.dueDate) delete payload.dueDate;
+          if (!payload.paymentTerms || payload.paymentTerms.trim() === '') delete payload.paymentTerms;
+          if (!payload.notes || payload.notes.trim() === '') delete payload.notes;
+          if (!payload.internalNotes || payload.internalNotes.trim() === '') delete payload.internalNotes;
+          if (!payload.readyForPickUpDate) delete payload.readyForPickUpDate;
+          if (!payload.pickedUpDate) delete payload.pickedUpDate;
+        }
+  
         let originalInvoice: Invoice | null = null;
         if (hasId) {
           const originalSnap = await transaction.get(invoiceRef);
@@ -302,11 +313,10 @@ export default function InvoicesPage() {
             originalInvoice = { id: invoiceToSave.id!, ...(originalSnap.data() as any) } as Invoice;
           }
         }
-
-        // Get a map of product IDs that currently exist.
+  
         const productIdsInState = new Set(products.map(p => p.id));
         const inventoryChanges = new Map<string, number>();
-
+  
         if (originalInvoice) {
             for (const item of originalInvoice.lineItems || []) {
                 if (item.productId && !item.isNonStock && productIdsInState.has(item.productId)) {
@@ -315,14 +325,14 @@ export default function InvoicesPage() {
                 }
             }
         }
-
+  
         for (const item of invoiceDataFromDialog.lineItems || []) {
             if (item.productId && !item.isNonStock && productIdsInState.has(item.productId)) {
                 const delta = item.isReturn ? item.quantity : -item.quantity;
                 inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
             }
         }
-
+  
         const productIds = Array.from(inventoryChanges.keys());
         const productSnaps: { id: string; snap: any }[] = [];
         if (productIds.length) {
@@ -330,23 +340,26 @@ export default function InvoicesPage() {
           const snaps = await Promise.all(refs.map((r) => transaction.get(r)));
           snaps.forEach((snap, i) => productSnaps.push({ id: refs[i].id, snap }));
         }
-
-        // Validate reads
+  
         for (const { id, snap } of productSnaps) {
           if (!snap.exists()) throw new Error(`Product with ID ${id} not found during transaction.`);
         }
-
-        // PHASE 2: WRITES ONLY
+  
         for (const { id, snap } of productSnaps) {
           const qtyChange = inventoryChanges.get(id) ?? 0;
           if (!qtyChange) continue;
           const currentStock = (snap.data() as any)?.quantityInStock ?? 0;
           transaction.update(snap.ref, { quantityInStock: currentStock + qtyChange });
         }
-
-        transaction.set(invoiceRef, payload, hasId ? { merge: true } : {});
+  
+        // Use merge:true for updates, and a standard set for creation
+        if (hasId) {
+          transaction.set(invoiceRef, payload, { merge: true });
+        } else {
+          transaction.set(invoiceRef, payload);
+        }
       });
-
+  
       toast({
         title: invoiceToSave.id ? "Invoice Updated" : "Invoice Added",
         description: `Invoice ${invoiceToSave.invoiceNumber} and stock levels have been updated.`,
@@ -360,7 +373,7 @@ export default function InvoicesPage() {
         duration: 8000,
       });
     }
-
+  
     if (isConvertingInvoice) {
       setIsConvertingInvoice(false);
       setConversionInvoiceData(null);
@@ -590,9 +603,12 @@ export default function InvoicesPage() {
     }
     
     const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
+    const customer = customers.find(c => c.id === invoice.customerId) || null;
+
 
     setInvoiceToPrint({
       invoice,
+      customer,
       companySettings: settings,
       logoUrl: absoluteLogoUrl,
       disclaimer: settings.invoiceDisclaimer
@@ -1080,5 +1096,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
