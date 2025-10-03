@@ -339,9 +339,7 @@ export default function OrdersPage() {
   const handlePrepareAndPrintOrder = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-      const absoluteLogoUrl = settings?.logoUrl 
-        ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
-        : undefined;
+      const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
 
       setOrderToPrint({
         order: order,
@@ -377,9 +375,7 @@ export default function OrdersPage() {
   const handlePrepareAndPrintOrderPackingSlip = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
-      const absoluteLogoUrl = settings?.logoUrl 
-        ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
-        : undefined;
+      const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
 
       setPackingSlipToPrint({
         order: order,
@@ -770,3 +766,5 @@ export default function OrdersPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    

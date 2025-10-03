@@ -104,3 +104,5 @@ export const PrintableBulkPaymentReceipt = React.forwardRef<HTMLDivElement, Prin
 );
 
 PrintableBulkPaymentReceipt.displayName = "PrintableBulkPaymentReceipt";
+
+    

@@ -635,7 +635,7 @@ export default function ReportsPage() {
     setIsLoading(true);
     const settings = await fetchCompanySettings();
     if (settings) {
-      const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
+      const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
       
       const printData: ReportToPrintData = {
         reportType: printReportType,
@@ -1233,3 +1233,5 @@ export default function ReportsPage() {
     </>
   );
 }
+
+    

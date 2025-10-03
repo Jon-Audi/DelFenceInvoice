@@ -589,9 +589,7 @@ export default function InvoicesPage() {
       return;
     }
     
-    const absoluteLogoUrl = settings?.logoUrl 
-      ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
-      : undefined;
+    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
 
     setInvoiceToPrint({
       invoice,
@@ -637,9 +635,7 @@ export default function InvoicesPage() {
       return;
     }
 
-    const absoluteLogoUrl = settings?.logoUrl 
-      ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
-      : undefined;
+    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
 
     setPackingSlipToPrintForInvoice({
       invoice,
@@ -880,7 +876,7 @@ export default function InvoicesPage() {
             }
             onSave={handleSaveInvoice}
             onSaveProduct={handleSaveProduct}
-            onSaveCustomer={handleSaveCustomer}
+            onSaveCustomer={handleSaveCustomerWrapper}
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
@@ -905,7 +901,7 @@ export default function InvoicesPage() {
           initialData={conversionInvoiceData}
           onSave={handleSaveInvoice}
           onSaveProduct={handleSaveProduct}
-          onSaveCustomer={handleSaveCustomer}
+          onSaveCustomer={handleSaveCustomerWrapper}
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
@@ -1084,3 +1080,5 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    

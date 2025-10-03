@@ -478,9 +478,7 @@ export default function EstimatesPage() {
   const handlePrepareAndPrint = async (estimate: Estimate) => {
     const customer = customers.find(c => c.id === estimate.customerId);
     const companySettings = await fetchCompanySettings();
-    const absoluteLogoUrl = companySettings?.logoUrl 
-      ? (companySettings.logoUrl.startsWith('http') ? companySettings.logoUrl : `${window.location.origin}${companySettings.logoUrl}`)
-      : undefined;
+    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
 
     const estimateDataForPrint = {
       estimateNumber: estimate.estimateNumber,
@@ -797,3 +795,5 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
