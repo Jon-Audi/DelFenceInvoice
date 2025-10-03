@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -176,41 +177,30 @@ export default function EstimatesPage() {
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
     const { id, ...estimateDataFromDialog } = estimateToSave;
-    const basePayload: any = {
-      estimateNumber: estimateDataFromDialog.estimateNumber,
-      customerId: estimateDataFromDialog.customerId,
-      customerName: estimateDataFromDialog.customerName,
-      date: estimateDataFromDialog.date,
-      status: estimateDataFromDialog.status,
-      lineItems: estimateDataFromDialog.lineItems,
-      subtotal: estimateDataFromDialog.subtotal,
-      taxAmount: estimateDataFromDialog.taxAmount || 0,
-      total: estimateDataFromDialog.total,
+    
+    // Sanitize optional fields before saving
+    const payload: any = {
+      ...estimateDataFromDialog,
+      poNumber: (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') 
+                ? estimateDataFromDialog.poNumber.trim() 
+                : deleteField(),
+      validUntil: estimateDataFromDialog.validUntil ? estimateDataFromDialog.validUntil : deleteField(),
+      notes: (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') 
+             ? estimateDataFromDialog.notes.trim() 
+             : deleteField(),
+      internalNotes: (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') 
+                     ? estimateDataFromDialog.internalNotes.trim() 
+                     : deleteField(),
     };
+
 
     try {
       if (id && estimates.some(e => e.id === id)) {
         const estimateRef = doc(db, 'estimates', id);
-        const updatePayload = { ...basePayload };
-        updatePayload.poNumber = (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '')
-                                  ? estimateDataFromDialog.poNumber.trim()
-                                  : deleteField();
-        updatePayload.validUntil = estimateDataFromDialog.validUntil ? estimateDataFromDialog.validUntil : deleteField();
-        updatePayload.notes = (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '')
-                               ? estimateDataFromDialog.notes.trim()
-                               : deleteField();
-        updatePayload.internalNotes = (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '')
-                                      ? estimateDataFromDialog.internalNotes.trim()
-                                      : deleteField();
-        await setDoc(estimateRef, updatePayload, { merge: true });
+        await setDoc(estimateRef, payload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
       } else {
-        const addPayload = { ...basePayload };
-        if (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') addPayload.poNumber = estimateDataFromDialog.poNumber.trim();
-        if (estimateDataFromDialog.validUntil) addPayload.validUntil = estimateDataFromDialog.validUntil;
-        if (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') addPayload.notes = estimateDataFromDialog.notes.trim();
-        if (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') addPayload.internalNotes = estimateDataFromDialog.internalNotes.trim();
-        const docRef = await addDoc(collection(db, 'estimates'), addPayload);
+        const docRef = await addDoc(collection(db, 'estimates'), payload);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
     } catch (error: any) {
@@ -785,3 +775,5 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    

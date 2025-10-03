@@ -46,6 +46,7 @@ import {
   doc,
   getDoc,
   runTransaction,
+  deleteField,
 } from "firebase/firestore";
 import { PrintableInvoice } from "@/components/invoices/printable-invoice";
 import { PrintableInvoicePackingSlip } from "@/components/invoices/printable-invoice-packing-slip";
@@ -281,6 +282,17 @@ export default function InvoicesPage() {
 
         // Prepare write data (strip id)
         const { id: _ignore, ...invoiceDataFromDialog } = invoiceToSave;
+        
+        // Sanitize optional fields to prevent Firestore 'undefined' error
+        const payload: any = { ...invoiceDataFromDialog };
+        if (!payload.poNumber || payload.poNumber.trim() === '') payload.poNumber = deleteField();
+        if (!payload.dueDate) payload.dueDate = deleteField();
+        if (!payload.paymentTerms || payload.paymentTerms.trim() === '') payload.paymentTerms = deleteField();
+        if (!payload.notes || payload.notes.trim() === '') payload.notes = deleteField();
+        if (!payload.internalNotes || payload.internalNotes.trim() === '') payload.internalNotes = deleteField();
+        if (!payload.readyForPickUpDate) payload.readyForPickUpDate = deleteField();
+        if (!payload.pickedUpDate) payload.pickedUpDate = deleteField();
+
 
         // PHASE 1: READS ONLY
         let originalInvoice: Invoice | null = null;
@@ -332,7 +344,7 @@ export default function InvoicesPage() {
           transaction.update(snap.ref, { quantityInStock: currentStock + qtyChange });
         }
 
-        transaction.set(invoiceRef, invoiceDataFromDialog, hasId ? { merge: true } : {});
+        transaction.set(invoiceRef, payload, hasId ? { merge: true } : {});
       });
 
       toast({
@@ -910,7 +922,7 @@ export default function InvoicesPage() {
               void handleSaveInvoice(inv);
             }}
             onSaveProduct={handleSaveProduct}
-            onSaveCustomer={handleSaveCustomer}
+            onSaveCustomer={handleSaveCustomerWrapper}
             onDelete={(id) => {
               void handleDeleteInvoice(id);
             }}
@@ -1061,5 +1073,7 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
 
     
