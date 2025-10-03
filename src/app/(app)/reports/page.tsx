@@ -374,7 +374,7 @@ export default function ReportsPage() {
         } else {
             currentReportTitle = "Outstanding Invoices Report (All)";
             qConstraints = [
-                where('status', 'not-in', ['Paid', 'Voided']),
+                where('status', 'not-in', ['Draft', 'Ordered', 'Paid', 'Voided']),
                 where('balanceDue', '>', 0)
             ];
         }
@@ -1160,5 +1160,3 @@ export default function ReportsPage() {
     </>
   );
 }
-
-    
