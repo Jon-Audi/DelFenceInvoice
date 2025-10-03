@@ -31,6 +31,7 @@ import { PrintableProductionReport } from '@/components/reports/printable-produc
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
@@ -65,6 +66,7 @@ export default function ReportsPage() {
   const [generatedReportData, setGeneratedReportData] = useState<any | null>(null);
   const [generatedProfitabilitySummaryData, setGeneratedProfitabilitySummaryData] = useState<ProfitSummaryItem[] | null>(null);
   const [activeDatePreset, setActiveDatePreset] = useState<DatePreset>('thisMonth');
+  const [showOnlyPickedUpUnpaid, setShowOnlyPickedUpUnpaid] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [reportToPrintData, setReportToPrintData] = useState<ReportToPrintData | null>(null);
@@ -361,18 +363,31 @@ export default function ReportsPage() {
 
       } else if (targetReportType === 'customerBalances') {
         const invoicesRef = collection(db, 'invoices');
-        let qConstraints = [
-            where('status', 'not-in', ['Paid', 'Voided']),
-            where('balanceDue', '>', 0)
-        ];
+        let qConstraints = [];
 
-        if (selectedCustomerId === 'all') {
-          currentReportTitle = "Outstanding Invoices Report (All Customers)";
+        if (showOnlyPickedUpUnpaid) {
+            currentReportTitle = "Outstanding Invoices (Picked Up, Unpaid)";
+            qConstraints = [
+                where('status', '==', 'Picked up'),
+                where('balanceDue', '>', 0)
+            ];
         } else {
+            currentReportTitle = "Outstanding Invoices Report (All)";
+            qConstraints = [
+                where('status', 'not-in', ['Paid', 'Voided']),
+                where('balanceDue', '>', 0)
+            ];
+        }
+
+        if (selectedCustomerId !== 'all') {
           const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
           currentReportTitle = `Outstanding Invoices for ${selectedCustomer?.companyName || `${selectedCustomer?.firstName} ${selectedCustomer?.lastName}` || 'Selected Customer'}`;
+          if (showOnlyPickedUpUnpaid) {
+            currentReportTitle += " (Picked Up)";
+          }
           qConstraints.push(where('customerId', '==', selectedCustomerId));
         }
+        
         const qInvoices = query(invoicesRef, ...qConstraints);
         const invoicesSnapshot = await getDocs(qInvoices);
         
@@ -574,7 +589,7 @@ export default function ReportsPage() {
 
   const handlePrintReport = async (printReportType: ReportType) => {
     const dataForPrintCheck = (printReportType === 'profitabilitySummary') ? generatedProfitabilitySummaryData : generatedReportData;
-    if (!dataForPrintCheck || (Array.isArray(dataForPrintCheck) && dataForPrintCheck.length === 0) || (dataForPrintCheck.transactions && dataForPrintCheck.transactions.length === 0)) {
+    if (!dataForPrintCheck || (Array.isArray(dataForPrintCheck) && dataForPrintCheck.length === 0) || (dataForPrintCheck && (dataForPrintCheck as any).transactions && (dataForPrintCheck as any).transactions.length === 0)) {
       toast({ title: "No Report Data", description: "Please generate a report with data first.", variant: "default" });
       return;
     }
@@ -940,7 +955,7 @@ export default function ReportsPage() {
     const isDataAvailableForCurrentReport = reportType === 'profitability' ? 
       (generatedReportData && Array.isArray(generatedReportData) && generatedReportData.length > 0) || 
       (generatedProfitabilitySummaryData && Array.isArray(generatedProfitabilitySummaryData) && generatedProfitabilitySummaryData.length > 0)
-      : generatedReportData && (!Array.isArray(generatedReportData) || generatedReportData.length > 0);
+      : generatedReportData && (!Array.isArray(generatedReportData) || generatedReportData.length > 0) && (!generatedReportData.transactions || generatedReportData.transactions.length > 0);
 
     if (reportType === 'profitability') {
       return (
@@ -1064,8 +1079,20 @@ export default function ReportsPage() {
               </Select>
               {reportType === 'customerBalances' && (
                   <p className="text-xs text-muted-foreground">
-                    This report shows currently outstanding invoices (not Paid or Voided, with a balance due). Date range is not applicable.
+                    This report shows currently outstanding invoices. Date range is not applicable unless the 'Picked Up' filter is used.
                   </p>
+              )}
+               {reportType === 'customerBalances' && (
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox
+                    id="show-picked-up"
+                    checked={showOnlyPickedUpUnpaid}
+                    onCheckedChange={(checked) => setShowOnlyPickedUpUnpaid(!!checked)}
+                  />
+                  <Label htmlFor="show-picked-up" className="font-normal">
+                    Only show invoices that are "Picked up" and not fully paid.
+                  </Label>
+                </div>
               )}
             </div>
           )}
@@ -1127,9 +1154,11 @@ export default function ReportsPage() {
           <PrintableProfitReport ref={printRef} reportItems={reportToPrintData.data as ProfitReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
         {reportToPrintData && reportToPrintData.reportType === 'profitabilitySummary' && (
-          <PrintableProfitSummaryReport ref={printRef} reportData={reportToPrintData.data} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
+          <PrintableProfitSummaryReport ref={printRef} reportData={reportToPrintData.data as ProfitSummaryItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl}/>
         )}
       </div>
     </>
   );
 }
+
+    
