@@ -61,6 +61,7 @@ import { cn } from '@/lib/utils';
 // Removed Firebase Functions imports: import { getFunctions, httpsCallable } from 'firebase/functions';
 
 type SortableEstimateKeys = 'estimateNumber' | 'customerName' | 'poNumber' | 'date' | 'total' | 'status' | 'validUntil';
+const COMPANY_SETTINGS_DOC_ID = "main";
 
 export default function EstimatesPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -459,25 +460,43 @@ export default function EstimatesPage() {
     return null;
   };
 
-  const handlePrepareAndPrint = (estimate: Estimate) => {
+  const fetchCompanySettings = async (): Promise<CompanySettings | null> => {
+    try {
+      const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as CompanySettings;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      toast({ title: "Error", description: "Could not fetch company settings for printing.", variant: "destructive" });
+      return null;
+    }
+  };
+  
+  const handlePrepareAndPrint = async (estimate: Estimate) => {
     const customer = customers.find(c => c.id === estimate.customerId);
+    const companySettings = await fetchCompanySettings();
+
     const estimateDataForPrint = {
-        estimateNumber: estimate.estimateNumber,
-        date: formatDateForDisplay(estimate.date),
-        poNumber: estimate.poNumber || '',
-        customerName: estimate.customerName || 'N/A',
-        customerPhone: customer?.phone,
-        customerEmail: customer?.emailContacts?.find(e => e.type === 'Main Contact')?.email || customer?.emailContacts?.[0]?.email,
-        items: estimate.lineItems.map(li => ({
-          description: li.productName + (li.isReturn ? " (Return)" : ""),
-          quantity: li.quantity,
-          unitPrice: li.unitPrice,
-          total: li.total,
-        })),
-        subtotal: estimate.subtotal,
-        total: estimate.total,
-        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
-      };
+      estimateNumber: estimate.estimateNumber,
+      date: formatDateForDisplay(estimate.date),
+      poNumber: estimate.poNumber || '',
+      customerName: estimate.customerName || 'N/A',
+      customerPhone: customer?.phone,
+      customerEmail: customer?.emailContacts?.find(e => e.type === 'Main Contact')?.email || customer?.emailContacts?.[0]?.email,
+      items: estimate.lineItems.map(li => ({
+        description: li.productName + (li.isReturn ? " (Return)" : ""),
+        quantity: li.quantity,
+        unitPrice: li.unitPrice,
+        total: li.total,
+      })),
+      subtotal: estimate.subtotal,
+      total: estimate.total,
+      logoUrl: companySettings?.logoUrl,
+      disclaimer: companySettings?.estimateDisclaimer,
+    };
     setEstimateToPrint(estimateDataForPrint);
 
     setTimeout(() => {
@@ -775,5 +794,3 @@ export default function EstimatesPage() {
 const FormFieldWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    

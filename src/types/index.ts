@@ -191,6 +191,8 @@ export interface CompanySettings {
   website?: string;
   logoUrl?: string;
   taxId?: string;
+  estimateDisclaimer?: string;
+  invoiceDisclaimer?: string;
 }
 
 // New type for the detailed customer balance/outstanding invoices report

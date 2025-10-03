@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -8,10 +9,11 @@ interface PrintableInvoiceProps {
   companySettings: CompanySettings | null;
   customer: Customer | null;
   logoUrl?: string;
+  disclaimer?: string;
 }
 
 const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>(
-  ({ invoice, companySettings, customer, logoUrl }, ref) => {
+  ({ invoice, companySettings, customer, logoUrl, disclaimer }, ref) => {
     if (!invoice || !companySettings) {
       return null;
     }
@@ -165,6 +167,7 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
           )}
 
           <div className="text-center text-xs text-gray-500 pt-8 border-t border-gray-300">
+            {disclaimer && <p className="whitespace-pre-line">{disclaimer}</p>}
             <p>Thank you for your business!</p>
             <p>{companySettings.companyName}</p>
           </div>
@@ -175,4 +178,4 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
 );
 
 PrintableInvoice.displayName = "PrintableInvoice";
-export { PrintableInvoice }; // Ensure it's exported
+export { PrintableInvoice };

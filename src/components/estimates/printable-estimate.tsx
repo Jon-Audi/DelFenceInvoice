@@ -1,10 +1,11 @@
+
 "use client";
 
 import React from 'react';
 
 // Define the props for PrintableEstimate
 interface PrintableEstimateProps {
-  logoUrl?: string; // Expecting an absolute URL
+  logoUrl?: string;
   estimateNumber?: string;
   date?: string;
   poNumber?: string;
@@ -19,27 +20,25 @@ interface PrintableEstimateProps {
   }>;
   subtotal?: number;
   total?: number;
+  disclaimer?: string;
 }
 
 const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProps>(
-  ({ logoUrl, estimateNumber, date, poNumber, customerName, customerPhone, customerEmail, items = [], subtotal = 0, total = 0 }, ref) => {
+  ({ logoUrl, estimateNumber, date, poNumber, customerName, customerPhone, customerEmail, items = [], subtotal = 0, total = 0, disclaimer }, ref) => {
   return (
-    // This div is what will have its innerHTML taken
     <div ref={ref} className="print-only-container">
-      <div className="print-only p-8"> {/* Added p-8 here for padding */}
-        {/* Logo */}
+      <div className="print-only p-8">
         {logoUrl && (
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}> {/* Wrapper div with inline style for centering */}
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <img
-              src={logoUrl} // Using the absolute logoUrl
-              alt="Delaware Fence Solutions Logo"
-              style={{ display: 'inline-block', height: '5rem', width: 'auto', objectFit: 'contain' }} // Inline styles for size and display
+              src={logoUrl}
+              alt="Company Logo"
+              style={{ display: 'inline-block', height: '5rem', width: 'auto', objectFit: 'contain' }}
               data-ai-hint="company logo"
             />
           </div>
         )}
 
-        {/* Heading */}
         <div className="text-center mb-4">
           <h1 className="text-2xl font-bold"></h1>
           <p>1111 Greenbank Road, Wilmington, DE 19808</p>
@@ -52,7 +51,6 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
           </p>
         </div>
 
-        {/* Estimate Info */}
         <div className="mb-4">
           <p><strong>Estimate #:</strong> {estimateNumber}</p>
           <p><strong>Date:</strong> {date}</p>
@@ -62,7 +60,6 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
           {customerEmail && <p><strong>Email:</strong> {customerEmail}</p>}
         </div>
 
-        {/* Table */}
         <table className="table-auto border-collapse w-full text-sm mb-4">
           <thead>
             <tr>
@@ -94,10 +91,15 @@ const PrintableEstimate = React.forwardRef<HTMLDivElement, PrintableEstimateProp
           </tfoot>
         </table>
 
-        {/* Footer */}
         <div className="text-center">
-          <p>All prices are current at the time of inquiry and may change without prior notice. We appreciate your consideration</p>
-          <p className="italic">Delaware Fence Solutions</p>
+          {disclaimer ? (
+            <p className="whitespace-pre-line text-xs">{disclaimer}</p>
+          ) : (
+            <>
+              <p>All prices are current at the time of inquiry and may change without prior notice. We appreciate your consideration</p>
+              <p className="italic">Delaware Fence Solutions</p>
+            </>
+          )}
         </div>
       </div>
     </div>

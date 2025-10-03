@@ -389,7 +389,7 @@ export default function InvoicesPage() {
   const handleSaveCustomerWrapper = async (c: Omit<Customer, "id"> & { id?: string; }) => {
     try {
       const customerToSave = { ...c, id: c.id || "" } as Customer; // Ensure it's a full Customer object for the main handler
-      await handleSaveCustomer(customerToSave);
+      return await handleSaveCustomer(customerToSave);
     } catch (err) {
       console.error("Failed to save customer from invoice dialog:", err);
       toast({ title: "Error", description: "Could not save customer.", variant: "destructive" });
@@ -566,7 +566,9 @@ export default function InvoicesPage() {
     try {
       const docRef = doc(db, "companySettings", COMPANY_SETTINGS_DOC_ID);
       const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) return docSnap.data() as CompanySettings;
+      if (docSnap.exists()) {
+        return docSnap.data() as CompanySettings;
+      }
       toast({
         title: "Company Settings Not Found",
         description: "Please configure company settings for printing.",
@@ -590,7 +592,8 @@ export default function InvoicesPage() {
     setInvoiceToPrint({
       invoice,
       companySettings: settings,
-      logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      logoUrl: settings.logoUrl,
+      disclaimer: settings.invoiceDisclaimer
     });
     setPackingSlipToPrintForInvoice(null);
 
@@ -922,7 +925,7 @@ export default function InvoicesPage() {
               void handleSaveInvoice(inv);
             }}
             onSaveProduct={handleSaveProduct}
-            onSaveCustomer={handleSaveCustomer}
+            onSaveCustomer={handleSaveCustomerWrapper}
             onDelete={(id) => {
               void handleDeleteInvoice(id);
             }}

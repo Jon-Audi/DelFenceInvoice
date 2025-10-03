@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,8 @@ const companySettingsSchema = z.object({
   website: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   logoUrl: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   taxId: z.string().optional(),
+  estimateDisclaimer: z.string().optional(),
+  invoiceDisclaimer: z.string().optional(),
 });
 
 type CompanySettingsFormData = z.infer<typeof companySettingsSchema>;
@@ -54,6 +57,8 @@ export default function CompanySettingsPage() {
       website: '',
       logoUrl: '',
       taxId: '',
+      estimateDisclaimer: '',
+      invoiceDisclaimer: '',
     },
   });
 
@@ -65,9 +70,8 @@ export default function CompanySettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const fetchedData = docSnap.data() as CompanySettings;
-          // Normalize fetchedData to ensure all optional string fields are at least ''
           const normalizedData: CompanySettingsFormData = {
-            companyName: fetchedData.companyName || '', // Should always exist if document exists and schema is followed
+            companyName: fetchedData.companyName || '',
             addressLine1: fetchedData.addressLine1 || '',
             addressLine2: fetchedData.addressLine2 || '',
             city: fetchedData.city || '',
@@ -79,11 +83,10 @@ export default function CompanySettingsPage() {
             website: fetchedData.website || '',
             logoUrl: fetchedData.logoUrl || '',
             taxId: fetchedData.taxId || '',
+            estimateDisclaimer: fetchedData.estimateDisclaimer || '',
+            invoiceDisclaimer: fetchedData.invoiceDisclaimer || '',
           };
           form.reset(normalizedData);
-        } else {
-          // No existing settings, form will use defaultValues which are already ''
-          // console.log("No company settings document found, using defaults.");
         }
       } catch (error) {
         console.error("Error fetching company settings:", error);
@@ -97,22 +100,13 @@ export default function CompanySettingsPage() {
       }
     };
     fetchCompanySettings();
-  }, [form, toast]); // form.reset is stable, so form is a fine dependency
+  }, [form, toast]);
 
   const onSubmit = async (data: CompanySettingsFormData) => {
     setIsLoading(true);
     try {
       const docRef = doc(db, 'companySettings', COMPANY_SETTINGS_DOC_ID);
-      const dataToSave = {
-        ...data,
-        // Convert empty strings for optional URL/email fields to undefined if desired for Firestore
-        // For simplicity, Firestore can store empty strings. If undefined is preferred:
-        // email: data.email?.trim() === '' ? undefined : data.email,
-        // website: data.website?.trim() === '' ? undefined : data.website,
-        // logoUrl: data.logoUrl?.trim() === '' ? undefined : data.logoUrl,
-      };
-
-      await setDoc(docRef, dataToSave, { merge: true });
+      await setDoc(docRef, data, { merge: true });
       toast({
         title: "Settings Saved",
         description: "Company information has been updated successfully.",
@@ -202,6 +196,22 @@ export default function CompanySettingsPage() {
               <h3 className="text-lg font-medium pt-4 border-t mt-6">Tax Information</h3>
                <FormField control={form.control} name="taxId" render={({ field }) => (
                 <FormItem><FormLabel>Tax ID / VAT Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+
+              <h3 className="text-lg font-medium pt-4 border-t mt-6">Disclaimers</h3>
+              <FormField control={form.control} name="estimateDisclaimer" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Estimate Disclaimer</FormLabel>
+                  <FormControl><Textarea rows={4} placeholder="e.g., All prices are current at the time of inquiry and may change without prior notice." {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+               <FormField control={form.control} name="invoiceDisclaimer" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Invoice Disclaimer</FormLabel>
+                  <FormControl><Textarea rows={4} placeholder="e.g., Thank you for your business!" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
 
               <div className="flex justify-end pt-4">
