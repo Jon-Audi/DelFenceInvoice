@@ -16,7 +16,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isVa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc as getFirestoreDoc, orderBy } from 'firebase/firestore';
-import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, CustomerStatementReportData, CustomerStatementItem, SalesByCustomerReportItem, Product, ProductionHistoryItem } from '@/types';
+import type { Invoice, Order, Customer, CompanySettings, CustomerInvoiceDetail, PaymentReportItem, Payment, WeeklySummaryReportItem, PaymentByTypeReportItem, ProfitReportItem, CustomerStatementReportData, CustomerStatementItem, SalesByCustomerReportItem, Product, ProductionHistoryItem, ReadyForPickupReportItem } from '@/types';
 import { PrintableSalesReport } from '@/components/reports/printable-sales-report';
 import PrintableOrderReport from '@/components/reports/printable-order-report';
 import { PrintableOutstandingInvoicesReport } from '@/components/reports/printable-outstanding-invoices-report';
@@ -28,6 +28,7 @@ import { PrintableProfitSummaryReport } from '@/components/reports/printable-pro
 import { PrintableCustomerStatement } from '@/components/reports/printable-customer-statement';
 import { PrintableSalesByCustomerReport } from '@/components/reports/printable-sales-by-customer-report';
 import { PrintableProductionReport } from '@/components/reports/printable-production-report';
+import { PrintableReadyForPickupReport } from '@/components/reports/printable-ready-for-pickup-report';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHODS } from '@/lib/constants';
@@ -35,7 +36,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const COMPANY_SETTINGS_DOC_ID = "main";
 
-type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production' | 'profitabilitySummary';
+type ReportType = 'sales' | 'orders' | 'customerBalances' | 'payments' | 'weeklySummary' | 'paymentByType' | 'profitability' | 'statement' | 'salesByCustomer' | 'production' | 'profitabilitySummary' | 'readyForPickup';
 type DatePreset = 'custom' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear';
 
 interface ProfitSummaryItem {
@@ -182,7 +183,7 @@ export default function ReportsPage() {
 
   const handleGenerateReport = async (targetReportType = reportType) => {
     if (!startDate || !endDate) {
-      if (targetReportType !== 'customerBalances') {
+      if (targetReportType !== 'customerBalances' && targetReportType !== 'readyForPickup') {
         toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
         return;
       }
@@ -209,7 +210,44 @@ export default function ReportsPage() {
     try {
       let data: any[] | any = [];
       
-      if (targetReportType === 'production') {
+      if (targetReportType === 'readyForPickup') {
+        currentReportTitle = `Ready for Pickup Report`;
+        const ordersQuery = query(collection(db, 'orders'), where('status', '==', 'Ready for pick up'));
+        const invoicesQuery = query(collection(db, 'invoices'), where('status', '==', 'Ready for pick up'));
+        
+        const [ordersSnapshot, invoicesSnapshot] = await Promise.all([
+          getDocs(ordersQuery),
+          getDocs(invoicesQuery)
+        ]);
+
+        const items: ReadyForPickupReportItem[] = [];
+        ordersSnapshot.forEach(doc => {
+            const order = doc.data() as Order;
+            items.push({
+                documentId: doc.id,
+                documentNumber: order.orderNumber,
+                documentType: 'Order',
+                customerName: order.customerName || 'N/A',
+                documentDate: order.date,
+                readyForPickUpDate: order.readyForPickUpDate,
+                total: order.total,
+            });
+        });
+        invoicesSnapshot.forEach(doc => {
+            const invoice = doc.data() as Invoice;
+            items.push({
+                documentId: doc.id,
+                documentNumber: invoice.invoiceNumber,
+                documentType: 'Invoice',
+                customerName: invoice.customerName || 'N/A',
+                documentDate: invoice.date,
+                readyForPickUpDate: invoice.readyForPickUpDate,
+                total: invoice.total,
+            });
+        });
+        data = items.sort((a,b) => toTime(b.readyForPickUpDate) - toTime(a.readyForPickUpDate));
+      }
+      else if (targetReportType === 'production') {
         currentReportTitle = `Production History Report (${format(rangeStart, "P")} - ${format(rangeEnd, "P")})`;
         const historyRef = collection(db, 'productionHistory');
         const q = query(historyRef, 
@@ -374,7 +412,7 @@ export default function ReportsPage() {
         } else {
             currentReportTitle = "Outstanding Invoices Report (All)";
             qConstraints = [
-                where('status', 'not-in', ['Draft', 'Ordered', 'Paid', 'Voided']),
+                where('status', 'not-in', ['Draft', 'Ordered', 'Paid', 'Voided', 'Ready for pick up']),
                 where('balanceDue', '>', 0)
             ];
         }
@@ -714,6 +752,11 @@ export default function ReportsPage() {
          </div>
        );
     }
+    if (reportType === 'readyForPickup') {
+      const items = generatedReportData as ReadyForPickupReportItem[];
+      const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
+      return <p>Total Value Ready for Pickup: <span className="font-semibold">${grandTotal.toFixed(2)}</span></p>;
+    }
     return null;
   };
   
@@ -727,6 +770,32 @@ export default function ReportsPage() {
   const renderReportTable = () => {
     if (!generatedReportData || (Array.isArray(generatedReportData) && generatedReportData.length === 0)) {
         return <p className="text-center text-muted-foreground py-4">No data to display for the selected criteria.</p>;
+    }
+
+    if (reportType === 'readyForPickup') {
+        const items = generatedReportData as ReadyForPickupReportItem[];
+        return (
+            <Table>
+                <TableHeader><TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Ready Date</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                    {items.map((item) => (
+                        <TableRow key={item.documentId}>
+                            <TableCell>{item.documentType}</TableCell>
+                            <TableCell>{item.documentNumber}</TableCell>
+                            <TableCell>{item.customerName}</TableCell>
+                            <TableCell>{item.readyForPickUpDate ? format(new Date(item.readyForPickUpDate), 'P') : 'N/A'}</TableCell>
+                            <TableCell className="text-right">${item.total.toFixed(2)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        );
     }
     
     if (reportType === 'production') {
@@ -944,8 +1013,8 @@ export default function ReportsPage() {
 
   const getActiveDatePresets = () => {
     const commonPresets: DatePreset[] = ['thisWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'custom'];
-    if (reportType === 'customerBalances') {
-        return ['custom'];
+    if (reportType === 'customerBalances' || reportType === 'readyForPickup') {
+        return [];
     }
     return commonPresets;
   }
@@ -1003,12 +1072,13 @@ export default function ReportsPage() {
             setSelectedCustomerId('all');
             handleDatePresetChange('thisMonth');
           }}>
-            <TabsList className="grid w-full grid-cols-5 sm:grid-cols-10">
+            <TabsList className="grid w-full grid-cols-5 sm:grid-cols-11">
               <TabsTrigger value="sales">Sales</TabsTrigger>
               <TabsTrigger value="salesByCustomer">Sales by Cust.</TabsTrigger>
               <TabsTrigger value="profitability">Profitability</TabsTrigger>
               <TabsTrigger value="production">Production</TabsTrigger>
               <TabsTrigger value="orders">Orders</TabsTrigger>
+              <TabsTrigger value="readyForPickup">Ready for Pickup</TabsTrigger>
               <TabsTrigger value="statement">Statement</TabsTrigger>
               <TabsTrigger value="customerBalances">Outstanding</TabsTrigger>
               <TabsTrigger value="payments">Payments</TabsTrigger>
@@ -1017,7 +1087,7 @@ export default function ReportsPage() {
             </TabsList>
           </Tabs>
 
-          {(reportType !== 'customerBalances') && (
+          {datePresetsToRender.length > 0 && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                  {datePresetsToRender.map(preset => (
@@ -1100,7 +1170,7 @@ export default function ReportsPage() {
           <div className="flex space-x-2">
             <Button 
               onClick={() => handleGenerateReport()} 
-              disabled={isLoading || isLoadingCustomers || ((reportType !== 'customerBalances') && (!startDate || !endDate)) || (reportType === 'statement' && selectedCustomerId === 'all')}
+              disabled={isLoading || isLoadingCustomers || (datePresetsToRender.length > 0 && (!startDate || !endDate)) || (reportType === 'statement' && selectedCustomerId === 'all')}
             >
               {(isLoading || isLoadingCustomers) && <Icon name="Loader2" className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
@@ -1125,6 +1195,9 @@ export default function ReportsPage() {
       <div style={{ display: 'none' }}>
         {reportToPrintData && reportToPrintData.reportType === 'production' && (
             <PrintableProductionReport ref={printRef} reportItems={reportToPrintData.data as ProductionHistoryItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />
+        )}
+        {reportToPrintData && reportToPrintData.reportType === 'readyForPickup' && (
+            <PrintableReadyForPickupReport ref={printRef} reportItems={reportToPrintData.data as ReadyForPickupReportItem[]} companySettings={reportToPrintData.companySettings} logoUrl={reportToPrintData.logoUrl} />
         )}
         {reportToPrintData && reportToPrintData.reportType === 'salesByCustomer' && (
             <PrintableSalesByCustomerReport ref={printRef} reportItems={reportToPrintData.data as SalesByCustomerReportItem[]} companySettings={reportToPrintData.companySettings} startDate={reportToPrintData.startDate!} endDate={reportToPrintData.endDate!} logoUrl={reportToPrintData.logoUrl} />

@@ -321,3 +321,13 @@ export interface ProductionHistoryItem {
   notes: string | null;
   poNumber: string | null;
 }
+
+export interface ReadyForPickupReportItem {
+  documentId: string;
+  documentNumber: string;
+  documentType: 'Order' | 'Invoice';
+  customerName: string;
+  documentDate: string;
+  readyForPickUpDate?: string;
+  total: number;
+}
