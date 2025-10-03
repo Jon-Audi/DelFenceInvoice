@@ -386,14 +386,14 @@ export default function InvoicesPage() {
     }
   };
   
-  const handleSaveCustomerWrapper = (c: Omit<Customer, "id"> & { id?: string; }) => {
-    const id = c.id ?? "";
-    const fullCustomer: Customer = { ...c, id: id } as Customer;
-    // fire-and-forget to match the `()=>void` prop type
-    void handleSaveCustomer(fullCustomer).catch(err => {
+  const handleSaveCustomerWrapper = async (c: Omit<Customer, "id"> & { id?: string; }) => {
+    try {
+      const customerToSave = { ...c, id: c.id || "" } as Customer; // Ensure it's a full Customer object for the main handler
+      await handleSaveCustomer(customerToSave);
+    } catch (err) {
       console.error("Failed to save customer from invoice dialog:", err);
       toast({ title: "Error", description: "Could not save customer.", variant: "destructive" });
-    });
+    }
   };
 
   const handleSaveCustomer = async (customerToSave: Customer): Promise<string | void> => {
@@ -922,7 +922,7 @@ export default function InvoicesPage() {
               void handleSaveInvoice(inv);
             }}
             onSaveProduct={handleSaveProduct}
-            onSaveCustomer={handleSaveCustomerWrapper}
+            onSaveCustomer={handleSaveCustomer}
             onDelete={(id) => {
               void handleDeleteInvoice(id);
             }}
@@ -1073,7 +1073,3 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
-
-    
-
-    
