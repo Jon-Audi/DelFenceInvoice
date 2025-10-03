@@ -478,6 +478,9 @@ export default function EstimatesPage() {
   const handlePrepareAndPrint = async (estimate: Estimate) => {
     const customer = customers.find(c => c.id === estimate.customerId);
     const companySettings = await fetchCompanySettings();
+    const absoluteLogoUrl = companySettings?.logoUrl 
+      ? (companySettings.logoUrl.startsWith('http') ? companySettings.logoUrl : `${window.location.origin}${companySettings.logoUrl}`)
+      : undefined;
 
     const estimateDataForPrint = {
       estimateNumber: estimate.estimateNumber,
@@ -494,7 +497,7 @@ export default function EstimatesPage() {
       })),
       subtotal: estimate.subtotal,
       total: estimate.total,
-      logoUrl: companySettings?.logoUrl,
+      logoUrl: absoluteLogoUrl,
       disclaimer: companySettings?.estimateDisclaimer,
     };
     setEstimateToPrint(estimateDataForPrint);

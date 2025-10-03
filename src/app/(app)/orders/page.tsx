@@ -339,10 +339,14 @@ export default function OrdersPage() {
   const handlePrepareAndPrintOrder = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
+      const absoluteLogoUrl = settings?.logoUrl 
+        ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
+        : undefined;
+
       setOrderToPrint({
         order: order,
         companySettings: settings,
-        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+        logoUrl: absoluteLogoUrl,
       });
       setPackingSlipToPrint(null); 
       setTimeout(() => {
@@ -373,10 +377,14 @@ export default function OrdersPage() {
   const handlePrepareAndPrintOrderPackingSlip = async (order: Order) => {
     const settings = await fetchCompanySettings();
     if (settings) {
+      const absoluteLogoUrl = settings?.logoUrl 
+        ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
+        : undefined;
+
       setPackingSlipToPrint({
         order: order,
         companySettings: settings,
-        logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+        logoUrl: absoluteLogoUrl,
       });
       setOrderToPrint(null); 
       setTimeout(() => {

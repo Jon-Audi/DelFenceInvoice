@@ -386,7 +386,7 @@ export default function InvoicesPage() {
     }
   };
   
-  const handleSaveCustomerWrapper = async (c: Omit<Customer, "id"> & { id?: string; }) => {
+  const handleSaveCustomerWrapper = async (c: Omit<Customer, "id"> & { id?: string; }): Promise<string | void> => {
     try {
       const customerToSave = { ...c, id: c.id || "" } as Customer; // Ensure it's a full Customer object for the main handler
       return await handleSaveCustomer(customerToSave);
@@ -588,11 +588,15 @@ export default function InvoicesPage() {
       toast({ title: "Cannot Print", description: "Company settings are required.", variant: "destructive" });
       return;
     }
+    
+    const absoluteLogoUrl = settings?.logoUrl 
+      ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
+      : undefined;
 
     setInvoiceToPrint({
       invoice,
       companySettings: settings,
-      logoUrl: settings.logoUrl,
+      logoUrl: absoluteLogoUrl,
       disclaimer: settings.invoiceDisclaimer
     });
     setPackingSlipToPrintForInvoice(null);
@@ -633,10 +637,14 @@ export default function InvoicesPage() {
       return;
     }
 
+    const absoluteLogoUrl = settings?.logoUrl 
+      ? (settings.logoUrl.startsWith('http') ? settings.logoUrl : `${window.location.origin}${settings.logoUrl}`)
+      : undefined;
+
     setPackingSlipToPrintForInvoice({
       invoice,
       companySettings: settings,
-      logoUrl: typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png",
+      logoUrl: absoluteLogoUrl,
     });
     setInvoiceToPrint(null);
 
