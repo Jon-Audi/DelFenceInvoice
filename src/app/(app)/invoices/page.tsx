@@ -119,70 +119,72 @@ export default function InvoicesPage() {
   
     const pendingEstimateRaw = localStorage.getItem("estimateToConvert_invoice");
     const pendingOrderRaw = localStorage.getItem("orderToConvert_invoice");
+    
+    if (!pendingEstimateRaw && !pendingOrderRaw) return;
+
     let newInvoiceData:
       | (Partial<InvoiceFormData> & { lineItems: InvoiceFormData["lineItems"]; payments?: Payment[] })
       | null = null;
 
-    if (pendingEstimateRaw) {
-      try {
-        const estimateToConvert = JSON.parse(pendingEstimateRaw) as Estimate;
-        newInvoiceData = {
-          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`,
-          customerId: estimateToConvert.customerId,
-          date: new Date(),
-          status: "Draft",
-          poNumber: estimateToConvert.poNumber || "",
-          lineItems: estimateToConvert.lineItems.map((li) => ({
-            id: li.id,
-            productId: li.productId,
-            productName: li.productName,
-            quantity: li.quantity,
-            unitPrice: li.unitPrice,
-            isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false,
-            addToProductList: li.addToProductList ?? false,
-          })),
-          notes: estimateToConvert.notes || "",
-          paymentTerms: "Due upon receipt",
-          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: [],
-        };
-        localStorage.removeItem("estimateToConvert_invoice");
-      } catch (e) {
-        console.error("Error processing estimate for invoice conversion:", e);
-        toast({ title: "Conversion Error", description: "Could not process estimate data for invoice.", variant: "destructive" });
-        localStorage.removeItem("estimateToConvert_invoice");
+    try {
+        if (pendingEstimateRaw) {
+          const estimateToConvert = JSON.parse(pendingEstimateRaw) as Estimate;
+          newInvoiceData = {
+            invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`,
+            customerId: estimateToConvert.customerId,
+            date: new Date(),
+            status: "Draft",
+            poNumber: estimateToConvert.poNumber || "",
+            lineItems: estimateToConvert.lineItems.map((li) => ({
+              id: li.id,
+              productId: li.productId,
+              productName: li.productName,
+              quantity: li.quantity,
+              unitPrice: li.unitPrice,
+              isReturn: li.isReturn || false,
+              isNonStock: li.isNonStock || false,
+              addToProductList: li.addToProductList ?? false,
+            })),
+            notes: estimateToConvert.notes || "",
+            paymentTerms: "Due upon receipt",
+            dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+            payments: [],
+          };
+          localStorage.removeItem("estimateToConvert_invoice");
+        } else if (pendingOrderRaw) {
+          const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
+          newInvoiceData = {
+            invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`,
+            customerId: orderToConvert.customerId,
+            date: new Date(),
+            status: "Draft",
+            poNumber: orderToConvert.poNumber || "",
+            lineItems: orderToConvert.lineItems.map((li) => ({
+              id: li.id,
+              productId: li.productId,
+              productName: li.productName,
+              quantity: li.quantity,
+              unitPrice: li.unitPrice,
+              isReturn: li.isReturn || false,
+              isNonStock: li.isNonStock || false,
+              addToProductList: li.addToProductList ?? false,
+            })),
+            notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ""}`.trim(),
+            paymentTerms: "Due upon receipt",
+            dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+            payments: orderToConvert.payments?.map((p) => ({ ...p, date: p.date })) || [],
+          };
+          localStorage.removeItem("orderToConvert_invoice");
+        }
+    } catch (e) {
+      console.error("Error processing item for invoice conversion:", e);
+      if(e instanceof SyntaxError) {
+        toast({ title: "Conversion Error", description: "Could not parse conversion data. The data may be corrupt.", variant: "destructive" });
+      } else {
+        toast({ title: "Conversion Error", description: "Could not process item data for invoice.", variant: "destructive" });
       }
-    } else if (pendingOrderRaw) {
-      try {
-        const orderToConvert = JSON.parse(pendingOrderRaw) as Order;
-        newInvoiceData = {
-          invoiceNumber: `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`,
-          customerId: orderToConvert.customerId,
-          date: new Date(),
-          status: "Draft",
-          poNumber: orderToConvert.poNumber || "",
-          lineItems: orderToConvert.lineItems.map((li) => ({
-            id: li.id,
-            productId: li.productId,
-            productName: li.productName,
-            quantity: li.quantity,
-            unitPrice: li.unitPrice,
-            isReturn: li.isReturn || false,
-            isNonStock: li.isNonStock || false,
-            addToProductList: li.addToProductList ?? false,
-          })),
-          notes: `Converted from Order #${orderToConvert.orderNumber}. ${orderToConvert.notes || ""}`.trim(),
-          paymentTerms: "Due upon receipt",
-          dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-          payments: orderToConvert.payments?.map((p) => ({ ...p, date: p.date })) || [],
-        };
-        localStorage.removeItem("orderToConvert_invoice");
-      } catch (e) {
-        console.error("Error processing order for invoice conversion:", e);
-        toast({ title: "Conversion Error", description: "Could not process order data for invoice.", variant: "destructive" });
-        localStorage.removeItem("orderToConvert_invoice");
-      }
+      localStorage.removeItem("estimateToConvert_invoice");
+      localStorage.removeItem("orderToConvert_invoice");
     }
 
     if (newInvoiceData) setConversionInvoiceData(newInvoiceData);
@@ -277,43 +279,26 @@ export default function InvoicesPage() {
   const handleSaveInvoice = async (invoiceToSave: Invoice) => {
     try {
       await runTransaction(db, async (transaction) => {
-        const hasId = Boolean(invoiceToSave.id);
-        const invoiceRef = hasId ? doc(db, "invoices", invoiceToSave.id!) : doc(collection(db, "invoices"));
+        const { id, ...invoiceData } = invoiceToSave;
+        const invoiceRef = id ? doc(db, "invoices", id) : doc(collection(db, "invoices"));
   
-        // Prepare write data (strip id)
-        const { id: _ignore, ...invoiceDataFromDialog } = invoiceToSave;
-        
-        const payload: any = { ...invoiceDataFromDialog };
-  
-        // Sanitize optional fields based on whether it's a new doc or an update
-        if (hasId) {
-          // For updates, use deleteField with merge: true
-          if (!payload.poNumber || payload.poNumber.trim() === '') payload.poNumber = deleteField();
-          if (!payload.dueDate) payload.dueDate = deleteField();
-          if (!payload.paymentTerms || payload.paymentTerms.trim() === '') payload.paymentTerms = deleteField();
-          if (!payload.notes || payload.notes.trim() === '') payload.notes = deleteField();
-          if (!payload.internalNotes || payload.internalNotes.trim() === '') payload.internalNotes = deleteField();
-          if (!payload.readyForPickUpDate) payload.readyForPickUpDate = deleteField();
-          if (!payload.pickedUpDate) payload.pickedUpDate = deleteField();
-        } else {
-          // For new documents, just delete the key if it's empty/falsy
-          if (!payload.poNumber || payload.poNumber.trim() === '') delete payload.poNumber;
-          if (!payload.dueDate) delete payload.dueDate;
-          if (!payload.paymentTerms || payload.paymentTerms.trim() === '') delete payload.paymentTerms;
-          if (!payload.notes || payload.notes.trim() === '') delete payload.notes;
-          if (!payload.internalNotes || payload.internalNotes.trim() === '') delete payload.internalNotes;
-          if (!payload.readyForPickUpDate) delete payload.readyForPickUpDate;
-          if (!payload.pickedUpDate) delete payload.pickedUpDate;
-        }
-  
-        let originalInvoice: Invoice | null = null;
-        if (hasId) {
-          const originalSnap = await transaction.get(invoiceRef);
-          if (originalSnap.exists()) {
-            originalInvoice = { id: invoiceToSave.id!, ...(originalSnap.data() as any) } as Invoice;
+        // Create a clean payload, excluding undefined or empty string values, to avoid Firestore errors
+        const payload: { [key: string]: any } = {};
+        for (const [key, value] of Object.entries(invoiceData)) {
+          if (value !== undefined && value !== null && value !== '') {
+            payload[key] = value;
           }
         }
   
+        let originalInvoice: Invoice | null = null;
+        if (id) {
+          const originalSnap = await transaction.get(invoiceRef);
+          if (originalSnap.exists()) {
+            originalInvoice = { id, ...(originalSnap.data() as any) } as Invoice;
+          }
+        }
+  
+        // --- Inventory Logic ---
         const productIdsInState = new Set(products.map(p => p.id));
         const inventoryChanges = new Map<string, number>();
   
@@ -326,7 +311,7 @@ export default function InvoicesPage() {
             }
         }
   
-        for (const item of invoiceDataFromDialog.lineItems || []) {
+        for (const item of invoiceData.lineItems || []) {
             if (item.productId && !item.isNonStock && productIdsInState.has(item.productId)) {
                 const delta = item.isReturn ? item.quantity : -item.quantity;
                 inventoryChanges.set(item.productId, (inventoryChanges.get(item.productId) || 0) + delta);
@@ -334,26 +319,25 @@ export default function InvoicesPage() {
         }
   
         const productIds = Array.from(inventoryChanges.keys());
-        const productSnaps: { id: string; snap: any }[] = [];
-        if (productIds.length) {
-          const refs = productIds.map((pid) => doc(db, "products", pid));
-          const snaps = await Promise.all(refs.map((r) => transaction.get(r)));
-          snaps.forEach((snap, i) => productSnaps.push({ id: refs[i].id, snap }));
-        }
+        if (productIds.length > 0) {
+          const productRefs = productIds.map((pid) => doc(db, "products", pid));
+          const productSnaps = await Promise.all(productRefs.map((r) => transaction.get(r)));
   
-        for (const { id, snap } of productSnaps) {
-          if (!snap.exists()) throw new Error(`Product with ID ${id} not found during transaction.`);
-        }
+          for (const [index, snap] of productSnaps.entries()) {
+            const productId = productIds[index];
+            if (!snap.exists()) throw new Error(`Product with ID ${productId} not found during transaction.`);
+            
+            const qtyChange = inventoryChanges.get(productId) ?? 0;
+            if (qtyChange === 0) continue;
   
-        for (const { id, snap } of productSnaps) {
-          const qtyChange = inventoryChanges.get(id) ?? 0;
-          if (!qtyChange) continue;
-          const currentStock = (snap.data() as any)?.quantityInStock ?? 0;
-          transaction.update(snap.ref, { quantityInStock: currentStock + qtyChange });
+            const currentStock = (snap.data() as any)?.quantityInStock ?? 0;
+            transaction.update(snap.ref, { quantityInStock: currentStock + qtyChange });
+          }
         }
+        // --- End Inventory Logic ---
   
         // Use merge:true for updates, and a standard set for creation
-        if (hasId) {
+        if (id) {
           transaction.set(invoiceRef, payload, { merge: true });
         } else {
           transaction.set(invoiceRef, payload);
@@ -602,7 +586,7 @@ export default function InvoicesPage() {
       return;
     }
     
-    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
+    const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
     const customer = customers.find(c => c.id === invoice.customerId) || null;
 
 
@@ -651,7 +635,7 @@ export default function InvoicesPage() {
       return;
     }
 
-    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
+    const absoluteLogoUrl = typeof window !== "undefined" ? `${window.location.origin}/Logo.png` : "/Logo.png";
 
     setPackingSlipToPrintForInvoice({
       invoice,
@@ -1096,3 +1080,5 @@ export default function InvoicesPage() {
 const FormFieldWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="space-y-1">{children}</div>
 );
+
+    
