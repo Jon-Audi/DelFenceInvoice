@@ -28,6 +28,8 @@ const getClientFirebaseConfig = () => {
 };
 
 const nextConfig: NextConfig = {
+  // Add the output: 'export' option for Capacitor
+  output: 'export',
   // Expose the server-side config to the client-side using the `env` key.
   env: getClientFirebaseConfig(),
   experimental: {
