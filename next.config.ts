@@ -28,8 +28,9 @@ const getClientFirebaseConfig = () => {
 };
 
 const nextConfig: NextConfig = {
-  // Add the output: 'export' option for Capacitor
-  output: 'export',
+  // The output: 'export' option has been removed to fix the runtime error.
+  // Add it back temporarily when you need to build for Capacitor/iOS.
+  // output: 'export',
   // Expose the server-side config to the client-side using the `env` key.
   env: getClientFirebaseConfig(),
   experimental: {
