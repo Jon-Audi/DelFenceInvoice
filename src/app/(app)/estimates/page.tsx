@@ -97,7 +97,7 @@ export default function EstimatesPage() {
   const [estimateToPrint, setEstimateToPrint] = useState<any | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   
-  const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
+  const [isCloneDialogOpen, setIsCloneDialogOpen] = useState<boolean>(false);
   const [clonedEstimateData, setClonedEstimateData] = useState<Partial<EstimateFormData> | null>(null);
 
 
@@ -107,6 +107,16 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     setIsClient(true);
+     if (typeof window !== 'undefined') {
+      const pendingEstimateRaw = localStorage.getItem("estimateToConvert_invoice");
+      if (pendingEstimateRaw) {
+        // Clear the item to prevent re-triggering, but don't parse if empty
+        localStorage.removeItem("estimateToConvert_invoice");
+        if (pendingEstimateRaw.trim()) {
+           // Conversion logic to invoice is handled on the invoice page
+        }
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -177,30 +187,24 @@ export default function EstimatesPage() {
   }, [products]);
 
   const handleSaveEstimate = async (estimateToSave: Estimate) => {
-    const { id, ...estimateDataFromDialog } = estimateToSave;
-    
-    // Sanitize optional fields before saving
-    const payload: any = {
-      ...estimateDataFromDialog,
-      poNumber: (estimateDataFromDialog.poNumber && estimateDataFromDialog.poNumber.trim() !== '') 
-                ? estimateDataFromDialog.poNumber.trim() 
-                : deleteField(),
-      validUntil: estimateDataFromDialog.validUntil ? estimateDataFromDialog.validUntil : deleteField(),
-      notes: (estimateDataFromDialog.notes && estimateDataFromDialog.notes.trim() !== '') 
-             ? estimateDataFromDialog.notes.trim() 
-             : deleteField(),
-      internalNotes: (estimateDataFromDialog.internalNotes && estimateDataFromDialog.internalNotes.trim() !== '') 
-                     ? estimateDataFromDialog.internalNotes.trim() 
-                     : deleteField(),
-    };
+    const { id, ...estimateData } = estimateToSave;
 
+    // Create a clean payload object, only including defined and non-empty values
+    const payload: { [key: string]: any } = {};
+    for (const [key, value] of Object.entries(estimateData)) {
+      if (value !== undefined && value !== null && value !== '') {
+        payload[key] = value;
+      }
+    }
 
     try {
       if (id && estimates.some(e => e.id === id)) {
+        // UPDATE existing document
         const estimateRef = doc(db, 'estimates', id);
         await setDoc(estimateRef, payload, { merge: true });
         toast({ title: "Estimate Updated", description: `Estimate ${estimateToSave.estimateNumber} has been updated.` });
       } else {
+        // ADD new document
         const docRef = await addDoc(collection(db, 'estimates'), payload);
         toast({ title: "Estimate Added", description: `Estimate ${estimateToSave.estimateNumber} has been added with ID: ${docRef.id}.` });
       }
@@ -478,7 +482,7 @@ export default function EstimatesPage() {
   const handlePrepareAndPrint = async (estimate: Estimate) => {
     const customer = customers.find(c => c.id === estimate.customerId);
     const companySettings = await fetchCompanySettings();
-    const absoluteLogoUrl = `${window.location.origin}/Logo.png`;
+    const absoluteLogoUrl = window.location.origin + '/Logo.png';
 
     const estimateDataForPrint = {
       estimateNumber: estimate.estimateNumber,
