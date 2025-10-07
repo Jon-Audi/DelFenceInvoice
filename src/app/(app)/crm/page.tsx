@@ -21,11 +21,14 @@ interface CustomerInteractionInfo {
   lastInteractionDate: Date | null;
 }
 
+type SortableCrmKeys = 'name' | 'lastEstimateDate' | 'lastOrderDate' | 'lastInteractionDate';
+
 export default function CrmPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableCrmKeys; direction: 'asc' | 'desc' }>({ key: 'lastInteractionDate', direction: 'asc' });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -48,7 +51,6 @@ export default function CrmPage() {
       }));
     });
     
-    // Simple way to manage loading state for multiple listeners
     Promise.all([
       new Promise(res => onSnapshot(collection(db, 'customers'), () => res(true))),
       new Promise(res => onSnapshot(collection(db, 'orders'), () => res(true))),
@@ -62,7 +64,7 @@ export default function CrmPage() {
   const customerInteractionData = useMemo((): CustomerInteractionInfo[] => {
     if (isLoading) return [];
 
-    const customerData = customers.map(customer => {
+    let customerData = customers.map(customer => {
       const customerOrders = orders.filter(o => o.customerId === customer.id);
       const customerEstimates = estimates.filter(e => e.customerId === customer.id);
 
@@ -91,21 +93,51 @@ export default function CrmPage() {
       };
     });
 
-    // Sort by the last interaction date, oldest first. Customers with no interactions are at the end.
-    return customerData.sort((a, b) => {
-      if (a.lastInteractionDate && b.lastInteractionDate) {
-        return a.lastInteractionDate.getTime() - b.lastInteractionDate.getTime();
-      }
-      if (a.lastInteractionDate) return -1; // a has a date, b does not, so a comes first
-      if (b.lastInteractionDate) return 1;  // b has a date, a does not, so b comes first
-      return 0; // neither has a date
+    customerData.sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+
+        let comparison = 0;
+        if (valA === null || valA === undefined) comparison = 1;
+        else if (valB === null || valB === undefined) comparison = -1;
+        else if (sortConfig.key === 'name') {
+          comparison = String(valA).localeCompare(String(valB));
+        } else {
+          comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        }
+        
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
-  }, [customers, orders, estimates, isLoading]);
+
+    return customerData;
+  }, [customers, orders, estimates, isLoading, sortConfig]);
   
   const formatDateAgo = (dateString: string | null) => {
     if (!dateString) return <span className="text-muted-foreground">Never</span>;
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
   }
+
+  const requestSort = (key: SortableCrmKeys) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key) {
+        direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Default sort directions for certain columns
+        if (['lastEstimateDate', 'lastOrderDate', 'lastInteractionDate'].includes(key)) {
+            direction = 'desc';
+        } else {
+            direction = 'asc';
+        }
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const renderSortArrow = (columnKey: SortableCrmKeys) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
+    }
+    return null;
+  };
 
 
   if (isLoading) {
@@ -125,17 +157,23 @@ export default function CrmPage() {
         <CardHeader>
           <CardTitle>Customer Activity</CardTitle>
           <CardDescription>
-            This list shows the last time each customer received an estimate or placed an order. Customers with the oldest activity are shown first.
+            This list shows the last time each customer received an estimate or placed an order. Click column headers to sort.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
+                <TableHead onClick={() => requestSort('name')} className="cursor-pointer hover:bg-muted/50">
+                  Customer {renderSortArrow('name')}
+                </TableHead>
                 <TableHead>Phone Number</TableHead>
-                <TableHead>Last Estimate</TableHead>
-                <TableHead>Last Order</TableHead>
+                <TableHead onClick={() => requestSort('lastEstimateDate')} className="cursor-pointer hover:bg-muted/50">
+                  Last Estimate {renderSortArrow('lastEstimateDate')}
+                </TableHead>
+                <TableHead onClick={() => requestSort('lastOrderDate')} className="cursor-pointer hover:bg-muted/50">
+                  Last Order {renderSortArrow('lastOrderDate')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
