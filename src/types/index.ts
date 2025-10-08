@@ -42,49 +42,30 @@ export interface Product {
   components?: AssemblyComponent[]; // New field for assembly components
 }
 
-export interface EmailContact {
-  id: string;
-  type: EmailContactType;
-  email: string;
-  name?: string;
-}
-
-export interface CustomerSpecificMarkup {
-  id: string; // For React key and potentially Firestore ID if stored as subcollection
-  categoryName: string;
-  markupPercentage: number;
-}
-
 export interface Customer {
   id: string; // doc id
-  companyName: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  address: {
-    line1: string;
+  companyName: string; // required
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: {
+    line1?: string;
     line2?: string;
-    city: string;
-    state: string;
-    zip: string;
+    city?: string;
+    state?: string;
+    zip?: string;
   };
-  tags: CustomerType[];
-  credit: {
-    terms: string;
-    limit: number;
-    balance: number;
-    onHold: boolean;
+  tags?: CustomerType[];
+  credit?: {
+    terms?: string;
+    limit?: number;
+    balance?: number;
+    onHold?: boolean;
   };
-  notes?: string; // Kept for general notes
-  createdAt: any; // serverTimestamp
-  updatedAt: any; // serverTimestamp
+  notes?: string;
+  createdAt: string; // ISO String from serverTimestamp
+  updatedAt: string; // ISO string from serverTimestamp
   searchIndex: string; // company + contact + email lowercased
-  // Deprecated fields that we will migrate away from:
-  firstName?: string;
-  lastName?: string;
-  emailContacts?: EmailContact[];
-  customerType?: CustomerType;
-  specificMarkups?: CustomerSpecificMarkup[];
 }
 
 export interface LineItem {

@@ -2,67 +2,44 @@
 "use client";
 
 import React from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Customer, CustomerType, EmailContactType, CustomerSpecificMarkup, ProductCategory } from '@/types';
-import { CUSTOMER_TYPES, EMAIL_CONTACT_TYPES, ALL_CATEGORIES_MARKUP_KEY } from '@/lib/constants';
+import type { Customer, CustomerType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Icon } from '@/components/icons';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-
-const emailContactSchema = z.object({
-  id: z.string().optional(),
-  type: z.enum(EMAIL_CONTACT_TYPES as [EmailContactType, ...EmailContactType[]]),
-  email: z.string().email("Invalid email address"),
-  name: z.string().optional(),
-});
-
-const specificMarkupSchema = z.object({
-  id: z.string(), // Required for useFieldArray key
-  categoryName: z.string().min(1, "Category is required"),
-  markupPercentage: z.coerce.number().min(0, "Markup must be non-negative"),
-});
+import { Checkbox } from '@/components/ui/checkbox';
 
 const customerSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  companyName: z.string().default(''),
-  phone: z.string().min(1, "Phone number is required"),
-  customerType: z.enum(CUSTOMER_TYPES as [CustomerType, ...CustomerType[]]),
-  emailContacts: z.array(emailContactSchema).min(1, "At least one email contact is required"),
-  createdAt: z.date().optional(),
+  companyName: z.string().min(1, "Company name is required"),
+  contactName: z.string().optional(),
+  email: z.string().email("Invalid email address").optional().or(z.literal('')),
+  phone: z.string().optional(),
   address: z.object({
-    street: z.string().default(''),
-    city: z.string().default(''),
-    state: z.string().default(''),
-    zip: z.string().default(''),
-  }).optional().default({ street: '', city: '', state: '', zip: '' }),
-  notes: z.string().default(''),
-  specificMarkups: z.array(specificMarkupSchema).optional().default([]),
+    line1: z.string().optional(),
+    line2: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    zip: z.string().optional(),
+  }).optional(),
+  tags: z.array(z.string()).optional(),
+  credit: z.object({
+    terms: z.string().optional(),
+    limit: z.coerce.number().optional(),
+    balance: z.coerce.number().optional(),
+    onHold: z.boolean().optional(),
+  }).optional(),
+  notes: z.string().optional(),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -71,128 +48,50 @@ interface CustomerFormProps {
   customer?: Customer;
   onSubmit: (data: CustomerFormData) => void;
   onClose?: () => void;
-  productCategories: ProductCategory[];
 }
 
-export function CustomerForm({ customer, onSubmit, onClose, productCategories = [] }: CustomerFormProps) {
+export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps) {
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: customer ? {
       ...customer,
-      createdAt: customer.createdAt ? new Date(customer.createdAt) : new Date(),
-      emailContacts: customer.emailContacts.map(ec => ({...ec, id: ec.id || crypto.randomUUID()})),
-      specificMarkups: customer.specificMarkups?.map(sm => ({...sm, id: sm.id || crypto.randomUUID() })) || [],
-      address: customer.address || { street: '', city: '', state: '', zip: '' },
-      notes: customer.notes || '',
-      companyName: customer.companyName || '',
+      address: customer.address || {},
+      credit: customer.credit || {},
+      tags: customer.tags || [],
     } : {
-      firstName: '',
-      lastName: '',
       companyName: '',
+      contactName: '',
+      email: '',
       phone: '',
-      customerType: CUSTOMER_TYPES[0],
-      emailContacts: [{ id: crypto.randomUUID(), type: EMAIL_CONTACT_TYPES[0], email: '', name: '' }],
-      address: { street: '', city: '', state: '', zip: '' },
+      address: { line1: '', line2: '', city: '', state: '', zip: '' },
+      tags: [],
+      credit: { terms: '', limit: 0, balance: 0, onHold: false },
       notes: '',
-      specificMarkups: [],
-      createdAt: new Date(),
     },
-  });
-
-  const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({
-    control: form.control,
-    name: "emailContacts",
-  });
-
-  const { fields: markupFields, append: appendMarkup, remove: removeMarkup } = useFieldArray({
-    control: form.control,
-    name: "specificMarkups",
   });
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField control={form.control} name="firstName" render={({ field }) => (
-            <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-          )} />
-          <FormField control={form.control} name="lastName" render={({ field }) => (
-            <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-          )} />
-        </div>
         <FormField control={form.control} name="companyName" render={({ field }) => (
           <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField control={form.control} name="contactName" render={({ field }) => (
+            <FormItem><FormLabel>Contact Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
           <FormField control={form.control} name="phone" render={({ field }) => (
             <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
-          <FormField control={form.control} name="customerType" render={({ field }) => (
-            <FormItem>
-              <FormLabel>Customer Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
-                <SelectContent>{CUSTOMER_TYPES.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )} />
         </div>
-        <FormField control={form.control} name="createdAt" render={({ field }) => (
-          <FormItem className="flex flex-col">
-            <FormLabel>Date Added</FormLabel>
-            <Popover>
-              <PopoverTrigger asChild>
-                <FormControl>
-                  <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                    <Icon name="Calendar" className="ml-auto h-4 w-4 opacity-50" />
-                  </Button>
-                </FormControl>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-              </PopoverContent>
-            </Popover>
-            <FormMessage />
-          </FormItem>
+        <FormField control={form.control} name="email" render={({ field }) => (
+          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         
         <Separator />
-        <h3 className="text-lg font-medium">Email Contacts</h3>
-        {emailFields.map((item, index) => (
-          <div key={item.id} className="space-y-2 p-3 border rounded-md relative">
-            {emailFields.length > 1 && (
-              <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEmail(index)}>
-                <Icon name="Trash2" className="h-4 w-4 text-destructive" />
-              </Button>
-            )}
-            <FormField control={form.control} name={`emailContacts.${index}.type`} render={({ field }) => (
-              <FormItem>
-                <FormLabel>Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
-                  <SelectContent>{EMAIL_CONTACT_TYPES.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name={`emailContacts.${index}.email`} render={({ field }) => (
-              <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-             <FormField control={form.control} name={`emailContacts.${index}.name`} render={({ field }) => (
-              <FormItem><FormLabel>Contact Name (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => appendEmail({ id: crypto.randomUUID(), type: EMAIL_CONTACT_TYPES[0], email: '', name: '' })}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Email Contact
-        </Button>
-
-        <Separator />
-        <h3 className="text-lg font-medium">Address (Optional)</h3>
-        <FormField control={form.control} name="address.street" render={({ field }) => (
-          <FormItem><FormLabel>Street</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        <h3 className="text-lg font-medium">Address</h3>
+        <FormField control={form.control} name="address.line1" render={({ field }) => (
+          <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField control={form.control} name="address.city" render={({ field }) => (
@@ -207,44 +106,28 @@ export function CustomerForm({ customer, onSubmit, onClose, productCategories = 
         </div>
 
         <Separator />
-        <h3 className="text-lg font-medium">Customer Specific Markups (Optional)</h3>
-        {markupFields.map((item, index) => (
-          <div key={item.id} className="space-y-3 p-4 border rounded-md relative">
-            <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7" onClick={() => removeMarkup(index)}>
-              <Icon name="Trash2" className="h-4 w-4 text-destructive" />
-            </Button>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <FormField control={form.control} name={`specificMarkups.${index}.categoryName`} render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Product Category</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value={ALL_CATEGORIES_MARKUP_KEY}>All Categories</SelectItem>
-                      {(productCategories || []).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name={`specificMarkups.${index}.markupPercentage`} render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Markup (%)</FormLabel>
-                  <FormControl><Input type="number" step="0.01" min="0" {...field} placeholder="e.g., 10 for 10%" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+        <h3 className="text-lg font-medium">Credit Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField control={form.control} name="credit.terms" render={({ field }) => (
+            <FormItem><FormLabel>Terms</FormLabel><FormControl><Input {...field} placeholder="e.g., NET 30" /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="credit.limit" render={({ field }) => (
+            <FormItem><FormLabel>Credit Limit</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+        </div>
+         <FormField control={form.control} name="credit.onHold" render={({ field }) => (
+          <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>On Credit Hold</FormLabel>
             </div>
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => appendMarkup({ id: crypto.randomUUID(), categoryName: '', markupPercentage: 0 })}>
-          <Icon name="PlusCircle" className="mr-2 h-4 w-4" /> Add Specific Markup Rule
-        </Button>
-        {form.formState.errors.specificMarkups && !form.formState.errors.specificMarkups.root && !markupFields.length && (
-             <p className="text-sm font-medium text-destructive">{form.formState.errors.specificMarkups.message}</p>
-        )}
-
+          </FormItem>
+        )} />
+        
         <Separator />
+
         <FormField control={form.control} name="notes" render={({ field }) => (
           <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea placeholder="Internal notes about the customer" {...field} /></FormControl><FormMessage /></FormItem>
         )} />

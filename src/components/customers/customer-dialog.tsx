@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import type { Customer, ProductCategory } from '@/types';
+import type { Customer } from '@/types';
 import { CustomerForm } from './customer-form';
 import {
   Dialog,
@@ -16,10 +16,9 @@ import {
 interface CustomerDialogProps {
   customer?: Customer;
   triggerButton?: React.ReactElement;
-  onSave?: (customer: Omit<Customer, 'id'> & { id?: string }) => void;
+  onSave?: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  productCategories: ProductCategory[]; // Added this prop
 }
 
 export function CustomerDialog({
@@ -28,7 +27,6 @@ export function CustomerDialog({
   onSave,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
-  productCategories, // Destructure new prop
 }: CustomerDialogProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
 
@@ -38,13 +36,7 @@ export function CustomerDialog({
 
   const handleSubmit = (data: any) => {
     if (onSave) {
-      const customerToSave: Omit<Customer, 'id'> & { id?: string } = {
-        ...data,
-        id: customer?.id, // Let onSave logic handle new ID generation
-        specificMarkups: data.specificMarkups || [],
-        createdAt: data.createdAt ? data.createdAt.toISOString() : new Date().toISOString(),
-      };
-      onSave(customerToSave);
+      onSave({ id: customer?.id, ...data });
     }
     setOpen(false);
   };
@@ -61,7 +53,6 @@ export function CustomerDialog({
         customer={customer}
         onSubmit={handleSubmit}
         onClose={() => setOpen(false)}
-        productCategories={productCategories} // Pass productCategories to CustomerForm
       />
     </DialogContent>
   );

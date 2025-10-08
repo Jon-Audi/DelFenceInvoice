@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Customer, ProductCategory } from '@/types';
+import type { Customer } from '@/types';
 import {
   Table,
   TableBody,
@@ -35,12 +35,11 @@ import React from 'react';
 
 interface CustomerTableProps {
   customers: Customer[];
-  onSave: (customer: Omit<Customer, 'id'> & { id?: string }) => void;
+  onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
-  productCategories: ProductCategory[]; // Added this prop
 }
 
-export function CustomerTable({ customers, onSave, onDelete, productCategories }: CustomerTableProps) {
+export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
 
   const formatDate = (dateString: string | undefined) => {
@@ -58,11 +57,10 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>Type</TableHead>
+              <TableHead>Company Name</TableHead>
+              <TableHead>Contact Name</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
-              <TableHead>Primary Email</TableHead>
               <TableHead>Date Added</TableHead>
               <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
@@ -70,12 +68,11 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
           <TableBody>
             {customers.map((customer) => (
               <TableRow key={customer.id}>
-                <TableCell className="font-medium">{customer.firstName} {customer.lastName}</TableCell>
-                <TableCell>{customer.companyName || 'N/A'}</TableCell>
-                <TableCell><Badge variant="outline">{customer.customerType}</Badge></TableCell>
-                <TableCell>{customer.phone}</TableCell>
-                <TableCell>{customer.emailContacts.find(ec => ec.type === 'Main Contact')?.email || customer.emailContacts[0]?.email || 'N/A'}</TableCell>
-                <TableCell>{formatDate(customer.createdAt)}</TableCell>
+                <TableCell className="font-medium">{customer.companyName}</TableCell>
+                <TableCell>{customer.contactName || 'N/A'}</TableCell>
+                <TableCell>{customer.email || 'N/A'}</TableCell>
+                <TableCell>{customer.phone || 'N/A'}</TableCell>
+                <TableCell>{formatDate(customer.createdAt as string)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -92,7 +89,6 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
                           </DropdownMenuItem>
                         }
                         onSave={onSave}
-                        productCategories={productCategories} // Pass productCategories
                       />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -115,7 +111,7 @@ export function CustomerTable({ customers, onSave, onDelete, productCategories }
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the customer 
-                "{customerToDelete.firstName} {customerToDelete.lastName}".
+                "{customerToDelete.companyName}".
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
