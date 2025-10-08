@@ -56,21 +56,34 @@ export interface CustomerSpecificMarkup {
 }
 
 export interface Customer {
-  id: string;
-  firstName: string;
-  lastName: string;
-  companyName?: string;
+  id: string; // doc id
+  companyName: string;
+  contactName: string;
+  email: string;
   phone: string;
-  emailContacts: EmailContact[];
-  customerType: CustomerType;
-  createdAt?: string; // ISO Date String
-  address?: {
-    street: string;
+  address: {
+    line1: string;
+    line2?: string;
     city: string;
     state: string;
     zip: string;
   };
-  notes?: string;
+  tags: CustomerType[];
+  credit: {
+    terms: string;
+    limit: number;
+    balance: number;
+    onHold: boolean;
+  };
+  notes?: string; // Kept for general notes
+  createdAt: any; // serverTimestamp
+  updatedAt: any; // serverTimestamp
+  searchIndex: string; // company + contact + email lowercased
+  // Deprecated fields that we will migrate away from:
+  firstName?: string;
+  lastName?: string;
+  emailContacts?: EmailContact[];
+  customerType?: CustomerType;
   specificMarkups?: CustomerSpecificMarkup[];
 }
 
