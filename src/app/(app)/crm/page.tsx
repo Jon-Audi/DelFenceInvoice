@@ -28,7 +28,7 @@ export default function CrmPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState<{ key: SortableCrmKeys; direction: 'asc' | 'desc' }>({ key: 'lastInteractionDate', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortableCrmKeys; direction: 'asc' | 'desc' }>({ key: 'lastInteractionDate', direction: 'desc' });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -200,3 +200,4 @@ export default function CrmPage() {
   );
 }
 
+    
