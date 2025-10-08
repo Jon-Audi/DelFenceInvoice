@@ -37,7 +37,7 @@ export default function CustomersPage() {
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Customer);
       });
-      setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || a.contactName).localeCompare(b.companyName || b.contactName)));
+      setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || a.contactName || '').localeCompare(b.companyName || b.contactName || '')));
       setIsLoading(false);
     }, (error) => {
       console.error("[CustomersPage] Error fetching customers:", error);
