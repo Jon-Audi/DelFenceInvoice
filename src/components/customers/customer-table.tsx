@@ -37,9 +37,10 @@ interface CustomerTableProps {
   customers: Customer[];
   onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
+  onRowClick: (customerId: string) => void;
 }
 
-export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProps) {
+export function CustomerTable({ customers, onSave, onDelete, onRowClick }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
 
   const formatDate = (dateString: string | undefined) => {
@@ -67,13 +68,13 @@ export function CustomerTable({ customers, onSave, onDelete }: CustomerTableProp
           </TableHeader>
           <TableBody>
             {customers.map((customer) => (
-              <TableRow key={customer.id}>
+              <TableRow key={customer.id} onClick={() => onRowClick(customer.id)} className="cursor-pointer">
                 <TableCell className="font-medium">{customer.companyName}</TableCell>
                 <TableCell>{customer.contactName || 'N/A'}</TableCell>
                 <TableCell>{customer.email || 'N/A'}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
                 <TableCell>{formatDate(customer.createdAt as string)}</TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">

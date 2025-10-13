@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -22,6 +23,7 @@ export default function CustomersPage() {
   const [dateFilter, setDateFilter] = useState<'all' | 'thisWeek' | 'thisMonth' | 'lastMonth'>('all');
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     setIsLoading(true);
@@ -32,7 +34,6 @@ export default function CustomersPage() {
         fetchedCustomers.push({ 
           ...data, 
           id: docSnap.id,
-          // Ensure timestamps are handled correctly if they exist
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Customer);
@@ -133,6 +134,10 @@ export default function CustomersPage() {
       }
     }
   };
+  
+  const handleRowClick = (customerId: string) => {
+    router.push(`/customers/${customerId}`);
+  };
 
   if (isLoading && customers.length === 0) {
     return (
@@ -183,6 +188,7 @@ export default function CustomersPage() {
         customers={filteredCustomers}
         onSave={handleSaveCustomer}
         onDelete={handleDeleteCustomer}
+        onRowClick={handleRowClick}
       />
        {filteredCustomers.length === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
