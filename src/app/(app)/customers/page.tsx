@@ -154,8 +154,12 @@ export default function CustomersPage() {
         else if (valB === null || valB === undefined) comparison = -1;
         else if (key === 'lastEstimateDate' || key === 'lastOrderDate' || key === 'createdAt') {
             comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        } else if (key === 'companyName' || key === 'contactName') {
+            const nameA = a.companyName || a.contactName || '';
+            const nameB = b.companyName || b.contactName || '';
+            comparison = nameA.localeCompare(nameB);
         } else if (typeof valA === 'string' && typeof valB === 'string') {
-            comparison = (a.companyName || a.contactName || '').localeCompare(b.companyName || b.contactName || '');
+            comparison = valA.localeCompare(valB);
         }
         
         return sortConfig.direction === 'asc' ? comparison : -comparison;
