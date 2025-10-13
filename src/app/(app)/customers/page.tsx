@@ -38,31 +38,30 @@ export default function CustomersPage() {
     setIsLoading(true);
     const unsubscribes: (() => void)[] = [];
 
-    unsubscribes.push(onSnapshot(collection(db, 'customers'), (snapshot) => {
-      const fetchedCustomers = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Customer));
+    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const fetchedCustomers = snapshot.docs.map(docSnap => {
+        return { ...docSnap.data(), id: docSnap.id } as Customer;
+      });
       setCustomers(fetchedCustomers);
+      setIsLoading(false);
     }, (error) => {
       console.error("[CustomersPage] Error fetching customers:", error);
       toast({ title: "Error", description: `Could not fetch customers.`, variant: "destructive" });
-    }));
+      setIsLoading(false);
+    });
+    unsubscribes.push(unsubscribeCustomers);
     
-    unsubscribes.push(onSnapshot(collection(db, 'estimates'), (snapshot) => {
+    const unsubscribeEstimates = onSnapshot(collection(db, 'estimates'), (snapshot) => {
       const fetchedEstimates = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Estimate));
       setEstimates(fetchedEstimates);
-    }));
+    });
+    unsubscribes.push(unsubscribeEstimates);
 
-    unsubscribes.push(onSnapshot(collection(db, 'orders'), (snapshot) => {
+    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
         const fetchedOrders = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Order));
         setOrders(fetchedOrders);
-    }));
-    
-    // Simple check to stop loading spinner
-    Promise.all([
-        new Promise(res => onSnapshot(collection(db, 'customers'), () => res(true))),
-        new Promise(res => onSnapshot(collection(db, 'estimates'), () => res(true))),
-        new Promise(res => onSnapshot(collection(db, 'orders'), () => res(true))),
-    ]).then(() => setIsLoading(false));
-
+    });
+    unsubscribes.push(unsubscribeOrders);
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
@@ -117,7 +116,7 @@ export default function CustomersPage() {
   }, [customers, estimates, orders]);
 
   const filteredAndSortedCustomers = useMemo(() => {
-    let customersToFilter = customersWithLastInteraction;
+    let customersToFilter = [...customersWithLastInteraction];
 
     if (dateFilter !== 'all') {
         const now = new Date();

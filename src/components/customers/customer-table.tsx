@@ -87,7 +87,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
           <TableBody>
             {customers.map((customer) => (
               <TableRow key={customer.id} onClick={() => onRowClick(customer.id)} className="cursor-pointer">
-                <TableCell className="font-medium">{customer.companyName || customer.contactName}</TableCell>
+                <TableCell className="font-medium">{customer.companyName || customer.contactName || ''}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
                 <TableCell>{formatDate(customer.lastEstimateDate)}</TableCell>
                 <TableCell>{formatDate(customer.lastOrderDate)}</TableCell>
@@ -129,7 +129,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the customer 
-                "{customerToDelete.companyName}".
+                "{customerToDelete.companyName || customerToDelete.contactName}".
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
