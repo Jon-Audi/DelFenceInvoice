@@ -38,7 +38,13 @@ export default function CustomersPage() {
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Customer);
       });
-      setCustomers(fetchedCustomers.sort((a, b) => (a.companyName || a.contactName || '').localeCompare(b.companyName || b.contactName || '')));
+       setCustomers(fetchedCustomers.sort((a, b) => {
+        const nameA = (a.companyName || a.contactName || '').trim();
+        const nameB = (b.companyName || b.contactName || '').trim();
+        if (!nameA) return 1; // Push empty names to the bottom
+        if (!nameB) return -1;
+        return nameA.localeCompare(nameB);
+      }));
       setIsLoading(false);
     }, (error) => {
       console.error("[CustomersPage] Error fetching customers:", error);

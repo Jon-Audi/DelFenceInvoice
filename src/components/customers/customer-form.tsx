@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const customerSchema = z.object({
-  companyName: z.string().min(1, "Company name is required"),
+  companyName: z.string().trim().min(1, "Company name is required"),
   contactName: z.string().optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal('')),
   phone: z.string().optional(),
