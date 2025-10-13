@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { CustomerDialog } from './customer-dialog';
 import {
   DropdownMenu,
@@ -31,25 +30,39 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import React from 'react';
+import { format } from 'date-fns';
 
+type CustomerWithLastInteraction = Customer & {
+  lastEstimateDate?: string;
+  lastOrderDate?: string;
+};
 
 interface CustomerTableProps {
-  customers: Customer[];
+  customers: CustomerWithLastInteraction[];
   onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
   onRowClick: (customerId: string) => void;
+  sortConfig: { key: keyof CustomerWithLastInteraction; direction: 'asc' | 'desc' };
+  requestSort: (key: keyof CustomerWithLastInteraction) => void;
 }
 
-export function CustomerTable({ customers, onSave, onDelete, onRowClick }: CustomerTableProps) {
+export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortConfig, requestSort }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return 'N/A';
     try {
-      return new Date(dateString).toLocaleDateString();
+      return format(new Date(dateString), 'PP');
     } catch (error) {
       return 'Invalid Date';
     }
+  };
+  
+  const renderSortArrow = (columnKey: keyof CustomerWithLastInteraction) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <Icon name="ChevronUp" className="inline ml-1 h-4 w-4" /> : <Icon name="ChevronDown" className="inline ml-1 h-4 w-4" />;
+    }
+    return null;
   };
 
   return (
@@ -58,22 +71,26 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick }: Custo
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Company Name</TableHead>
-              <TableHead>Contact Name</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead onClick={() => requestSort('companyName')} className="cursor-pointer hover:bg-muted/50">
+                Company Name {renderSortArrow('companyName')}
+              </TableHead>
               <TableHead>Phone</TableHead>
-              <TableHead>Date Added</TableHead>
+              <TableHead onClick={() => requestSort('lastEstimateDate')} className="cursor-pointer hover:bg-muted/50">
+                Last Estimate {renderSortArrow('lastEstimateDate')}
+              </TableHead>
+              <TableHead onClick={() => requestSort('lastOrderDate')} className="cursor-pointer hover:bg-muted/50">
+                Last Order {renderSortArrow('lastOrderDate')}
+              </TableHead>
               <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customers.map((customer) => (
               <TableRow key={customer.id} onClick={() => onRowClick(customer.id)} className="cursor-pointer">
-                <TableCell className="font-medium">{customer.companyName}</TableCell>
-                <TableCell>{customer.contactName || 'N/A'}</TableCell>
-                <TableCell>{customer.email || 'N/A'}</TableCell>
+                <TableCell className="font-medium">{customer.companyName || customer.contactName}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
-                <TableCell>{formatDate(customer.createdAt as string)}</TableCell>
+                <TableCell>{formatDate(customer.lastEstimateDate)}</TableCell>
+                <TableCell>{formatDate(customer.lastOrderDate)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

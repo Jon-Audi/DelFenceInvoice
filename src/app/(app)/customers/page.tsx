@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { CustomerTable } from '@/components/customers/customer-table';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
-import type { Customer, CustomerType } from '@/types';
+import type { Customer, Estimate, Order } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
@@ -16,48 +16,55 @@ import { Input } from '@/components/ui/input';
 import { PrintableCustomerList } from '@/components/customers/printable-customer-list';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, isValid, type Interval } from 'date-fns';
 
+type CustomerWithLastInteraction = Customer & {
+  lastEstimateDate?: string;
+  lastOrderDate?: string;
+};
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'thisWeek' | 'thisMonth' | 'lastMonth'>('all');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof CustomerWithLastInteraction; direction: 'asc' | 'desc' }>({ key: 'companyName', direction: 'asc' });
+
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
-      const fetchedCustomers: Customer[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        fetchedCustomers.push({ 
-          ...data, 
-          id: docSnap.id,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as Customer);
-      });
-       setCustomers(fetchedCustomers.sort((a, b) => {
-        const nameA = (a.companyName || a.contactName || '').trim();
-        const nameB = (b.companyName || b.contactName || '').trim();
-        if (!nameA) return 1; // Push empty names to the bottom
-        if (!nameB) return -1;
-        return nameA.localeCompare(nameB);
-      }));
-      setIsLoading(false);
+    const unsubscribes: (() => void)[] = [];
+
+    unsubscribes.push(onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const fetchedCustomers = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Customer));
+      setCustomers(fetchedCustomers);
     }, (error) => {
       console.error("[CustomersPage] Error fetching customers:", error);
-      toast({
-        title: "Error Fetching Data",
-        description: `Could not fetch customers. Ensure Firestore rules allow reads.`,
-        variant: "destructive",
-        duration: 10000,
-      });
-      setIsLoading(false);
-    });
+      toast({ title: "Error", description: `Could not fetch customers.`, variant: "destructive" });
+    }));
+    
+    unsubscribes.push(onSnapshot(collection(db, 'estimates'), (snapshot) => {
+      const fetchedEstimates = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Estimate));
+      setEstimates(fetchedEstimates);
+    }));
 
-    return () => unsubscribeCustomers();
+    unsubscribes.push(onSnapshot(collection(db, 'orders'), (snapshot) => {
+        const fetchedOrders = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Order));
+        setOrders(fetchedOrders);
+    }));
+    
+    // Simple check to stop loading spinner
+    Promise.all([
+        new Promise(res => onSnapshot(collection(db, 'customers'), () => res(true))),
+        new Promise(res => onSnapshot(collection(db, 'estimates'), () => res(true))),
+        new Promise(res => onSnapshot(collection(db, 'orders'), () => res(true))),
+    ]).then(() => setIsLoading(false));
+
+
+    return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
 
   const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => {
@@ -73,10 +80,10 @@ export default function CustomersPage() {
     try {
       if (id) {
         const customerRef = doc(db, 'customers', id);
-        await setDoc(customerRef, { ...customerData, searchIndex, updatedAt: now }, { merge: true });
+        await setDoc(customerRef, { ...customerData, searchIndex, updatedAt: now.toISOString() }, { merge: true });
         toast({ title: "Customer Updated", description: `Customer ${customerData.companyName || customerData.contactName} updated.` });
       } else {
-        const docRef = await addDoc(collection(db, 'customers'), { ...customerData, searchIndex, createdAt: now, updatedAt: now });
+        const docRef = await addDoc(collection(db, 'customers'), { ...customerData, searchIndex, createdAt: now.toISOString(), updatedAt: now.toISOString() });
         toast({ title: "Customer Added", description: `Customer ${customerData.companyName || customerData.contactName} added.` });
       }
     } catch (error) {
@@ -96,8 +103,21 @@ export default function CustomersPage() {
     }
   };
 
-  const filteredCustomers = useMemo(() => {
-    let customersToFilter = customers;
+  const customersWithLastInteraction = useMemo((): CustomerWithLastInteraction[] => {
+    return customers.map(customer => {
+      const customerEstimates = estimates.filter(e => e.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const customerOrders = orders.filter(o => o.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      return {
+        ...customer,
+        lastEstimateDate: customerEstimates[0]?.date,
+        lastOrderDate: customerOrders[0]?.date,
+      };
+    });
+  }, [customers, estimates, orders]);
+
+  const filteredAndSortedCustomers = useMemo(() => {
+    let customersToFilter = customersWithLastInteraction;
 
     if (dateFilter !== 'all') {
         const now = new Date();
@@ -119,12 +139,30 @@ export default function CustomersPage() {
         });
     }
 
-    if (!searchTerm) {
-      return customersToFilter;
+    if (searchTerm) {
+        const lowercasedFilter = searchTerm.toLowerCase();
+        customersToFilter = customersToFilter.filter(customer => customer.searchIndex?.includes(lowercasedFilter));
     }
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return customersToFilter.filter(customer => customer.searchIndex?.includes(lowercasedFilter));
-  }, [customers, searchTerm, dateFilter]);
+
+    customersToFilter.sort((a, b) => {
+        const key = sortConfig.key;
+        const valA = a[key as keyof typeof a];
+        const valB = b[key as keyof typeof b];
+
+        let comparison = 0;
+        if (valA === null || valA === undefined) comparison = 1;
+        else if (valB === null || valB === undefined) comparison = -1;
+        else if (key === 'lastEstimateDate' || key === 'lastOrderDate' || key === 'createdAt') {
+            comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+        } else if (typeof valA === 'string' && typeof valB === 'string') {
+            comparison = (a.companyName || a.contactName || '').localeCompare(b.companyName || b.contactName || '');
+        }
+        
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return customersToFilter;
+  }, [customersWithLastInteraction, searchTerm, dateFilter, sortConfig]);
 
   const handlePrint = () => {
     if (printRef.current) {
@@ -145,7 +183,16 @@ export default function CustomersPage() {
     router.push(`/customers/${customerId}`);
   };
 
-  if (isLoading && customers.length === 0) {
+  const requestSort = (key: keyof CustomerWithLastInteraction) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+        direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+
+  if (isLoading) {
     return (
       <PageHeader title="CRM" description="Loading customer database...">
         <div className="flex items-center justify-center h-32">
@@ -191,19 +238,21 @@ export default function CustomersPage() {
       </div>
 
       <CustomerTable
-        customers={filteredCustomers}
+        customers={filteredAndSortedCustomers}
         onSave={handleSaveCustomer}
         onDelete={handleDeleteCustomer}
         onRowClick={handleRowClick}
+        sortConfig={sortConfig}
+        requestSort={requestSort}
       />
-       {filteredCustomers.length === 0 && !isLoading && (
+       {filteredAndSortedCustomers.length === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">
           {searchTerm || dateFilter !== 'all' ? "No customers match your search criteria." : "No customers found. Try adding one."}
         </p>
       )}
 
       <div style={{ display: 'none' }}>
-        <PrintableCustomerList ref={printRef} customers={filteredCustomers} />
+        <PrintableCustomerList ref={printRef} customers={filteredAndSortedCustomers} />
       </div>
     </>
   );
