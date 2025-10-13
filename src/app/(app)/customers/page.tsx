@@ -21,6 +21,36 @@ type CustomerWithLastInteraction = Customer & {
   lastOrderDate?: string;
 };
 
+const buildSearchIndex = (c: Partial<Customer>) => {
+  const parts = [
+    c.companyName ?? "",
+    c.contactName ?? "",
+    c.email ?? "",
+    c.phone ?? "",
+  ]
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return parts || null;
+};
+
+const hasName = (c: Partial<Customer>) => {
+  const company = (c.companyName ?? "").trim();
+  const person = (c.contactName ?? "").trim();
+  return Boolean(company || person);
+};
+
+const sortKey = (c: Partial<Customer>) => {
+  const company = (c.companyName ?? "").trim();
+  const person = (c.contactName ?? "").trim();
+  const key = company || person || "~"; // tilde sorts after A–Z with localeCompare
+  return key.toLowerCase();
+};
+
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -66,16 +96,12 @@ export default function CustomersPage() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
 
-  const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => {
+  const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
     const { id, ...customerData } = customerToSave;
     const now = new Date();
     
     // Create a comprehensive search index
-    const searchIndex = [
-      customerData.companyName,
-      customerData.contactName,
-      customerData.email,
-    ].filter(Boolean).join(' ').toLowerCase();
+    const searchIndex = buildSearchIndex(customerData);
 
     try {
       if (id) {
@@ -119,63 +145,48 @@ export default function CustomersPage() {
   }, [customers, estimates, orders]);
 
   const filteredAndSortedCustomers = useMemo(() => {
-    let customersToFilter = [...customersWithLastInteraction];
+    const q = searchTerm.toLowerCase().trim();
 
-    if (dateFilter !== 'all') {
-        const now = new Date();
-        let interval: Interval;
+    const matches = (c: Customer) => {
+      if (!q) return true;
+      // Prefer the indexed field, fall back to on-the-fly build (for legacy rows)
+      const idx = c.searchIndex ?? buildSearchIndex(c);
+      return idx?.includes(q);
+    };
 
-        if (dateFilter === 'thisWeek') {
-            interval = { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
-        } else if (dateFilter === 'thisMonth') {
-            interval = { start: startOfMonth(now), end: endOfMonth(now) };
-        } else { // lastMonth
-            const lastMonthDate = subMonths(now, 1);
-            interval = { start: startOfMonth(lastMonthDate), end: endOfMonth(lastMonthDate) };
-        }
+    // Filter by index
+    const filtered = customersWithLastInteraction.filter(matches);
 
-        customersToFilter = customersToFilter.filter(customer => {
-            if (!customer.createdAt) return false;
-            const createdAtDate = new Date(customer.createdAt);
-            return isValid(createdAtDate) && isWithinInterval(createdAtDate, interval);
-        });
-    }
+    // Sort: named first (A→Z), nameless last
+    return filtered.sort((a, b) => {
+      if (sortConfig.key === 'companyName' || sortConfig.key === 'contactName') {
+        const aHas = hasName(a);
+        const bHas = hasName(b);
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
 
-    if (searchTerm) {
-        const lowercasedFilter = searchTerm.toLowerCase();
-        customersToFilter = customersToFilter.filter(customer => 
-            customer.searchIndex?.includes(lowercasedFilter)
-        );
-    }
-
-    customersToFilter.sort((a, b) => {
-        const key = sortConfig.key;
-        const valA = a[key as keyof typeof a];
-        const valB = b[key as keyof typeof b];
-
-        let comparison = 0;
-        
-        if (key === 'companyName' || key === 'contactName') {
-            const nameA = a.companyName || a.contactName || '';
-            const nameB = b.companyName || b.contactName || '';
-            if (!nameA && nameB) return 1;
-            if (nameA && !nameB) return -1;
-            comparison = nameA.localeCompare(nameB);
-        } else if (valA === null || valA === undefined) {
-            comparison = 1;
-        } else if (valB === null || valB === undefined) {
-            comparison = -1;
-        } else if (key === 'lastEstimateDate' || key === 'lastOrderDate' || key === 'createdAt') {
-            comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
-        } else if (typeof valA === 'string' && typeof valB === 'string') {
-            comparison = valA.localeCompare(valB);
-        }
-        
+        const comparison = sortKey(a).localeCompare(sortKey(b), undefined, { sensitivity: "base" });
         return sortConfig.direction === 'asc' ? comparison : -comparison;
-    });
+      }
 
-    return customersToFilter;
-  }, [customersWithLastInteraction, searchTerm, dateFilter, sortConfig]);
+      // Fallback for other sort keys (like dates)
+      const valA = a[sortConfig.key as keyof typeof a];
+      const valB = b[sortConfig.key as keyof typeof b];
+
+      let comparison = 0;
+      if (valA === null || valA === undefined) {
+          comparison = 1;
+      } else if (valB === null || valB === undefined) {
+          comparison = -1;
+      } else if (sortConfig.key === 'lastEstimateDate' || sortConfig.key === 'lastOrderDate' || sortConfig.key === 'createdAt') {
+          comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
+      } else if (typeof valA === 'string' && typeof valB === 'string') {
+          comparison = valA.localeCompare(valB);
+      }
+      
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [customersWithLastInteraction, searchTerm, sortConfig]);
 
   const handlePrint = () => {
     if (printRef.current) {

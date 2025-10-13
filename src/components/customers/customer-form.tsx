@@ -5,7 +5,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Customer, CustomerType } from '@/types';
+import type { Customer } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,8 +21,8 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const customerSchema = z.object({
-  companyName: z.string().trim().min(1, "Company name is required"),
-  contactName: z.string().optional(),
+  companyName: z.string().trim().optional(),
+  contactName: z.string().trim().optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal('')),
   phone: z.string().optional(),
   address: z.object({
@@ -40,7 +40,11 @@ const customerSchema = z.object({
     onHold: z.boolean().optional(),
   }).optional(),
   notes: z.string().optional(),
+}).refine(data => (data.companyName && data.companyName.length > 0) || (data.contactName && data.contactName.length > 0), {
+  message: "Either Company Name or Contact Name must be provided.",
+  path: ["companyName"], // Assign error to companyName for visibility
 });
+
 
 type CustomerFormData = z.infer<typeof customerSchema>;
 
@@ -140,3 +144,5 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
     </Form>
   );
 }
+
+    

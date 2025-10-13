@@ -39,12 +39,19 @@ type CustomerWithLastInteraction = Customer & {
 
 interface CustomerTableProps {
   customers: CustomerWithLastInteraction[];
-  onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
+  onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
   onRowClick: (customerId: string) => void;
   sortConfig: { key: keyof CustomerWithLastInteraction; direction: 'asc' | 'desc' };
   requestSort: (key: keyof CustomerWithLastInteraction) => void;
 }
+
+const displayName = (c: Partial<Customer>) => {
+  const byCompany = (c.companyName ?? "").trim();
+  const byContact = (c.contactName ?? "").trim();
+  return byCompany || byContact || "N/A";
+};
+
 
 export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortConfig, requestSort }: CustomerTableProps) {
   const [customerToDelete, setCustomerToDelete] = React.useState<Customer | null>(null);
@@ -87,7 +94,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
           <TableBody>
             {customers.map((customer) => (
               <TableRow key={customer.id} onClick={() => onRowClick(customer.id)} className="cursor-pointer">
-                <TableCell className="font-medium">{customer.companyName || customer.contactName || <span className="text-muted-foreground">N/A</span>}</TableCell>
+                <TableCell className="font-medium">{displayName(customer)}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
                 <TableCell>{formatDate(customer.lastEstimateDate)}</TableCell>
                 <TableCell>{formatDate(customer.lastOrderDate)}</TableCell>
@@ -129,7 +136,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the customer 
-                "{customerToDelete.companyName || customerToDelete.contactName}".
+                "{displayName(customerToDelete)}".
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -150,3 +157,5 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
     </>
   );
 }
+
+    
