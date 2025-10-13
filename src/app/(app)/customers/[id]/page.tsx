@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function CustomerDetailPage({ params }: { params: { id: string } }) {
+  const customerId = params.id;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -36,8 +37,6 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
   const router = useRouter();
   const { user } = useAuth();
   
-  const customerId = params.id;
-
   useEffect(() => {
     if (!customerId) return;
 
@@ -282,5 +281,3 @@ function DataTable({ title, data, type }: { title: string, data: any[], type: 'i
         </Card>
     )
 }
-
-    
