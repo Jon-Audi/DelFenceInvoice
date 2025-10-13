@@ -87,7 +87,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
           <TableBody>
             {customers.map((customer) => (
               <TableRow key={customer.id} onClick={() => onRowClick(customer.id)} className="cursor-pointer">
-                <TableCell className="font-medium">{customer.companyName || customer.contactName || ''}</TableCell>
+                <TableCell className="font-medium">{customer.companyName || customer.contactName || <span className="text-muted-foreground">N/A</span>}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
                 <TableCell>{formatDate(customer.lastEstimateDate)}</TableCell>
                 <TableCell>{formatDate(customer.lastOrderDate)}</TableCell>

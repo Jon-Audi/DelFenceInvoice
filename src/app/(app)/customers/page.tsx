@@ -149,14 +149,19 @@ export default function CustomersPage() {
         const valB = b[key as keyof typeof b];
 
         let comparison = 0;
-        if (valA === null || valA === undefined) comparison = 1;
-        else if (valB === null || valB === undefined) comparison = -1;
-        else if (key === 'lastEstimateDate' || key === 'lastOrderDate' || key === 'createdAt') {
-            comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
-        } else if (key === 'companyName' || key === 'contactName') {
+        
+        if (key === 'companyName' || key === 'contactName') {
             const nameA = a.companyName || a.contactName || '';
             const nameB = b.companyName || b.contactName || '';
+            if (!nameA && nameB) return 1;
+            if (nameA && !nameB) return -1;
             comparison = nameA.localeCompare(nameB);
+        } else if (valA === null || valA === undefined) {
+            comparison = 1;
+        } else if (valB === null || valB === undefined) {
+            comparison = -1;
+        } else if (key === 'lastEstimateDate' || key === 'lastOrderDate' || key === 'createdAt') {
+            comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
         } else if (typeof valA === 'string' && typeof valB === 'string') {
             comparison = valA.localeCompare(valB);
         }
