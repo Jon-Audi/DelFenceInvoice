@@ -70,18 +70,22 @@ export default function CustomersPage() {
     const { id, ...customerData } = customerToSave;
     const now = new Date();
     
+    // Create a comprehensive search index
     const searchIndex = [
       customerData.companyName,
       customerData.contactName,
       customerData.email,
+      // You can add other fields like phone to the index if needed
     ].filter(Boolean).join(' ').toLowerCase();
 
     try {
       if (id) {
+        // Update existing customer
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, { ...customerData, searchIndex, updatedAt: now.toISOString() }, { merge: true });
         toast({ title: "Customer Updated", description: `Customer ${customerData.companyName || customerData.contactName} updated.` });
       } else {
+        // Add new customer
         const docRef = await addDoc(collection(db, 'customers'), { ...customerData, searchIndex, createdAt: now.toISOString(), updatedAt: now.toISOString() });
         toast({ title: "Customer Added", description: `Customer ${customerData.companyName || customerData.contactName} added.` });
       }
@@ -140,7 +144,9 @@ export default function CustomersPage() {
 
     if (searchTerm) {
         const lowercasedFilter = searchTerm.toLowerCase();
-        customersToFilter = customersToFilter.filter(customer => customer.searchIndex?.includes(lowercasedFilter));
+        customersToFilter = customersToFilter.filter(customer => 
+            customer.searchIndex?.includes(lowercasedFilter)
+        );
     }
 
     customersToFilter.sort((a, b) => {
@@ -265,3 +271,4 @@ export default function CustomersPage() {
     </>
   );
 }
+
