@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
@@ -20,8 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
 
-export default function CustomerDetailPage({ params }: { params: { id: string } }) {
-  const customerId = params.id;
+export default function CustomerDetailPage() {
+  const params = useParams();
+  const customerId = params.id as string;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -281,3 +282,5 @@ function DataTable({ title, data, type }: { title: string, data: any[], type: 'i
         </Card>
     )
 }
+
+    
