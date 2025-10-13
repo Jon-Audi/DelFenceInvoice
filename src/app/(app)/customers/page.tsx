@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icons';
 import { CustomerTable } from '@/components/customers/customer-table';
 import { CustomerDialog } from '@/components/customers/customer-dialog';
-import type { Customer, Estimate, Order } from '@/types';
+import type { Customer, Estimate, Order, Invoice } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, addDoc, setDoc, deleteDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
@@ -18,7 +18,7 @@ import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinIn
 
 type CustomerWithLastInteraction = Customer & {
   lastEstimateDate?: string;
-  lastOrderDate?: string;
+  lastPurchaseDate?: string;
 };
 
 const buildSearchIndex = (c: Partial<Customer>) => {
@@ -55,6 +55,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'thisWeek' | 'thisMonth' | 'lastMonth'>('all');
@@ -68,30 +69,29 @@ export default function CustomersPage() {
     setIsLoading(true);
     const unsubscribes: (() => void)[] = [];
 
-    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
-      const fetchedCustomers = snapshot.docs.map(docSnap => {
-        return { ...docSnap.data(), id: docSnap.id } as Customer;
-      });
-      setCustomers(fetchedCustomers);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("[CustomersPage] Error fetching customers:", error);
-      toast({ title: "Error", description: `Could not fetch customers.`, variant: "destructive" });
-      setIsLoading(false);
-    });
-    unsubscribes.push(unsubscribeCustomers);
-    
-    const unsubscribeEstimates = onSnapshot(collection(db, 'estimates'), (snapshot) => {
-      const fetchedEstimates = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Estimate));
-      setEstimates(fetchedEstimates);
-    });
-    unsubscribes.push(unsubscribeEstimates);
+    const collections = {
+        customers: (items: Customer[]) => setCustomers(items),
+        estimates: (items: Estimate[]) => setEstimates(items),
+        orders: (items: Order[]) => setOrders(items),
+        invoices: (items: Invoice[]) => setInvoices(items),
+    };
 
-    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-        const fetchedOrders = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Order));
-        setOrders(fetchedOrders);
+    Object.entries(collections).forEach(([path, setStateCallback]) => {
+      unsubscribes.push(onSnapshot(collection(db, path), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        setStateCallback(items as any[]);
+      }, (error) => {
+        console.error(`[CustomersPage] Error fetching ${path}:`, error);
+        toast({ title: "Error", description: `Could not fetch ${path}.`, variant: "destructive" });
+      }));
     });
-    unsubscribes.push(unsubscribeOrders);
+    
+    // A simple way to determine initial loading state
+    Promise.all(Object.keys(collections).map(path => 
+        new Promise(res => onSnapshot(collection(db, path), () => res(true)))
+    )).finally(() => {
+        setIsLoading(false);
+    });
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
@@ -100,17 +100,14 @@ export default function CustomersPage() {
     const { id, ...customerData } = customerToSave;
     const now = new Date();
     
-    // Create a comprehensive search index
     const searchIndex = buildSearchIndex(customerData);
 
     try {
       if (id) {
-        // Update existing customer
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, { ...customerData, searchIndex, updatedAt: now.toISOString() }, { merge: true });
         toast({ title: "Customer Updated", description: `Customer ${customerData.companyName || customerData.contactName} updated.` });
       } else {
-        // Add new customer
         const docRef = await addDoc(collection(db, 'customers'), { ...customerData, searchIndex, createdAt: now.toISOString(), updatedAt: now.toISOString() });
         toast({ title: "Customer Added", description: `Customer ${customerData.companyName || customerData.contactName} added.` });
       }
@@ -134,30 +131,30 @@ export default function CustomersPage() {
   const customersWithLastInteraction = useMemo((): CustomerWithLastInteraction[] => {
     return customers.map(customer => {
       const customerEstimates = estimates.filter(e => e.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      const customerOrders = orders.filter(o => o.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const customerOrders = orders.filter(o => o.customerId === customer.id);
+      const customerInvoices = invoices.filter(i => i.customerId === customer.id);
+      
+      const allPurchases = [...customerOrders, ...customerInvoices].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return {
         ...customer,
         lastEstimateDate: customerEstimates[0]?.date,
-        lastOrderDate: customerOrders[0]?.date,
+        lastPurchaseDate: allPurchases[0]?.date,
       };
     });
-  }, [customers, estimates, orders]);
+  }, [customers, estimates, orders, invoices]);
 
   const filteredAndSortedCustomers = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
 
     const matches = (c: Customer) => {
       if (!q) return true;
-      // Prefer the indexed field, fall back to on-the-fly build (for legacy rows)
       const idx = c.searchIndex ?? buildSearchIndex(c);
       return idx?.includes(q);
     };
 
-    // Filter by index
     const filtered = customersWithLastInteraction.filter(matches);
 
-    // Sort: named first (A→Z), nameless last
     return filtered.sort((a, b) => {
       if (sortConfig.key === 'companyName' || sortConfig.key === 'contactName') {
         const aHas = hasName(a);
@@ -169,7 +166,6 @@ export default function CustomersPage() {
         return sortConfig.direction === 'asc' ? comparison : -comparison;
       }
 
-      // Fallback for other sort keys (like dates)
       const valA = a[sortConfig.key as keyof typeof a];
       const valB = b[sortConfig.key as keyof typeof b];
 
@@ -178,7 +174,7 @@ export default function CustomersPage() {
           comparison = 1;
       } else if (valB === null || valB === undefined) {
           comparison = -1;
-      } else if (sortConfig.key === 'lastEstimateDate' || sortConfig.key === 'lastOrderDate' || sortConfig.key === 'createdAt') {
+      } else if (sortConfig.key === 'lastEstimateDate' || sortConfig.key === 'lastPurchaseDate' || sortConfig.key === 'createdAt') {
           comparison = new Date(valA as string).getTime() - new Date(valB as string).getTime();
       } else if (typeof valA === 'string' && typeof valB === 'string') {
           comparison = valA.localeCompare(valB);

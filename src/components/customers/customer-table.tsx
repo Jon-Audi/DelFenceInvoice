@@ -34,7 +34,7 @@ import { format } from 'date-fns';
 
 type CustomerWithLastInteraction = Customer & {
   lastEstimateDate?: string;
-  lastOrderDate?: string;
+  lastPurchaseDate?: string;
 };
 
 interface CustomerTableProps {
@@ -85,8 +85,8 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
               <TableHead onClick={() => requestSort('lastEstimateDate')} className="cursor-pointer hover:bg-muted/50">
                 Last Estimate {renderSortArrow('lastEstimateDate')}
               </TableHead>
-              <TableHead onClick={() => requestSort('lastOrderDate')} className="cursor-pointer hover:bg-muted/50">
-                Last Order {renderSortArrow('lastOrderDate')}
+              <TableHead onClick={() => requestSort('lastPurchaseDate')} className="cursor-pointer hover:bg-muted/50">
+                Last Purchase {renderSortArrow('lastPurchaseDate')}
               </TableHead>
               <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
@@ -97,7 +97,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
                 <TableCell className="font-medium">{displayName(customer)}</TableCell>
                 <TableCell>{customer.phone || 'N/A'}</TableCell>
                 <TableCell>{formatDate(customer.lastEstimateDate)}</TableCell>
-                <TableCell>{formatDate(customer.lastOrderDate)}</TableCell>
+                <TableCell>{formatDate(customer.lastPurchaseDate)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
