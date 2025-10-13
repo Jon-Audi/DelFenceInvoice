@@ -157,7 +157,7 @@ export default function CustomerDetailPage() {
 
   return (
     <>
-      <PageHeader title={customer.companyName || customer.contactName || 'Customer'} description={`CRM profile for ${customer.id}`}>
+      <PageHeader title={customer.companyName || customer.contactName || 'Customer'} description={customer.email || 'Customer Profile'}>
         <div className="flex gap-2">
             <Button onClick={() => handleCreateDocument('estimate')} variant="outline"><Icon name="FileText" className="mr-2"/> New Estimate</Button>
             <Button onClick={() => handleCreateDocument('invoice')}><Icon name="FileDigit" className="mr-2"/> New Invoice</Button>
