@@ -75,7 +75,6 @@ export default function CustomersPage() {
       customerData.companyName,
       customerData.contactName,
       customerData.email,
-      // You can add other fields like phone to the index if needed
     ].filter(Boolean).join(' ').toLowerCase();
 
     try {
@@ -272,3 +271,4 @@ export default function CustomersPage() {
   );
 }
 
+    
