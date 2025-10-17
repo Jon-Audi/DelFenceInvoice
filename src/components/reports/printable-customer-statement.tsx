@@ -57,7 +57,7 @@ export const PrintableCustomerStatement = React.forwardRef<HTMLDivElement, Print
           <section className="mb-6 p-3 border border-gray-300 rounded">
             <h3 className="text-lg font-semibold text-gray-700">Statement For:</h3>
             <p className="font-bold">{customer.companyName || `${customer.firstName} ${customer.lastName}`}</p>
-            {customer.address && <p>{customer.address.street}</p>}
+            {customer.address && <p>{customer.address.line1}</p>}
             {customer.address && <p>{customer.address.city}, {customer.address.state} {customer.address.zip}</p>}
             <p>{customer.phone}</p>
           </section>

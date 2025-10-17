@@ -102,7 +102,10 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
         <Separator />
         <h3 className="text-lg font-medium">Address</h3>
         <FormField control={form.control} name="address.line1" render={({ field }) => (
-          <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>Address Line 1</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="address.line2" render={({ field }) => (
+          <FormItem><FormLabel>Address Line 2</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField control={form.control} name="address.city" render={({ field }) => (
@@ -151,5 +154,3 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
     </Form>
   );
 }
-
-    

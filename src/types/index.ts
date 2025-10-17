@@ -1,3 +1,4 @@
+
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -47,14 +48,15 @@ export interface Customer {
   companyName?: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   emailContacts: EmailContact[];
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    zip: string;
+  address?: {
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
   };
   customerType: CustomerType;
   specificMarkups?: { categoryName: string; markupPercentage: number }[];

@@ -282,5 +282,3 @@ function DataTable({ title, data, type }: { title: string, data: any[], type: 'i
         </Card>
     )
 }
-
-    
