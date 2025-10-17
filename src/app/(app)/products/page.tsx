@@ -16,7 +16,6 @@ import { PrintablePriceSheet } from '@/components/products/printable-price-sheet
 import { SelectCategoriesDialog } from '@/components/products/select-categories-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
