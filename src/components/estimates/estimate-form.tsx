@@ -102,11 +102,12 @@ interface EstimateFormProps {
   products: Product[];
   customers: Customer[];
   productCategories: string[];
+  productSubcategories: string[];
   onSaveCustomer: (customerToSave: Customer) => Promise<string | void>;
   onViewCustomer: (customer: Customer) => void;
 }
 
-export function EstimateForm({ estimate, initialData, onSubmit, onClose, products, customers: initialCustomers, productCategories, onSaveCustomer, onViewCustomer }: EstimateFormProps) {
+export function EstimateForm({ estimate, initialData, onSubmit, onClose, products, customers: initialCustomers, productCategories, productSubcategories, onSaveCustomer, onViewCustomer }: EstimateFormProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
@@ -151,7 +152,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
       date: new Date(),
       status: 'Draft',
       poNumber: '',
-      lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, cost: 0, markupPercentage: 0 }],
+      lineItems: [{ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false, cost: 0, markupPercentage: 0 }],
       notes: '',
     };
     
@@ -167,6 +168,16 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         if (!item.isNonStock && item.productId) {
             const product = products.find(p => p.id === item.productId);
             return product?.category;
+        }
+        return undefined;
+    })
+  );
+
+  const [lineItemSubcategoryFilters, setLineItemSubcategoryFilters] = useState<(string | undefined)[]>(
+    (estimate?.lineItems || initialData?.lineItems || []).map(item => {
+        if (!item.isNonStock && item.productId) {
+            const product = products.find(p => p.id === item.productId);
+            return product?.subcategory;
         }
         return undefined;
     })
@@ -231,8 +242,26 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
+    setLineItemSubcategoryFilters(prevFilters => { // Reset subcategory filter when category changes
+        const newFilters = [...prevFilters];
+        newFilters[index] = undefined;
+        return newFilters;
+    });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.setValue(`lineItems.${index}.productName`, ''); // Clear manual name if category changes
+    form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
+    form.trigger(`lineItems.${index}.productId`);
+  };
+
+  const handleSubcategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
+    const newSubcategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
+    setLineItemSubcategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = newSubcategoryFilter;
+        return newFilters;
+    });
+    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.productName`, '');
     form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
     form.trigger(`lineItems.${index}.productId`);
   };
@@ -253,6 +282,11 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         newFilters[index] = selectedProd.category;
         return newFilters;
       });
+       setLineItemSubcategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = selectedProd.subcategory;
+        return newFilters;
+      });
     }
     form.trigger(`lineItems.${index}.productId`);
     form.trigger(`lineItems.${index}.unitPrice`);
@@ -261,15 +295,18 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
   const addLineItem = () => {
     append({ productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false, cost: 0, markupPercentage: 0 });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
+    setLineItemSubcategoryFilters(prev => [...prev, undefined]);
   };
 
   const removeLineItem = (index: number) => {
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
+    setLineItemSubcategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
     const newFilterEntries: (string | undefined)[] = [];
+    const newSubFilterEntries: (string | undefined)[] = [];
     const currentCustomerId = form.getValues('customerId');
     const currentCustomer = customers.find(c => c.id === currentCustomerId);
 
@@ -291,17 +328,34 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
         addToProductList: true
       });
       newFilterEntries.push(productDetails?.category);
+      newSubFilterEntries.push(productDetails?.subcategory);
     });
     setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
+    setLineItemSubcategoryFilters(prev => [...prev, ...newSubFilterEntries]);
     setIsBulkAddDialogOpen(false);
   };
 
   const getFilteredProducts = (index: number) => {
     const selectedCategory = lineItemCategoryFilters[index];
+    const selectedSubcategory = lineItemSubcategoryFilters[index];
+    let filtered = products;
+
     if (selectedCategory && selectedCategory !== ALL_CATEGORIES_VALUE) {
-      return products.filter(p => p.category === selectedCategory);
+      filtered = filtered.filter(p => p.category === selectedCategory);
     }
-    return products;
+    if (selectedSubcategory && selectedSubcategory !== ALL_CATEGORIES_VALUE) {
+        filtered = filtered.filter(p => p.subcategory === selectedSubcategory);
+    }
+    return filtered;
+  };
+
+  const getAvailableSubcategories = (index: number) => {
+    const selectedCategory = lineItemCategoryFilters[index];
+    if (selectedCategory) {
+        const subcategories = new Set(products.filter(p => p.category === selectedCategory).map(p => p.subcategory).filter(Boolean));
+        return Array.from(subcategories) as string[];
+    }
+    return [];
   };
   
   const handleNonStockToggle = (index: number, checked: boolean) => {
@@ -493,6 +547,7 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
           const isNonStock = currentLineItem?.isNonStock || false;
           const lineTotal = isReturn ? -(quantity * unitPrice) : (quantity * unitPrice);
           const filteredProductsForLine = getFilteredProducts(index);
+          const availableSubcategories = getAvailableSubcategories(index);
 
           return (
             <div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
@@ -576,19 +631,35 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
                 </>
               ) : (
                 <>
-                  <FormItem>
-                    <FormLabel>Category Filter</FormLabel>
-                    <Select
-                      value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
-                      onValueChange={(value) => handleCategoryFilterChange(index, value)}
-                    >
-                      <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
-                        {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormItem>
+                      <FormLabel>Category Filter</FormLabel>
+                      <Select
+                        value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                        onValueChange={(value) => handleCategoryFilterChange(index, value)}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                          {productCategories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                    <FormItem>
+                      <FormLabel>Subcategory Filter</FormLabel>
+                      <Select
+                        value={lineItemSubcategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                        onValueChange={(value) => handleSubcategoryFilterChange(index, value)}
+                        disabled={!lineItemCategoryFilters[index]}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="All Subcategories" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value={ALL_CATEGORIES_VALUE}>All Subcategories</SelectItem>
+                          {availableSubcategories.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  </div>
 
                   <FormField
                     control={form.control}
@@ -738,7 +809,6 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
           isOpen={isNewCustomerDialogOpen}
           onOpenChange={setIsNewCustomerDialogOpen}
           onSave={handleSaveNewCustomerFromEstimateForm}
-          productCategories={productCategories}
         />
       )}
       {isBulkAddDialogOpen && (

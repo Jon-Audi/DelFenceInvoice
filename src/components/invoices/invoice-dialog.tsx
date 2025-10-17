@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -23,6 +22,7 @@ interface InvoiceDialogProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  productSubcategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: Partial<InvoiceFormData> & { lineItems: InvoiceFormData['lineItems'] } | null;
@@ -38,6 +38,7 @@ export function InvoiceDialog({
   customers,
   products,
   productCategories,
+  productSubcategories,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
   initialData,
@@ -192,6 +193,7 @@ export function InvoiceDialog({
             customers={customers}
             products={products}
             productCategories={productCategories}
+            productSubcategories={productSubcategories}
             isDataLoading={isDataLoading}
             onViewCustomer={(customer) => setCustomerToView(customer)}
           />
@@ -204,7 +206,6 @@ export function InvoiceDialog({
             onOpenChange={() => setCustomerToView(null)}
             customer={customerToView}
             onSave={handleSaveCustomerWrapper}
-            productCategories={productCategories}
         />
       )}
     </>

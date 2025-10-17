@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -140,6 +139,7 @@ interface InvoiceFormProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  productSubcategories: string[];
   isDataLoading?: boolean; 
   onViewCustomer: (customer: Customer) => void;
 }
@@ -153,11 +153,13 @@ export function InvoiceForm({
   customers,
   products,
   productCategories = [],
+  productSubcategories,
   isDataLoading = false,
   onViewCustomer,
 }: InvoiceFormProps) {
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
+  const [lineItemSubcategoryFilters, setLineItemSubcategoryFilters] = useState<(string | undefined)[]>([]);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
   
   const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
@@ -394,6 +396,24 @@ export function InvoiceForm({
       newFilters[index] = newCategoryFilter;
       return newFilters;
     });
+    setLineItemSubcategoryFilters(prevFilters => { // Reset subcategory filter when category changes
+        const newFilters = [...prevFilters];
+        newFilters[index] = undefined;
+        return newFilters;
+    });
+    form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
+    form.setValue(`lineItems.${index}.productName`, '');
+    form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
+    form.trigger(`lineItems.${index}.productId`);
+  };
+
+  const handleSubcategoryFilterChange = (index: number, valueFromSelect: string | undefined) => {
+    const newSubcategoryFilter = valueFromSelect === ALL_CATEGORIES_VALUE ? undefined : valueFromSelect;
+    setLineItemSubcategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = newSubcategoryFilter;
+        return newFilters;
+    });
     form.setValue(`lineItems.${index}.productId`, '', { shouldValidate: true });
     form.setValue(`lineItems.${index}.productName`, '');
     form.setValue(`lineItems.${index}.unitPrice`, 0, { shouldValidate: true });
@@ -402,10 +422,25 @@ export function InvoiceForm({
 
   const getFilteredProducts = (index: number) => {
     const selectedCategory = lineItemCategoryFilters[index];
+    const selectedSubcategory = lineItemSubcategoryFilters[index];
+    let filtered = products;
+
     if (selectedCategory && selectedCategory !== ALL_CATEGORIES_VALUE) {
-      return products.filter(p => p.category === selectedCategory);
+      filtered = filtered.filter(p => p.category === selectedCategory);
     }
-    return (products || []);
+    if (selectedSubcategory && selectedSubcategory !== ALL_CATEGORIES_VALUE) {
+        filtered = filtered.filter(p => p.subcategory === selectedSubcategory);
+    }
+    return (filtered || []);
+  };
+
+  const getAvailableSubcategories = (index: number) => {
+    const selectedCategory = lineItemCategoryFilters[index];
+    if (selectedCategory) {
+        const subcategories = new Set(products.filter(p => p.category === selectedCategory).map(p => p.subcategory).filter(Boolean));
+        return Array.from(subcategories) as string[];
+    }
+    return [];
   };
 
   const handleProductSelect = (index: number, productId: string) => {
@@ -423,6 +458,11 @@ export function InvoiceForm({
         newFilters[index] = selectedProd.category;
         return newFilters;
       });
+      setLineItemSubcategoryFilters(prevFilters => {
+        const newFilters = [...prevFilters];
+        newFilters[index] = selectedProd.subcategory;
+        return newFilters;
+      });
     }
     form.trigger(`lineItems.${index}.productId`);
     form.trigger(`lineItems.${index}.unitPrice`);
@@ -431,11 +471,13 @@ export function InvoiceForm({
   const addLineItem = () => {
     append({ id: crypto.randomUUID(), productId: '', productName: '', quantity: 1, unitPrice: 0, isReturn: false, isNonStock: false, addToProductList: false });
     setLineItemCategoryFilters(prev => [...prev, undefined]);
+    setLineItemSubcategoryFilters(prev => [...prev, undefined]);
   };
 
   const removeLineItem = (index: number) => {
     remove(index);
     setLineItemCategoryFilters(prev => prev.filter((_, i) => i !== index));
+    setLineItemSubcategoryFilters(prev => prev.filter((_, i) => i !== index));
   };
   
   const handleNonStockToggle = (index: number, checked: boolean) => {
@@ -456,6 +498,7 @@ export function InvoiceForm({
 
   const handleBulkAddItems = (itemsToAdd: Array<{ productId: string; quantity: number }>) => {
     const newFilterEntries: (string | undefined)[] = [];
+    const newSubFilterEntries: (string | undefined)[] = [];
     const currentCustomerId = form.getValues('customerId');
     const currentCustomer = customers.find(c => c.id === currentCustomerId);
 
@@ -476,8 +519,10 @@ export function InvoiceForm({
         addToProductList: false,
       });
       newFilterEntries.push(productDetails?.category);
+      newSubFilterEntries.push(productDetails?.subcategory);
     });
     setLineItemCategoryFilters(prev => [...prev, ...newFilterEntries]);
+    setLineItemSubcategoryFilters(prev => [...prev, ...newSubFilterEntries]);
     setIsBulkAddDialogOpen(false);
   };
   
@@ -625,6 +670,7 @@ export function InvoiceForm({
           const isNonStock = currentLineItem?.isNonStock || false;
           const lineTotal = isReturn ? -(quantity * unitPrice) : (quantity * unitPrice);
           const filteredProductsForLine = getFilteredProducts(index);
+          const availableSubcategories = getAvailableSubcategories(index);
           return (
             <div key={fieldItem.id} className="space-y-3 p-4 border rounded-md relative">
               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeLineItem(index)}>
@@ -688,14 +734,30 @@ export function InvoiceForm({
                     )}
                 </>
               ) : ( <>
-                  <FormItem><FormLabel>Category Filter</FormLabel>
-                    <Select value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE} onValueChange={(value) => handleCategoryFilterChange(index, value)}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
-                      <SelectContent><SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
-                        {(productCategories || []).map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormItem><FormLabel>Category Filter</FormLabel>
+                      <Select value={lineItemCategoryFilters[index] || ALL_CATEGORIES_VALUE} onValueChange={(value) => handleCategoryFilterChange(index, value)}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger></FormControl>
+                        <SelectContent><SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                          {(productCategories || []).map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                    <FormItem>
+                      <FormLabel>Subcategory Filter</FormLabel>
+                      <Select
+                        value={lineItemSubcategoryFilters[index] || ALL_CATEGORIES_VALUE}
+                        onValueChange={(value) => handleSubcategoryFilterChange(index, value)}
+                        disabled={!lineItemCategoryFilters[index]}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="All Subcategories" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value={ALL_CATEGORIES_VALUE}>All Subcategories</SelectItem>
+                          {availableSubcategories.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  </div>
                   <FormField control={form.control} name={`lineItems.${index}.productId`} render={({ field: controllerField }) => (
                       <FormItem className="flex flex-col"><FormLabel>Product</FormLabel>
                         <Popover><PopoverTrigger asChild><FormControl>

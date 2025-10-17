@@ -25,6 +25,7 @@ const COMPANY_SETTINGS_DOC_ID = "main";
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<string[]>(INITIAL_PRODUCT_CATEGORIES);
+  const [productSubcategories, setProductSubcategories] = useState<string[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -48,15 +49,20 @@ export default function ProductsPage() {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const fetchedProducts: Product[] = [];
       const categoriesFromDb = new Set<string>(INITIAL_PRODUCT_CATEGORIES);
+      const subcategoriesFromDb = new Set<string>();
       snapshot.forEach((docSnap) => {
         const productData = docSnap.data() as Omit<Product, 'id'>;
         fetchedProducts.push({ ...productData, id: docSnap.id });
         if (productData.category) {
           categoriesFromDb.add(productData.category);
         }
+        if (productData.subcategory) {
+          subcategoriesFromDb.add(productData.subcategory);
+        }
       });
       setProducts(fetchedProducts.sort((a,b) => a.name.localeCompare(b.name)));
       setProductCategories(Array.from(categoriesFromDb).sort((a, b) => a.localeCompare(b)));
+      setProductSubcategories(Array.from(subcategoriesFromDb).sort((a, b) => a.localeCompare(b)));
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching products:", error);
@@ -100,11 +106,26 @@ export default function ProductsPage() {
     }
   };
 
+  const handleAddNewSubcategory = (subcategory: string) => {
+    if (subcategory.trim() === '') return;
+    const normalized = subcategory.trim();
+    if (!productSubcategories.find(sc => sc.toLowerCase() === normalized.toLowerCase())) {
+      setProductSubcategories(prev => [...prev, normalized].sort((a, b) => a.localeCompare(b)));
+    }
+  };
+
+
   const handleSaveProduct = async (productToSave: Product) => {
     if (productToSave.category) {
         const normalizedCategory = productToSave.category.trim();
         if (normalizedCategory && !productCategories.find(pc => pc.toLowerCase() === normalizedCategory.toLowerCase())) {
             setProductCategories(prev => [...prev, normalizedCategory].sort((a, b) => a.localeCompare(b)));
+        }
+    }
+    if (productToSave.subcategory) {
+        const normalizedSub = productToSave.subcategory.trim();
+        if (normalizedSub && !productSubcategories.find(sc => sc.toLowerCase() === normalizedSub.toLowerCase())) {
+            setProductSubcategories(prev => [...prev, normalizedSub].sort((a,b) => a.localeCompare(b)));
         }
     }
 
@@ -126,7 +147,6 @@ export default function ProductsPage() {
     if (restOfProductData.description !== undefined) {
       dataForFirestore.description = restOfProductData.description;
     }
-    // Clean up undefined fields to avoid Firestore errors
     if (dataForFirestore.subcategory === undefined || dataForFirestore.subcategory === '') {
       delete dataForFirestore.subcategory;
     }
@@ -341,7 +361,7 @@ export default function ProductsPage() {
 
   const parseCsvToProducts = (csvData: string): Omit<Product, 'id'>[] => {
     const newProductsData: Omit<Product, 'id'>[] = [];
-    const lines = csvData.trim().split(/\\r\\n|\\n/);
+    const lines = csvData.trim().split(/\r\n|\n/);
     const lineCount = lines.length;
 
     if (lineCount < 2) {
@@ -350,7 +370,7 @@ export default function ProductsPage() {
     }
 
     const rawHeaders = lines[0].split(',').map(h => h.trim());
-    const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\\s+/g, ''));
+    const normalizedCsvHeaders = rawHeaders.map(h => h.toLowerCase().replace(/\s+/g, ''));
     
     const expectedRequiredHeadersNormalized = ['name', 'category', 'unit', 'price', 'cost', 'markuppercentage'];
     
@@ -803,6 +823,8 @@ export default function ProductsPage() {
             allProducts={products}
             productCategories={productCategories}
             onAddNewCategory={handleAddNewCategory}
+            productSubcategories={productSubcategories}
+            onAddNewSubcategory={handleAddNewSubcategory}
           />
           <BulkAddProductsDialog
             triggerButton={
@@ -823,6 +845,8 @@ export default function ProductsPage() {
         onDelete={handleDeleteProduct}
         productCategories={productCategories}
         onAddNewCategory={handleAddNewCategory}
+        productSubcategories={productSubcategories}
+        onAddNewSubcategory={handleAddNewSubcategory}
         isLoading={isLoading}
         onApplyCategoryMarkup={handleApplyCategoryMarkup}
         onDeleteCategory={handleDeleteCategory}
