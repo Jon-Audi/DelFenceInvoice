@@ -23,6 +23,7 @@ interface OrderDialogProps {
   customers: Customer[];
   products: Product[]; 
   productCategories: string[];
+  productSubcategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: Partial<OrderFormData> & { lineItems: NonNullable<OrderFormData['lineItems']> } | null;
@@ -37,6 +38,7 @@ export function OrderDialog({
   customers, 
   products,
   productCategories,
+  productSubcategories,
   isOpen: controlledIsOpen,
   onOpenChange: controlledOnOpenChange,
   initialData
@@ -177,6 +179,7 @@ export function OrderDialog({
             customers={customers}
             products={products}
             productCategories={productCategories}
+            productSubcategories={productSubcategories}
             onViewCustomer={(customer) => setCustomerToView(customer)}
             onSaveCustomer={onSaveCustomer}
           />
@@ -188,7 +191,6 @@ export function OrderDialog({
           onOpenChange={() => setCustomerToView(null)}
           customer={customerToView}
           onSave={adaptCustomerSaveForDialog}
-          productCategories={productCategories}
         />      
       )}
     </>

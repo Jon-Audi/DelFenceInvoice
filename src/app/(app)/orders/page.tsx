@@ -41,6 +41,7 @@ export default function OrdersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
+  const [stableProductSubcategories, setStableProductSubcategories] = useState<string[]>([]);
 
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -59,6 +60,7 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
+  const conversionHandled = useRef(false);
 
   const [isConvertingOrder, setIsConvertingOrder] = useState(false);
   const [conversionOrderData, setConversionOrderData] = useState<OrderFormData | null>(null);
@@ -75,9 +77,11 @@ export default function OrdersPage() {
   
   useEffect(() => {
     setIsClient(true);
+    if (conversionHandled.current) return;
     if (typeof window !== 'undefined') {
       const pendingOrderRaw = localStorage.getItem('estimateToConvert_order');
       if (pendingOrderRaw) {
+        conversionHandled.current = true;
         localStorage.removeItem('estimateToConvert_order');
         try {
           const estimateToConvert = JSON.parse(pendingOrderRaw) as Estimate;
@@ -225,12 +229,21 @@ export default function OrdersPage() {
             }
             return currentStableCategories;
         });
+        const newSubcategories = Array.from(new Set(products.map(p => p.subcategory).filter(Boolean) as string[])).sort();
+        setStableProductSubcategories(currentStableSubcategories => {
+            if (JSON.stringify(newSubcategories) !== JSON.stringify(currentStableSubcategories)) {
+                return newSubcategories;
+            }
+            return currentStableSubcategories;
+        });
     } else {
         setStableProductCategories(currentStableCategories => {
-            if (currentStableCategories.length > 0) {
-                return [];
-            }
+            if (currentStableCategories.length > 0) return [];
             return currentStableCategories;
+        });
+        setStableProductSubcategories(currentStableSubcategories => {
+            if (currentStableSubcategories.length > 0) return [];
+            return currentStableSubcategories;
         });
     }
   }, [products]);
@@ -613,6 +626,7 @@ export default function OrdersPage() {
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
+          productSubcategories={stableProductSubcategories}
         />
       </PageHeader>
 
@@ -630,6 +644,7 @@ export default function OrdersPage() {
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
+            productSubcategories={stableProductSubcategories}
         />
       )}
 
@@ -656,6 +671,7 @@ export default function OrdersPage() {
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
+            productSubcategories={stableProductSubcategories}
             onViewItems={handleViewItems}
             onConvertToInvoice={handleConvertToInvoice}
             sortConfig={sortConfig}

@@ -85,8 +85,10 @@ export default function EstimatesPage() {
   const [isLoadingEmail, setIsLoadingEmail] = useState(false); // Used for AI draft generation and actual send
   const { toast } = useToast();
   const router = useRouter();
+  const conversionHandled = useRef(false);
   const [isClient, setIsClient] = useState(false);
   const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
+  const [stableProductSubcategories, setStableProductSubcategories] = useState<string[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableEstimateKeys; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -107,9 +109,11 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     setIsClient(true);
+    if (conversionHandled.current) return;
      if (typeof window !== 'undefined') {
       const pendingEstimateRaw = localStorage.getItem("estimateToConvert_invoice");
       if (pendingEstimateRaw) {
+        conversionHandled.current = true;
         // Clear the item to prevent re-triggering, but don't parse if empty
         localStorage.removeItem("estimateToConvert_invoice");
         if (pendingEstimateRaw.trim()) {
@@ -176,12 +180,21 @@ export default function EstimatesPage() {
             }
             return currentStableCategories;
         });
+        const newSubcategories = Array.from(new Set(products.map(p => p.subcategory).filter(Boolean) as string[])).sort();
+        setStableProductSubcategories(currentStableSubcategories => {
+            if (JSON.stringify(newSubcategories) !== JSON.stringify(currentStableSubcategories)) {
+                return newSubcategories;
+            }
+            return currentStableSubcategories;
+        });
     } else {
         setStableProductCategories(currentStableCategories => {
-            if (currentStableCategories.length > 0) {
-                return [];
-            }
+            if (currentStableCategories.length > 0) return [];
             return currentStableCategories;
+        });
+        setStableProductSubcategories(currentStableSubcategories => {
+            if (currentStableSubcategories.length > 0) return [];
+            return currentStableSubcategories;
         });
     }
   }, [products]);
@@ -558,6 +571,7 @@ export default function EstimatesPage() {
           products={products}
           customers={customers}
           productCategories={stableProductCategories}
+          productSubcategories={stableProductSubcategories}
         />
       </PageHeader>
       
@@ -572,6 +586,7 @@ export default function EstimatesPage() {
           products={products}
           customers={customers}
           productCategories={stableProductCategories}
+          productSubcategories={stableProductSubcategories}
         />
        )}
 
@@ -645,6 +660,7 @@ export default function EstimatesPage() {
                             products={products}
                             customers={customers}
                             productCategories={stableProductCategories}
+                            productSubcategories={stableProductSubcategories}
                           />
                           <DropdownMenuItem onClick={() => handleCloneEstimate(estimate)}>
                             <Icon name="Copy" className="mr-2 h-4 w-4" /> Clone Estimate

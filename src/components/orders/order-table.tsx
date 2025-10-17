@@ -53,6 +53,7 @@ interface OrderTableProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  productSubcategories: string[];
   onViewItems: (order: Order) => void;
   onConvertToInvoice: (order: Order) => void;
   sortConfig: { key: SortableOrderKeys; direction: 'asc' | 'desc' };
@@ -73,6 +74,7 @@ export function OrderTable({
   customers,
   products,
   productCategories,
+  productSubcategories,
   onViewItems,
   onConvertToInvoice,
   sortConfig,
@@ -202,6 +204,7 @@ export function OrderTable({
                       customers={customers}
                       products={products}
                       productCategories={productCategories}
+                      productSubcategories={productSubcategories}
                     />
                     <DropdownMenuItem onClick={() => onGenerateEmail(order)}>
                       <Icon name="Mail" className="mr-2 h-4 w-4" /> Email Draft

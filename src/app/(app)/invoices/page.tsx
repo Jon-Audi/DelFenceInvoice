@@ -75,11 +75,13 @@ export default function InvoicesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stableProductCategories, setStableProductCategories] = useState<string[]>([]);
+  const [stableProductSubcategories, setStableProductSubcategories] = useState<string[]>([]);
 
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const conversionHandled = useRef(false);
 
   const [selectedInvoiceForEmail, setSelectedInvoiceForEmail] = useState<Invoice | null>(null);
   const [targetCustomerForEmail, setTargetCustomerForEmail] = useState<Customer | null>(null);
@@ -115,13 +117,14 @@ export default function InvoicesPage() {
 
   // Handle "convert estimate/order to invoice" handoff from localStorage
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || conversionHandled.current) return;
   
     const pendingEstimateRaw = localStorage.getItem("estimateToConvert_invoice");
     const pendingOrderRaw = localStorage.getItem("orderToConvert_invoice");
     
     if (!pendingEstimateRaw && !pendingOrderRaw) return;
 
+    conversionHandled.current = true;
     let newInvoiceData:
       | (Partial<InvoiceFormData> & { lineItems: InvoiceFormData["lineItems"]; payments?: Payment[] })
       | null = null;
@@ -268,10 +271,13 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (products?.length) {
-      const next = Array.from(new Set(products.map((p) => p.category))).sort();
-      setStableProductCategories((curr) => (JSON.stringify(next) !== JSON.stringify(curr) ? next : curr));
+      const nextCategories = Array.from(new Set(products.map((p) => p.category))).sort();
+      setStableProductCategories((curr) => (JSON.stringify(nextCategories) !== JSON.stringify(curr) ? nextCategories : curr));
+      const nextSubcategories = Array.from(new Set(products.map(p => p.subcategory).filter(Boolean) as string[])).sort();
+      setStableProductSubcategories(curr => JSON.stringify(nextSubcategories) !== JSON.stringify(curr) ? nextSubcategories : curr);
     } else {
       setStableProductCategories((curr) => (curr.length ? [] : curr));
+      setStableProductSubcategories(curr => curr.length ? [] : curr);
     }
   }, [products]);
 
@@ -880,6 +886,7 @@ export default function InvoicesPage() {
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
+            productSubcategories={stableProductSubcategories}
           />
         </div>
       </PageHeader>
@@ -905,6 +912,7 @@ export default function InvoicesPage() {
           customers={customers}
           products={products}
           productCategories={stableProductCategories}
+          productSubcategories={stableProductSubcategories}
           isDataLoading={isLoadingCustomers || isLoadingProducts}
         />
       )}
@@ -949,6 +957,7 @@ export default function InvoicesPage() {
             customers={customers}
             products={products}
             productCategories={stableProductCategories}
+            productSubcategories={stableProductSubcategories}
             onViewItems={(inv) => setInvoiceForViewingItems(inv)}
             sortConfig={sortConfig}
             requestSort={requestSort}
