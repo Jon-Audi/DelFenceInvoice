@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -15,14 +14,16 @@ import {
 
 interface ProductDialogProps {
   product?: Product;
-  allProducts?: Product[]; // Make this optional
+  allProducts?: Product[];
   triggerButton: React.ReactElement;
   onSave?: (product: Product) => void;
   productCategories: string[];
   onAddNewCategory: (category: string) => void;
+  productSubcategories: string[];
+  onAddNewSubcategory: (subcategory: string) => void;
 }
 
-export function ProductDialog({ product, allProducts, triggerButton, onSave, productCategories, onAddNewCategory }: ProductDialogProps) {
+export function ProductDialog({ product, allProducts, triggerButton, onSave, productCategories, onAddNewCategory, productSubcategories, onAddNewSubcategory }: ProductDialogProps) {
   const [open, setOpen] = React.useState(false);
 
   const handleSubmit = (data: Omit<Product, 'id'>) => {

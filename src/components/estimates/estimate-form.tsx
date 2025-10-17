@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
@@ -747,19 +748,10 @@ export function EstimateForm({ estimate, initialData, onSubmit, onClose, product
                           type="number"
                           {...qtyField}
                           value={qtyField.value === undefined || qtyField.value === null || isNaN(Number(qtyField.value)) ? '' : String(qtyField.value)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const num = parseInt(val, 10);
-                            qtyField.onChange(isNaN(num) ? undefined : num);
-                          }}
-                          min="1"
-                          disabled={!isNonStock && !watchedLineItems[index]?.productId}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                            onChange={(e) => { const val = e.target.value; const num = parseInt(val, 10); qtyField.onChange(isNaN(num) ? undefined : num); }}
+                            min="1" disabled={!isNonStock && !watchedLineItems[index]?.productId} />
+                    </FormControl><FormMessage /></FormItem>
+                )}/>
                  <FormItem>
                   <FormLabel>Line Total</FormLabel>
                   <Input type="text" readOnly value={lineTotal !== 0 ? `${isReturn ? '-' : ''}$${Math.abs(lineTotal).toFixed(2)}` : '$0.00'} className={cn("bg-muted font-semibold", isReturn && "text-destructive")} />

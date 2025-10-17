@@ -138,16 +138,18 @@ interface OrderFormProps {
   customers: Customer[];
   products: Product[];
   productCategories: string[];
+  productSubcategories: string[];
   onViewCustomer: (customer: Customer) => void;
   onSaveCustomer: (customer: Customer) => Promise<string | void>;
 }
 
-export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories, onViewCustomer, onSaveCustomer }: OrderFormProps) {
+export function OrderForm({ order, initialData, onSubmit, onClose, customers, products, productCategories, productSubcategories, onViewCustomer, onSaveCustomer }: OrderFormProps) {
   const [lineItemCategoryFilters, setLineItemCategoryFilters] = useState<(string | undefined)[]>([]);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<FormPayment | null>(null);
   const [localPayments, setLocalPayments] = useState<FormPayment[]>([]);
   const prevCustomerIdRef = useRef<string | undefined>();
+  const [lineItemSubcategoryFilters, setLineItemSubcategoryFilters] = useState<(string | undefined)[]>([]);
 
   const form = useForm<z.infer<typeof orderFormSchema>>({
     resolver: zodResolver(orderFormSchema),
@@ -712,4 +714,3 @@ export function OrderForm({ order, initialData, onSubmit, onClose, customers, pr
   );
 }
 
-    

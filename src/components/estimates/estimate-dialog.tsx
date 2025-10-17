@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -24,6 +23,7 @@ interface EstimateDialogProps {
   products: Product[];
   customers: Customer[];
   productCategories: string[];
+  productSubcategories: string[];
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialData?: Partial<EstimateFormData>;
@@ -38,6 +38,7 @@ export function EstimateDialog({
     products, 
     customers, 
     productCategories,
+    productSubcategories,
     isOpen: controlledIsOpen,
     onOpenChange: controlledOnOpenChange,
     initialData,
@@ -171,6 +172,7 @@ export function EstimateDialog({
             products={products}
             customers={customers}
             productCategories={productCategories}
+            productSubcategories={productSubcategories}
             onSaveCustomer={onSaveCustomer}
             onViewCustomer={(customer) => setCustomerToView(customer)}
           />
@@ -183,7 +185,6 @@ export function EstimateDialog({
             onOpenChange={() => setCustomerToView(null)}
             customer={customerToView}
             onSave={handleSaveCustomerWrapper}
-            productCategories={productCategories}
         />
       )}
     </>
