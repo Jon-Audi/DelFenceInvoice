@@ -22,7 +22,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const customerSchema = z.object({
   companyName: z.string().trim().optional(),
-  contactName: z.string().trim().optional(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal('')),
   phone: z.string().optional(),
   address: z.object({
@@ -40,8 +41,8 @@ const customerSchema = z.object({
     onHold: z.boolean().optional(),
   }).optional(),
   notes: z.string().optional(),
-}).refine(data => (data.companyName && data.companyName.length > 0) || (data.contactName && data.contactName.length > 0), {
-  message: "Either Company Name or Contact Name must be provided.",
+}).refine(data => (data.companyName && data.companyName.length > 0) || (data.firstName && data.firstName.length > 0), {
+  message: "Either Company Name or First Name must be provided.",
   path: ["companyName"], // Assign error to companyName for visibility
 });
 
@@ -64,7 +65,8 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
       tags: customer.tags || [],
     } : {
       companyName: '',
-      contactName: '',
+      firstName: '',
+      lastName: '',
       email: '',
       phone: '',
       address: { line1: '', line2: '', city: '', state: '', zip: '' },
@@ -81,16 +83,21 @@ export function CustomerForm({ customer, onSubmit, onClose }: CustomerFormProps)
           <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField control={form.control} name="contactName" render={({ field }) => (
-            <FormItem><FormLabel>Contact Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          <FormField control={form.control} name="firstName" render={({ field }) => (
+            <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
-          <FormField control={form.control} name="phone" render={({ field }) => (
-            <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+           <FormField control={form.control} name="lastName" render={({ field }) => (
+            <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </div>
-        <FormField control={form.control} name="email" render={({ field }) => (
-          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={form.control} name="phone" render={({ field }) => (
+                <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+        </div>
         
         <Separator />
         <h3 className="text-lg font-medium">Address</h3>
