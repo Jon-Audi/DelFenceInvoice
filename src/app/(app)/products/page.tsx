@@ -219,6 +219,43 @@ export default function ProductsPage() {
       setIsLoading(false);
     }
   };
+
+  const handleBulkSubcategoryUpdate = async (updatedProducts: Pick<Product, 'id' | 'subcategory'>[]) => {
+    setIsLoading(true);
+    const batch = writeBatch(db);
+    const newSubcategories = new Set<string>();
+
+    updatedProducts.forEach(product => {
+        const productRef = doc(db, "products", product.id);
+        const subcategory = product.subcategory?.trim();
+        batch.update(productRef, { subcategory: subcategory || null });
+
+        if (subcategory) {
+            newSubcategories.add(subcategory);
+        }
+    });
+
+    try {
+        await batch.commit();
+        setProductSubcategories(prev => {
+            const combined = new Set([...prev, ...Array.from(newSubcategories)]);
+            return Array.from(combined).sort();
+        });
+        toast({
+            title: "Bulk Subcategory Update Successful",
+            description: `${updatedProducts.length} products have had their subcategory updated.`,
+        });
+    } catch (error) {
+        console.error("Error during bulk subcategory update:", error);
+        toast({
+            title: "Bulk Update Failed",
+            description: `Could not update subcategories. Error: ${(error as Error).message}`,
+            variant: "destructive",
+        });
+    } finally {
+        setIsLoading(false);
+    }
+};
   
   const handleBulkStockUpdate = async (updatedProducts: { id: string; quantityInStock: number }[]) => {
     setIsLoading(true);
@@ -554,7 +591,7 @@ export default function ProductsPage() {
 
         if (typeof value === 'string') {
           const escapedValue = value.replace(/"/g, '""');
-          if (value.includes(',') || value.includes('"') || value.includes('\\n')) {
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
             return `"${escapedValue}"`;
           }
           return escapedValue;
@@ -562,7 +599,7 @@ export default function ProductsPage() {
         return value !== undefined && value !== null ? String(value) : '';
       }).join(',')
     );
-    return [headerString, ...rows].join('\\n');
+    return [headerString, ...rows].join('\n');
   };
 
   const handleExportCsv = () => {
@@ -853,6 +890,7 @@ export default function ProductsPage() {
         onUpdateStock={handleOpenStockUpdateDialog}
         onBulkUpdate={handleBulkUpdateProducts}
         onBulkStockUpdate={handleBulkStockUpdate}
+        onBulkSubcategoryUpdate={handleBulkSubcategoryUpdate}
       />
        {groupedProducts.size === 0 && !isLoading && (
         <p className="p-4 text-center text-muted-foreground">

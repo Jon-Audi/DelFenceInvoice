@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { ProductDialog } from './product-dialog';
 import { BulkPriceEditorDialog } from './bulk-price-editor-dialog'; 
 import { BulkStockEditorDialog } from './bulk-stock-editor-dialog';
+import { BulkSubcategoryEditorDialog } from './bulk-subcategory-editor-dialog';
 import {
   Accordion,
   AccordionContent,
@@ -59,12 +60,15 @@ interface ProductTableProps {
   onDelete: (productId: string) => void;
   productCategories: string[];
   onAddNewCategory: (category: string) => void;
+  productSubcategories: string[];
+  onAddNewSubcategory: (subcategory: string) => void;
   isLoading: boolean;
   onApplyCategoryMarkup: (categoryName: string, markup: number) => void;
   onDeleteCategory: (categoryName: string) => void;
   onUpdateStock: (product: Product) => void;
   onBulkUpdate: (products: Product[]) => Promise<void>;
   onBulkStockUpdate: (products: { id: string; quantityInStock: number }[]) => Promise<void>;
+  onBulkSubcategoryUpdate: (products: Pick<Product, 'id' | 'subcategory'>[]) => Promise<void>;
 }
 
 export function ProductTable({ 
@@ -74,12 +78,15 @@ export function ProductTable({
   onDelete, 
   productCategories, 
   onAddNewCategory,
+  productSubcategories,
+  onAddNewSubcategory,
   isLoading,
   onApplyCategoryMarkup,
   onDeleteCategory,
   onUpdateStock,
   onBulkUpdate,
   onBulkStockUpdate,
+  onBulkSubcategoryUpdate,
 }: ProductTableProps) {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [categoryToDelete, setCategoryToDeleteState] = React.useState<string | null>(null);
@@ -90,6 +97,7 @@ export function ProductTable({
   const [categoryForBulkEdit, setCategoryForBulkEdit] = React.useState<string | null>(null);
   const [isBulkPriceEditorOpen, setIsBulkPriceEditorOpen] = React.useState(false);
   const [isBulkStockEditorOpen, setIsBulkStockEditorOpen] = React.useState(false);
+  const [isBulkSubcategoryEditorOpen, setIsBulkSubcategoryEditorOpen] = React.useState(false);
 
 
   const formatCurrency = (amount: number | undefined) => {
@@ -111,6 +119,11 @@ export function ProductTable({
   const handleOpenBulkStockEditor = (category: string) => {
     setCategoryForBulkEdit(category);
     setIsBulkStockEditorOpen(true);
+  };
+
+  const handleOpenBulkSubcategoryEditor = (category: string) => {
+    setCategoryForBulkEdit(category);
+    setIsBulkSubcategoryEditorOpen(true);
   };
 
   const handleApplyMarkup = () => {
@@ -198,6 +211,10 @@ export function ProductTable({
                         <Icon name="Edit" className="mr-2 h-4 w-4" />
                         Bulk Edit Prices
                       </DropdownMenuItem>
+                       <DropdownMenuItem onSelect={() => handleOpenBulkSubcategoryEditor(category)}>
+                        <Icon name="FolderSymlink" className="mr-2 h-4 w-4" />
+                        Bulk Edit Subcategories
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => handleOpenMarkupDialog(category)}>
                         <Icon name="TrendingUp" className="mr-2 h-4 w-4" />
                         Apply Category Markup
@@ -272,6 +289,8 @@ export function ProductTable({
                                   onSave={onSave}
                                   productCategories={productCategories}
                                   onAddNewCategory={onAddNewCategory}
+                                  productSubcategories={productSubcategories}
+                                  onAddNewSubcategory={onAddNewSubcategory}
                                 />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -315,6 +334,18 @@ export function ProductTable({
           categoryName={categoryForBulkEdit}
           products={groupedProducts.get(categoryForBulkEdit) || []}
           onSave={onBulkStockUpdate}
+        />
+      )}
+
+      {categoryForBulkEdit && (
+        <BulkSubcategoryEditorDialog
+          isOpen={isBulkSubcategoryEditorOpen}
+          onOpenChange={setIsBulkSubcategoryEditorOpen}
+          categoryName={categoryForBulkEdit}
+          products={groupedProducts.get(categoryForBulkEdit) || []}
+          onSave={onBulkSubcategoryUpdate}
+          allSubcategories={productSubcategories}
+          onAddNewSubcategory={onAddNewSubcategory}
         />
       )}
 
