@@ -39,7 +39,7 @@ type CustomerWithLastInteraction = Customer & {
 
 interface CustomerTableProps {
   customers: CustomerWithLastInteraction[];
-  onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
+  onSave: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => void;
   onDelete: (customerId: string) => void;
   onRowClick: (customerId: string) => void;
   sortConfig: { key: keyof CustomerWithLastInteraction; direction: 'asc' | 'desc' };
@@ -48,7 +48,7 @@ interface CustomerTableProps {
 
 const displayName = (c: Partial<Customer>) => {
   const byCompany = (c.companyName ?? "").trim();
-  const byContact = (c.contactName ?? "").trim();
+  const byContact = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   return byCompany || byContact || "N/A";
 };
 
@@ -79,7 +79,7 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
           <TableHeader>
             <TableRow>
               <TableHead onClick={() => requestSort('companyName')} className="cursor-pointer hover:bg-muted/50">
-                Company Name {renderSortArrow('companyName')}
+                Customer Name {renderSortArrow('companyName')}
               </TableHead>
               <TableHead>Phone</TableHead>
               <TableHead onClick={() => requestSort('lastEstimateDate')} className="cursor-pointer hover:bg-muted/50">
@@ -143,7 +143,9 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
               <AlertDialogCancel onClick={() => setCustomerToDelete(null)}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  onDelete(customerToDelete.id);
+                  if (customerToDelete) {
+                    onDelete(customerToDelete.id);
+                  }
                   setCustomerToDelete(null);
                 }}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -157,5 +159,3 @@ export function CustomerTable({ customers, onSave, onDelete, onRowClick, sortCon
     </>
   );
 }
-
-    

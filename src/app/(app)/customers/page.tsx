@@ -24,7 +24,8 @@ type CustomerWithLastInteraction = Customer & {
 const buildSearchIndex = (c: Partial<Customer>) => {
   const parts = [
     c.companyName ?? "",
-    c.contactName ?? "",
+    c.firstName ?? "",
+    c.lastName ?? "",
     c.email ?? "",
     c.phone ?? "",
   ]
@@ -39,13 +40,13 @@ const buildSearchIndex = (c: Partial<Customer>) => {
 
 const hasName = (c: Partial<Customer>) => {
   const company = (c.companyName ?? "").trim();
-  const person = (c.contactName ?? "").trim();
+  const person = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   return Boolean(company || person);
 };
 
 const sortKey = (c: Partial<Customer>) => {
   const company = (c.companyName ?? "").trim();
-  const person = (c.contactName ?? "").trim();
+  const person = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   const key = company || person || "~"; // tilde sorts after A–Z with localeCompare
   return key.toLowerCase();
 };
@@ -96,7 +97,7 @@ export default function CustomersPage() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [toast]);
 
-  const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+  const handleSaveCustomer = async (customerToSave: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'searchIndex'> & { id?: string }) => {
     const { id, ...customerData } = customerToSave;
     const now = new Date();
     
@@ -106,10 +107,10 @@ export default function CustomersPage() {
       if (id) {
         const customerRef = doc(db, 'customers', id);
         await setDoc(customerRef, { ...customerData, searchIndex, updatedAt: now.toISOString() }, { merge: true });
-        toast({ title: "Customer Updated", description: `Customer ${customerData.companyName || customerData.contactName} updated.` });
+        toast({ title: "Customer Updated", description: `Customer ${customerData.companyName || `${customerData.firstName} ${customerData.lastName}`} updated.` });
       } else {
         const docRef = await addDoc(collection(db, 'customers'), { ...customerData, searchIndex, createdAt: now.toISOString(), updatedAt: now.toISOString() });
-        toast({ title: "Customer Added", description: `Customer ${customerData.companyName || customerData.contactName} added.` });
+        toast({ title: "Customer Added", description: `Customer ${customerData.companyName || `${customerData.firstName} ${customerData.lastName}`} added.` });
       }
     } catch (error) {
       console.error("Error saving customer:", error);
@@ -156,7 +157,7 @@ export default function CustomersPage() {
     const filtered = customersWithLastInteraction.filter(matches);
 
     return filtered.sort((a, b) => {
-      if (sortConfig.key === 'companyName' || sortConfig.key === 'contactName') {
+      if (sortConfig.key === 'companyName' || sortConfig.key === 'firstName') {
         const aHas = hasName(a);
         const bHas = hasName(b);
         if (aHas && !bHas) return -1;
@@ -277,5 +278,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-    
