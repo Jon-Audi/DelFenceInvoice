@@ -25,6 +25,7 @@ export default function CostingReviewPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<string[]>([]);
+  const [productSubcategories, setProductSubcategories] = useState<string[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState<string | null>(null); // For loading state on auto-cost button
@@ -44,6 +45,8 @@ export default function CostingReviewPage() {
           setProducts(items);
           const categories = Array.from(new Set(items.map(p => p.category))).sort();
           setProductCategories(categories);
+          const subcategories = Array.from(new Set(items.map(p => p.subcategory).filter(Boolean) as string[])).sort();
+          setProductSubcategories(subcategories);
       },
     };
 
@@ -252,6 +255,7 @@ export default function CostingReviewPage() {
             customers={customers}
             products={products}
             productCategories={productCategories}
+            productSubcategories={productSubcategories}
         />
       )}
       
@@ -266,6 +270,7 @@ export default function CostingReviewPage() {
             customers={customers}
             products={products}
             productCategories={productCategories}
+            productSubcategories={productSubcategories}
         />
       )}
     </>
