@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -39,6 +38,7 @@ import { Icon } from '@/components/icons';
 const priceEditSchema = z.object({
   id: z.string(),
   name: z.string(),
+  subcategory: z.string().optional(),
   cost: z.coerce.number().min(0, "Cost must be non-negative"),
   price: z.coerce.number().min(0, "Price must be non-negative"),
   markupPercentage: z.coerce.number().min(0, "Markup must be non-negative"),
@@ -73,6 +73,7 @@ export function BulkPriceEditorDialog({
       products: products.map(p => ({
         id: p.id,
         name: p.name,
+        subcategory: p.subcategory,
         cost: p.cost,
         price: p.price,
         markupPercentage: p.markupPercentage,
@@ -85,12 +86,13 @@ export function BulkPriceEditorDialog({
       products: products.map(p => ({
         id: p.id,
         name: p.name,
+        subcategory: p.subcategory,
         cost: p.cost,
         price: p.price,
         markupPercentage: p.markupPercentage,
       })),
     })
-  }, [products, form.reset, form]);
+  }, [products, form, isOpen]);
 
   const { control, getValues, setValue, watch } = form;
 
@@ -160,7 +162,8 @@ export function BulkPriceEditorDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[40%]">Product Name</TableHead>
+                    <TableHead className="w-[30%]">Product Name</TableHead>
+                    <TableHead className="w-[20%]">Subcategory</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Markup (%)</TableHead>
                     <TableHead className="text-right">Price</TableHead>
@@ -170,6 +173,7 @@ export function BulkPriceEditorDialog({
                   {fields.map((field, index) => (
                     <TableRow key={field.id}>
                       <TableCell className="font-medium">{watchedProducts[index]?.name}</TableCell>
+                      <TableCell>{watchedProducts[index]?.subcategory || 'N/A'}</TableCell>
                       <TableCell>
                         <FormField
                           control={control}
@@ -242,4 +246,3 @@ export function BulkPriceEditorDialog({
     </Dialog>
   );
 }
-

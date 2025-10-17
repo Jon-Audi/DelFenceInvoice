@@ -1,4 +1,3 @@
-
 export type ProductCategory = string;
 export type CustomerType = 'Fence Contractor' | 'Landscaper' | 'Home Owner' | 'Government' | 'Commercial' | 'Other';
 export type EmailContactType = 'Main Contact' | 'Accounts Payable' | 'Owner' | 'Billing' | 'Shipping' | 'Other';
@@ -32,6 +31,7 @@ export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
+  subcategory?: string;
   unit: string;
   price: number;
   cost: number;
@@ -44,28 +44,34 @@ export interface Product {
 
 export interface Customer {
   id: string; // doc id
-  companyName: string; // required
-  contactName?: string;
-  email?: string;
-  phone?: string;
-  address?: {
-    line1?: string;
-    line2?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
+  companyName?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  emailContacts: EmailContact[];
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
   };
-  tags?: CustomerType[];
+  customerType: CustomerType;
+  specificMarkups?: { categoryName: string; markupPercentage: number }[];
   credit?: {
     terms?: string;
     limit?: number;
-    balance?: number;
     onHold?: boolean;
   };
-  notes?: string;
-  createdAt: string; // ISO String from serverTimestamp
-  updatedAt: string; // ISO string from serverTimestamp
-  searchIndex: string; // company + contact + email lowercased
+  createdAt?: string;
+  searchIndex?: string;
+}
+
+export interface EmailContact {
+  id: string;
+  name: string;
+  email: string;
+  type: EmailContactType;
 }
 
 export interface LineItem {
@@ -324,4 +330,12 @@ export interface ReadyForPickupReportItem {
   documentDate: string;
   readyForPickUpDate?: string;
   total: number;
+}
+
+export interface Note {
+  id: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string; // ISO string
 }

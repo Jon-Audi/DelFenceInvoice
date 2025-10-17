@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -34,6 +33,7 @@ const assemblyComponentSchema = z.object({
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   category: z.string().min(1, "Category is required"),
+  subcategory: z.string().optional(),
   unit: z.string().min(1, "Unit is required"),
   cost: z.coerce.number().min(0, "Cost must be non-negative"),
   price: z.coerce.number().min(0, "Price must be non-negative"),
@@ -68,6 +68,7 @@ export function ProductForm({ product, allProducts = [], onSubmit, onClose, prod
     } : {
       name: '',
       category: productCategories.length > 0 ? productCategories[0] : '',
+      subcategory: '',
       unit: '',
       cost: 0,
       price: 0,
@@ -212,73 +213,86 @@ export function ProductForm({ product, allProducts = [], onSubmit, onClose, prod
           )}
         />
         
-        <FormField
-          control={control}
-          name="category"
-          render={({ field }) => ( 
-            <FormItem className="flex flex-col">
-              <FormLabel>Category</FormLabel>
-              <Popover open={comboboxOpen} onOpenChange={handleComboboxOpenChange}>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={comboboxOpen}
-                      className={cn("w-full justify-between", !field.value && "text-muted-foreground", errors.category && "border-destructive")}
-                    >
-                      {field.value || "Select or type category..."}
-                      <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command shouldFilter={false}>
-                    <CommandInput 
-                      placeholder="Search or add category..."
-                      value={inputValue}
-                      onValueChange={(search) => setInputValue(search)}
-                    />
-                     <CommandList>
-                      <CommandEmpty
-                        onMouseDown={(e) => { 
-                          e.preventDefault(); 
-                          const newCat = inputValue.trim();
-                          if (newCat) handleCategorySelect(newCat); 
-                          else setComboboxOpen(false); 
-                        }}
-                        className="cursor-pointer p-2 text-sm hover:bg-accent"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={control}
+            name="category"
+            render={({ field }) => ( 
+              <FormItem className="flex flex-col">
+                <FormLabel>Category</FormLabel>
+                <Popover open={comboboxOpen} onOpenChange={handleComboboxOpenChange}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={comboboxOpen}
+                        className={cn("w-full justify-between", !field.value && "text-muted-foreground", errors.category && "border-destructive")}
                       >
-                        {inputValue.trim() ? `Add "${inputValue.trim()}"` : "Type to search or add"}
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {productCategories
-                          .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
-                          .map((cat) => (
-                          <CommandItem
-                            value={cat} 
-                            key={cat}
-                            onSelect={() => handleCategorySelect(cat)}
-                          >
-                            <Icon
-                              name="Check"
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                cat.toLowerCase() === field.value?.toLowerCase() ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {cat}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                        {field.value || "Select or type category..."}
+                        <Icon name="ChevronsUpDown" className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder="Search or add category..."
+                        value={inputValue}
+                        onValueChange={(search) => setInputValue(search)}
+                      />
+                       <CommandList>
+                        <CommandEmpty
+                          onMouseDown={(e) => { 
+                            e.preventDefault(); 
+                            const newCat = inputValue.trim();
+                            if (newCat) handleCategorySelect(newCat); 
+                            else setComboboxOpen(false); 
+                          }}
+                          className="cursor-pointer p-2 text-sm hover:bg-accent"
+                        >
+                          {inputValue.trim() ? `Add "${inputValue.trim()}"` : "Type to search or add"}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {productCategories
+                            .filter(cat => cat.toLowerCase().includes(inputValue.toLowerCase()))
+                            .map((cat) => (
+                            <CommandItem
+                              value={cat} 
+                              key={cat}
+                              onSelect={() => handleCategorySelect(cat)}
+                            >
+                              <Icon
+                                name="Check"
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  cat.toLowerCase() === field.value?.toLowerCase() ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {cat}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+           <FormField
+            control={control}
+            name="subcategory"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Subcategory (Optional)</FormLabel>
+                <FormControl><Input placeholder="e.g., Privacy, Picket" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <FormField
           control={control}

@@ -110,9 +110,10 @@ export default function ProductsPage() {
 
     const { id, ...restOfProductData } = productToSave;
 
-    const dataForFirestore: Omit<Product, 'id'> = {
+    const dataForFirestore: Partial<Omit<Product, 'id'>> = {
       name: restOfProductData.name,
       category: restOfProductData.category,
+      subcategory: restOfProductData.subcategory,
       unit: restOfProductData.unit,
       cost: restOfProductData.cost,
       price: restOfProductData.price,
@@ -124,6 +125,10 @@ export default function ProductsPage() {
 
     if (restOfProductData.description !== undefined) {
       dataForFirestore.description = restOfProductData.description;
+    }
+    // Clean up undefined fields to avoid Firestore errors
+    if (dataForFirestore.subcategory === undefined || dataForFirestore.subcategory === '') {
+      delete dataForFirestore.subcategory;
     }
     
     const currentUser = firebaseAuthInstance.currentUser;
@@ -512,7 +517,7 @@ export default function ProductsPage() {
 
   const productsToCsv = (productsToExport: Product[]): string => {
     if (!productsToExport.length) return "";
-    const headers = ['id', 'name', 'category', 'unit', 'price', 'cost', 'markuppercentage', 'quantityInStock', 'description'];
+    const headers = ['id', 'name', 'category', 'subcategory', 'unit', 'price', 'cost', 'markuppercentage', 'quantityInStock', 'description'];
     const headerString = headers.join(',');
     const rows = productsToExport.map(product =>
       headers.map(header => {
@@ -523,7 +528,7 @@ export default function ProductsPage() {
           value = product[header as keyof Product];
         }
         
-        if (header === 'description' && value === undefined) {
+        if ((header === 'description' || header === 'subcategory') && value === undefined) {
           return '';
         }
 

@@ -223,6 +223,7 @@ export function ProductTable({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-card-foreground/80">Name</TableHead>
+                        <TableHead className="text-card-foreground/80">Subcategory</TableHead>
                         <TableHead className="text-card-foreground/80">Unit</TableHead>
                         <TableHead className="text-right text-card-foreground/80">Cost</TableHead>
                         <TableHead className="text-right text-card-foreground/80">Price</TableHead>
@@ -238,6 +239,7 @@ export function ProductTable({
                             {product.name}
                             {product.isAssembly && <Icon name="Settings" className="h-3 w-3 ml-2 inline-block text-muted-foreground" title="This is an assembly" />}
                           </TableCell>
+                          <TableCell className="text-card-foreground/90">{product.subcategory || 'N/A'}</TableCell>
                           <TableCell className="text-card-foreground/90">{product.unit}</TableCell>
                           <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.cost)}</TableCell>
                           <TableCell className="text-right text-card-foreground/90">{formatCurrency(product.price)}</TableCell>
